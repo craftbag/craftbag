@@ -727,7 +727,10 @@ fn try_load_skill_file(
                 });
                 return;
             }
-            if let Some(winner) = skills.iter().find(|s| s.name == skill.name) {
+            if let Some(winner) = skills
+                .iter()
+                .find(|s| crate::parse::skill_names_equal(&s.name, &skill.name))
+            {
                 let winner_path = winner
                     .source_path
                     .clone()
@@ -1118,6 +1121,103 @@ mod tests {
         assert_eq!(report.skips.len(), 1);
         assert_eq!(report.skips[0].kind, SkipKind::NameCollision);
         assert!(report.skips[0].winner_path.is_some());
+    }
+
+    #[test]
+    fn first_name_wins_uses_nfkc_identity_like_why_and_load() {
+        // Greek titlecase ᾼ vs lowercase ᾳ survive NFKC (unlike ǅ -> Dž)
+        // and stay valid names, but skill_names_equal after case fold.
+        // Separate extra-path roots so APFS case-fold does not merge dirs.
+        const WIN: &str = "ᾼ-pack";
+        const LOSE: &str = "ᾳ-pack";
+        assert_ne!(WIN, LOSE);
+        assert!(
+            crate::parse::skill_names_equal(WIN, LOSE),
+            "fixture must be one identity"
+        );
+        assert!(crate::parse::validate_skill_name(WIN).is_ok());
+        assert!(crate::parse::validate_skill_name(LOSE).is_ok());
+
+        let cwd = tempfile::tempdir().expect("cwd");
+        let first = tempfile::tempdir().expect("first");
+        let second = tempfile::tempdir().expect("second");
+        write_skill(&first.path().join(WIN), WIN, "first");
+        write_skill(&second.path().join(LOSE), LOSE, "second");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![
+                    first.path().display().to_string(),
+                    second.path().display().to_string(),
+                ],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            [WIN],
+            "first-name-wins must use skill_names_equal, not == : skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(report.skills[0].content.trim(), "first");
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::NameCollision);
+        assert!(report.skips[0].winner_path.is_some());
+        assert!(find_skill_by_name(&report.skills, LOSE).is_some());
+        assert!(find_skill_by_name(&report.skills, WIN).is_some());
+        let why = crate::why(&report, Some(LOSE), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert_eq!(why.skips.len(), 1, "why skips={:?}", why.skips);
+        assert_eq!(why.skips[0].kind, SkipKind::NameCollision);
+        assert!(why.unknown_skill_message().is_none());
+        let load_msg = unknown_or_skipped_skill_message(LOSE, &report.skips);
+        assert!(
+            load_msg.contains("skipped skill"),
+            "loser must be a named collision, not unknown: {load_msg}"
+        );
+    }
+
+    #[test]
+    fn first_name_wins_collides_nfkc_fullwidth_names() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let first = tempfile::tempdir().expect("first");
+        let second = tempfile::tempdir().expect("second");
+        write_skill(&first.path().join("foo"), "foo", "first");
+        write_skill(&second.path().join("ｆｏｏ"), "ｆｏｏ", "second");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![
+                    first.path().display().to_string(),
+                    second.path().display().to_string(),
+                ],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["foo"],
+            "NFKC fullwidth name must lose to the first foo: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].content.trim(), "first");
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::NameCollision);
+        assert!(find_skill_by_name(&report.skills, "ｆｏｏ").is_some());
+        let why = crate::why(&report, Some("ｆｏｏ"), None, None);
+        assert_eq!(why.loaded.len(), 1);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::NameCollision);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[test]
