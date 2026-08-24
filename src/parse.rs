@@ -83,6 +83,43 @@ pub fn validate_skill_name(name: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
+/// Frontmatter `name` when the field parsed, even if the skill is invalid.
+pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return None;
+    }
+    let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
+    let close_pos = after_open.find("\n---")?;
+    let yaml_block = &after_open[..close_pos];
+    if let Ok(skill) = parse_frontmatter(yaml_block) {
+        return Some(skill.name);
+    }
+    scan_frontmatter_name(yaml_block)
+}
+
+fn scan_frontmatter_name(yaml: &str) -> Option<String> {
+    for line in yaml.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once(':') else {
+            continue;
+        };
+        if key.trim() != "name" {
+            continue;
+        }
+        let raw_value = strip_yaml_inline_comment(value);
+        let value = raw_value.trim_matches('"').trim_matches('\'');
+        if value.is_empty() {
+            return None;
+        }
+        return Some(value.to_owned());
+    }
+    None
+}
+
 /// True when the parent directory name of `skill_md` matches `name`.
 pub fn skill_name_matches_directory(skill_md: &Path, name: &str) -> bool {
     skill_md
@@ -364,7 +401,7 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_frontmatter, parse_skill, validate_skill_name};
+    use super::{parse_frontmatter, parse_skill, peek_frontmatter_name, validate_skill_name};
     use crate::error::ParseError;
     use crate::skill::SKILL_DESCRIPTION_MAX_CHARS;
     use crate::source::SkillSource;
@@ -617,5 +654,23 @@ Use pdftotext.
         let skill = parse_frontmatter("name: demo\ndescription: d\n").expect("fm");
         assert_eq!(skill.name, "demo");
         assert!(skill.content.is_empty());
+    }
+
+    #[test]
+    fn peek_frontmatter_name_survives_invalid_name() {
+        let input = "\
+---
+name: Bad_Name
+description: Invalid agentskills name (uppercase and underscore)
+---
+Should fail parse.
+";
+        assert_eq!(peek_frontmatter_name(input).as_deref(), Some("Bad_Name"));
+        assert!(peek_frontmatter_name("# no frontmatter\n").is_none());
+        let missing_desc = "---\nname: only-name\n---\nBody.\n";
+        assert_eq!(
+            peek_frontmatter_name(missing_desc).as_deref(),
+            Some("only-name")
+        );
     }
 }

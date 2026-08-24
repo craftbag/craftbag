@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
-use crate::parse::{parse_skill, skill_name_matches_directory};
+use crate::parse::{parse_skill, peek_frontmatter_name, skill_name_matches_directory};
 use crate::skill::Skill;
 use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
 use crate::source::SkillSource;
@@ -114,19 +114,22 @@ pub fn validate_path(path: &Path) -> ValidationReport {
                 }
             }
         }
-        Err(e) => ValidationReport {
-            path: path_buf.clone(),
-            ok: false,
-            name: None,
-            errors: vec![e.to_string()],
-            skip: Some(SkillSkip {
-                path: path_buf,
-                name: None,
-                kind: SkipKind::ParseError,
-                detail: e.to_string(),
-                winner_path: None,
-            }),
-        },
+        Err(e) => {
+            let name = peek_frontmatter_name(&content);
+            ValidationReport {
+                path: path_buf.clone(),
+                ok: false,
+                name: name.clone(),
+                errors: vec![e.to_string()],
+                skip: Some(SkillSkip {
+                    path: path_buf,
+                    name,
+                    kind: SkipKind::ParseError,
+                    detail: e.to_string(),
+                    winner_path: None,
+                }),
+            }
+        }
     }
 }
 
@@ -351,7 +354,17 @@ fn load_skills_from_dir(
 ) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
-        Err(_) => return,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => {
+            skips.push(SkillSkip {
+                path: dir.to_path_buf(),
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail: e.to_string(),
+                winner_path: None,
+            });
+            return;
+        }
     };
 
     for entry in entries.filter_map(Result::ok) {
@@ -473,7 +486,7 @@ fn try_load_skill_file(
         Err(e) => {
             skips.push(SkillSkip {
                 path: skill_file.to_path_buf(),
-                name: None,
+                name: peek_frontmatter_name(&content),
                 kind: SkipKind::ParseError,
                 detail: e.to_string(),
                 winner_path: None,
@@ -699,6 +712,37 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn unreadable_skills_dir_is_skip_not_silent() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().expect("tmp");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        write_skill(&skills.join("hidden"), "hidden", "x");
+        let original = fs::metadata(&skills).expect("meta").permissions();
+        struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = fs::set_permissions(self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(&skills, original.clone());
+        let mut locked = original.clone();
+        locked.set_mode(0o000);
+        fs::set_permissions(&skills, locked).expect("chmod");
+        if fs::read_dir(&skills).is_ok() {
+            return;
+        }
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(
+            report.skips.iter().any(|s| s.kind == SkipKind::Unreadable),
+            "unreadable skills dir must be a skip row, not silent: {:?}",
+            report.skips
+        );
+        assert!(report.skills.iter().all(|s| s.name != "hidden"));
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn symlink_escape_is_unreadable() {
         let root = tempfile::tempdir().expect("tmp");
         let outside = tempfile::tempdir().expect("out");
@@ -766,6 +810,14 @@ mod tests {
         assert!(report.skills.is_empty());
         assert_eq!(report.skips.len(), 1);
         assert_eq!(report.skips[0].kind, SkipKind::ParseError);
+        assert_eq!(report.skips[0].name.as_deref(), Some("Bad_Name"));
+        let why = crate::why(&report, Some("Bad_Name"), None, None);
+        assert_eq!(
+            why.skips.len(),
+            1,
+            "why JSON must find the parse skip by name"
+        );
+        assert_eq!(why.skips[0].name.as_deref(), Some("Bad_Name"));
     }
 
     #[test]
