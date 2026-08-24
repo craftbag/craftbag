@@ -6,8 +6,10 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Error;
-use crate::parse::{parse_skill, peek_frontmatter_name, skill_name_matches_directory};
+use crate::error::{Error, ParseError};
+use crate::parse::{
+    parse_skill, peek_frontmatter_name, skill_name_matches_directory, unknown_frontmatter_keys,
+};
 use crate::skill::{SKILL_MD_MAX_BYTES, Skill};
 use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
 use crate::source::SkillSource;
@@ -98,7 +100,18 @@ pub struct ValidationReport {
 }
 
 /// Validate a SKILL.md path: readable, parse, and name/dir match.
+///
+/// Unknown frontmatter keys are ignored so host extensions still load.
 pub fn validate_path(path: &Path) -> ValidationReport {
+    validate_path_with_options(path, false)
+}
+
+/// Validate a SKILL.md path.
+///
+/// When `strict` is true, unknown frontmatter keys are errors. Default
+/// discover and [`validate_path`] stay ignore-unknown so host extensions
+/// (`triggers`, `disable_model_invocation`, …) still load.
+pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport {
     let path_buf = path.to_path_buf();
     let content = match read_skill_md(path) {
         Ok(c) => c,
@@ -120,6 +133,30 @@ pub fn validate_path(path: &Path) -> ValidationReport {
     };
     match parse_skill(&content) {
         Ok(skill) => {
+            if strict {
+                let unknown = unknown_frontmatter_keys(&content);
+                if !unknown.is_empty() {
+                    let detail = if unknown.len() == 1 {
+                        format!("unknown frontmatter key: {}", unknown[0])
+                    } else {
+                        format!("unknown frontmatter keys: {}", unknown.join(", "))
+                    };
+                    let err = ParseError::InvalidYaml(detail);
+                    return ValidationReport {
+                        path: path_buf.clone(),
+                        ok: false,
+                        name: Some(skill.name.clone()),
+                        errors: vec![err.to_string()],
+                        skip: Some(SkillSkip {
+                            path: path_buf,
+                            name: Some(skill.name),
+                            kind: SkipKind::ParseError,
+                            detail: err.to_string(),
+                            winner_path: None,
+                        }),
+                    };
+                }
+            }
             if skill_name_matches_directory(path, &skill.name) {
                 ValidationReport {
                     path: path_buf,
@@ -729,7 +766,8 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name,
-        unknown_or_skipped_skill_message, validate_path, with_home_override,
+        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+        with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -2083,6 +2121,84 @@ mod tests {
         let skip = report.skip.expect("skip");
         assert_eq!(skip.kind, SkipKind::Unreadable);
         assert!(skip.detail.contains(&SKILL_MD_MAX_BYTES.to_string()));
+    }
+
+    fn write_unknown_key_skill(dir: &std::path::Path) {
+        fs::create_dir_all(dir).expect("mkdir");
+        fs::write(
+            dir.join("SKILL.md"),
+            "---\nname: demo\ndescription: d\nmade_up_field: x\n---\nbody\n",
+        )
+        .expect("write");
+    }
+
+    #[test]
+    fn validate_path_ignores_unknown_frontmatter_key() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("demo");
+        write_unknown_key_skill(&pkg);
+        let report = validate_path(&pkg.join("SKILL.md"));
+        assert!(
+            report.ok,
+            "default validate ignores unknown keys: {:?}",
+            report.errors
+        );
+        assert_eq!(report.name.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn validate_path_strict_rejects_unknown_frontmatter_key() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("demo");
+        write_unknown_key_skill(&pkg);
+        let report = validate_path_with_options(&pkg.join("SKILL.md"), true);
+        assert!(!report.ok, "strict must reject made_up_field");
+        assert!(
+            report.errors.iter().any(|e| e.contains("made_up_field")),
+            "errors={:?}",
+            report.errors
+        );
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::ParseError);
+        assert_eq!(skip.code(), "parse_error");
+    }
+
+    #[test]
+    fn validate_path_strict_accepts_corpus_and_host_extensions() {
+        let corpus = corpus_dir().join("agentskills/minimal-valid/SKILL.md");
+        let report = validate_path_with_options(&corpus, true);
+        assert!(report.ok, "corpus must pass --strict: {:?}", report.errors);
+
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("hosty");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            concat!(
+                "---\n",
+                "name: hosty\n",
+                "description: host extensions\n",
+                "license: MIT\n",
+                "compatibility: rust\n",
+                "allowed-tools: Read\n",
+                "triggers:\n",
+                "  - hosty\n",
+                "user_invocable: true\n",
+                "disable_model_invocation: false\n",
+                "argument-hint: name\n",
+                "when-to-use: when testing\n",
+                "metadata:\n",
+                "  author: craftbag\n",
+                "---\nbody\n",
+            ),
+        )
+        .expect("write");
+        let report = validate_path_with_options(&pkg.join("SKILL.md"), true);
+        assert!(
+            report.ok,
+            "known fields and host extensions must pass --strict: {:?}",
+            report.errors
+        );
     }
 
     #[test]

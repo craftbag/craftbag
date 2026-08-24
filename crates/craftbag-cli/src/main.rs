@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, Skill, discover, find_skill_by_name, format_load_message,
-    progressive_budgets, unknown_or_skipped_skill_message, validate_path, why,
+    progressive_budgets, unknown_or_skipped_skill_message, validate_path_with_options, why,
 };
 
 #[derive(Parser)]
@@ -59,7 +59,12 @@ enum Cmd {
         user_dir: Option<PathBuf>,
     },
     /// Validate one SKILL.md path.
-    Validate { path: PathBuf },
+    Validate {
+        path: PathBuf,
+        /// Reject unknown frontmatter keys (skills-ref default).
+        #[arg(long)]
+        strict: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -191,8 +196,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Validate { path } => {
-            let report = validate_path(&path);
+        Cmd::Validate { path, strict } => {
+            let report = validate_path_with_options(&path, strict);
             if report.ok {
                 println!("ok\t{}", report.name.as_deref().unwrap_or("-"));
                 Ok(ExitCode::SUCCESS)

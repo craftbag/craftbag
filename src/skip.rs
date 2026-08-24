@@ -58,23 +58,54 @@ impl fmt::Display for SkipKind {
 }
 
 /// A skill package that discovery found but did not load.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillSkip {
     /// Path to the `SKILL.md` (or unreadable path).
     pub path: PathBuf,
     /// Frontmatter name when parse got far enough; otherwise `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub name: Option<String>,
     pub kind: SkipKind,
     /// Human-readable reason (parse error text, etc.).
     pub detail: String,
     /// Winning path when `kind` is [`SkipKind::NameCollision`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub winner_path: Option<PathBuf>,
 }
 
+impl Serialize for SkillSkip {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire<'a> {
+            path: &'a Path,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            name: &'a Option<String>,
+            kind: SkipKind,
+            code: &'a str,
+            detail: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            winner_path: &'a Option<PathBuf>,
+        }
+        Wire {
+            path: &self.path,
+            name: &self.name,
+            kind: self.kind,
+            code: self.kind.as_str(),
+            detail: &self.detail,
+            winner_path: &self.winner_path,
+        }
+        .serialize(serializer)
+    }
+}
+
 impl SkillSkip {
+    /// Stable machine code (`kind.as_str()`).
+    pub fn code(&self) -> &'static str {
+        self.kind.as_str()
+    }
+
     /// Whether `load`/`why` should treat this skip as the requested name.
     ///
     /// A non-blank frontmatter `name` is an identity. The `SKILL.md` parent
@@ -132,6 +163,24 @@ mod tests {
         );
         assert_eq!(SkipKind::NameCollision.as_str(), "name_collision");
         assert_eq!(SkipKind::RootFile.as_str(), "root_file");
+    }
+
+    #[test]
+    fn skill_skip_serializes_code_matching_kind() {
+        for kind in SkipKind::all() {
+            let skip = SkillSkip {
+                path: PathBuf::from("/tmp/x/SKILL.md"),
+                name: Some("x".to_owned()),
+                kind,
+                detail: "d".to_owned(),
+                winner_path: None,
+            };
+            assert_eq!(skip.code(), kind.as_str());
+            let json = serde_json::to_string(&skip).expect("ser");
+            let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+            assert_eq!(v["code"].as_str(), Some(kind.as_str()), "json={json}");
+            assert_eq!(v["kind"].as_str(), Some(kind.as_str()), "json={json}");
+        }
     }
 
     #[test]
