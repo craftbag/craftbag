@@ -117,9 +117,12 @@ impl SkillSkip {
         if want.is_empty() {
             return false;
         }
+        if crate::parse::is_path_component_skill_name(want) {
+            return false;
+        }
         if self.name.as_deref().is_some_and(|n| {
-            let n = n.trim();
-            !n.is_empty() && crate::parse::skill_names_equal(n, want)
+            !crate::parse::is_path_component_skill_name(n)
+                && crate::parse::skill_names_equal(n, want)
         }) {
             return true;
         }
@@ -278,6 +281,26 @@ mod tests {
         );
         assert!(named_root.matches_requested_name("LOOSE"));
         assert!(!named_root.matches_requested_name("skills"));
+    }
+
+    #[test]
+    fn matches_requested_name_nfkc_dot_peek_is_not_identity() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/wanted/SKILL.md"),
+            name: Some("．".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            skip.matches_requested_name("wanted"),
+            "package dir remains the identity when the peek is an NFKC path component"
+        );
+        assert!(
+            !skip.matches_requested_name("."),
+            "NFKC `.` is a path component, not a skill name"
+        );
+        assert!(!skip.matches_requested_name("．"));
     }
 
     #[test]

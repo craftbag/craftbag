@@ -83,7 +83,7 @@ fn skip_display_name<'a>(skip: &'a SkillSkip, want: &'a str) -> &'a str {
     skip.name
         .as_deref()
         .map(str::trim)
-        .filter(|n| !n.is_empty() && *n != "." && *n != "..")
+        .filter(|n| !crate::parse::is_path_component_skill_name(n))
         .or_else(|| crate::skip::skill_md_package_name(&skip.path))
         .unwrap_or(want)
 }
@@ -405,13 +405,12 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     let Some(name) = peek_frontmatter_name(&content) else {
         return false;
     };
-    let name = name.trim();
-    // `.` / `..` never match a package dir after lexical collapse, and
-    // they are not skill names. Treat them like a missing peek name.
-    if name.is_empty()
-        || name == "."
-        || name == ".."
-        || skill_name_matches_directory(skill_file, name)
+    // `.` / `..` (including NFKC compatibility forms) never match a
+    // package dir after lexical collapse, and they are not skill names.
+    // Treat them like a missing peek name so nested SKILL.md stays
+    // inside the package tree.
+    if crate::parse::is_path_component_skill_name(&name)
+        || skill_name_matches_directory(skill_file, &name)
     {
         return false;
     }
@@ -2514,7 +2513,7 @@ mod tests {
 
     #[test]
     fn extra_path_dot_or_dotdot_frontmatter_name_does_not_scan_nested() {
-        for peeked in [".", ".."] {
+        for peeked in [".", "..", "．", "‥"] {
             let cwd = tempfile::tempdir().expect("cwd");
             let extra = tempfile::tempdir().expect("extra");
             let pkg = extra.path().join("wanted");
