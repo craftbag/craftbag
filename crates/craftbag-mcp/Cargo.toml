@@ -1,9 +1,5 @@
-[workspace]
-members = ["crates/craftbag-cli", "crates/craftbag-mcp"]
-resolver = "2"
-
 [package]
-name = "craftbag"
+name = "craftbag-mcp"
 version = "0.0.1"
 edition = "2024"
 rust-version = "1.85"
@@ -14,13 +10,16 @@ keywords = []
 categories = []
 publish = false
 
+[[bin]]
+name = "craftbag-mcp"
+path = "src/main.rs"
+
 [dependencies]
+craftbag = { path = "../.." }
 serde = { version = "1", features = ["derive"] }
-thiserror = "2"
+serde_json = "1"
 
 [dev-dependencies]
+assert_cmd = "2"
 serde_json = "1"
 tempfile = "3"
-
-[lib]
-path = "src/lib.rs"
