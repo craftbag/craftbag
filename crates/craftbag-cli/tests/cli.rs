@@ -2,8 +2,11 @@ use assert_cmd::Command;
 use std::fs;
 use std::path::PathBuf;
 
-fn bin() -> Command {
-    Command::cargo_bin("craftbag").expect("bin")
+fn bin() -> (tempfile::TempDir, Command) {
+    let home = tempfile::tempdir().expect("home");
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    cmd.env("HOME", home.path()).env("USERPROFILE", home.path());
+    (home, cmd)
 }
 
 fn corpus() -> PathBuf {
@@ -13,8 +16,8 @@ fn corpus() -> PathBuf {
 #[test]
 fn validate_minimal_valid_ok() {
     let path = corpus().join("agentskills/minimal-valid/SKILL.md");
-    bin()
-        .arg("validate")
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
         .arg(&path)
         .assert()
         .success()
@@ -24,14 +27,15 @@ fn validate_minimal_valid_ok() {
 #[test]
 fn validate_invalid_name_fails() {
     let path = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
-    bin().arg("validate").arg(&path).assert().failure();
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate").arg(&path).assert().failure();
 }
 
 #[test]
 fn list_extra_path_json() {
     let pkg = corpus().join("agentskills/minimal-valid");
-    bin()
-        .arg("list")
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
         .arg("--json")
         .arg("--path")
         .arg(&pkg)
@@ -43,7 +47,8 @@ fn list_extra_path_json() {
 #[test]
 fn load_unknown_exits_2() {
     let tmp = tempfile::tempdir().expect("tmp");
-    let out = bin()
+    let (_home, mut cmd) = bin();
+    let out = cmd
         .current_dir(tmp.path())
         .arg("load")
         .arg("no-such-skill")
@@ -55,7 +60,8 @@ fn load_unknown_exits_2() {
 #[test]
 fn why_unknown_exits_1() {
     let tmp = tempfile::tempdir().expect("tmp");
-    let out = bin()
+    let (_home, mut cmd) = bin();
+    let out = cmd
         .current_dir(tmp.path())
         .arg("why")
         .arg("no-such-skill")
@@ -67,8 +73,8 @@ fn why_unknown_exits_1() {
 #[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
-    bin()
-        .arg("load")
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
         .arg("minimal-valid")
         .arg("--path")
         .arg(&pkg)
@@ -83,7 +89,8 @@ fn load_minimal_valid() {
 fn list_does_not_print_banner() {
     let tmp = tempfile::tempdir().expect("tmp");
     fs::create_dir_all(tmp.path().join(".agents").join("skills")).expect("mkdir");
-    let out = bin()
+    let (_home, mut cmd) = bin();
+    let out = cmd
         .current_dir(tmp.path())
         .arg("list")
         .output()

@@ -12,8 +12,11 @@ fn corpus_pkg() -> PathBuf {
 
 fn rpc(req: &serde_json::Value) -> serde_json::Value {
     let tmp = tempfile::tempdir().expect("tmp");
+    let home = tempfile::tempdir().expect("home");
     let out = bin()
         .current_dir(tmp.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .write_stdin(format!("{req}\n"))
         .output()
         .expect("run");

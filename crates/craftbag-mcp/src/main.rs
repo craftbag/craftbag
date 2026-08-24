@@ -286,6 +286,11 @@ mod tests {
         resp["result"]["content"][0]["text"].as_str().expect("text")
     }
 
+    fn empty_home<T>(f: impl FnOnce() -> T) -> T {
+        let home = tempfile::tempdir().expect("home");
+        craftbag::with_home_override(Some(home.path().to_path_buf()), f)
+    }
+
     #[test]
     fn initialize_advertises_tools() {
         let req = RpcRequest {
@@ -328,11 +333,13 @@ mod tests {
 
     #[test]
     fn list_json_shape() {
-        let out = list_json(DiscoverArgs {
-            paths: vec![corpus_pkg()],
-            ..DiscoverArgs::default()
-        })
-        .expect("list");
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![corpus_pkg()],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
         let v: serde_json::Value = serde_json::from_str(&out).expect("json");
         assert!(v.get("skills").is_some(), "{out}");
         assert!(v.get("skips").is_some(), "{out}");
@@ -341,36 +348,40 @@ mod tests {
 
     #[test]
     fn skills_list_and_load_and_why() {
-        let pkg = corpus_pkg();
-        let list = call(3, "skills_list", json!({"paths": [pkg.clone()]}));
-        assert_eq!(list["result"]["isError"], false);
-        assert!(call_text(&list).contains("minimal-valid"));
+        empty_home(|| {
+            let pkg = corpus_pkg();
+            let list = call(3, "skills_list", json!({"paths": [pkg.clone()]}));
+            assert_eq!(list["result"]["isError"], false);
+            assert!(call_text(&list).contains("minimal-valid"));
 
-        let load = call(
-            4,
-            "skills_load",
-            json!({"name": "minimal-valid", "paths": [pkg.clone()]}),
-        );
-        assert_eq!(load["result"]["isError"], false);
-        let load_text = call_text(&load);
-        assert!(
-            load_text.contains("[Activated skill: minimal-valid]"),
-            "{load_text}"
-        );
+            let load = call(
+                4,
+                "skills_load",
+                json!({"name": "minimal-valid", "paths": [pkg.clone()]}),
+            );
+            assert_eq!(load["result"]["isError"], false);
+            let load_text = call_text(&load);
+            assert!(
+                load_text.contains("[Activated skill: minimal-valid]"),
+                "{load_text}"
+            );
 
-        let why = call(5, "skills_why", json!({"paths": [pkg]}));
-        assert_eq!(why["result"]["isError"], false);
-        let why_text = call_text(&why);
-        let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
-        assert!(why_v.get("loaded").is_some(), "{why_text}");
-        assert!(why_v.get("skips").is_some(), "{why_text}");
-        assert!(why_v.get("activation").is_some(), "{why_text}");
+            let why = call(5, "skills_why", json!({"paths": [pkg]}));
+            assert_eq!(why["result"]["isError"], false);
+            let why_text = call_text(&why);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert!(why_v.get("loaded").is_some(), "{why_text}");
+            assert!(why_v.get("skips").is_some(), "{why_text}");
+            assert!(why_v.get("activation").is_some(), "{why_text}");
+        });
     }
 
     #[test]
     fn skills_load_unknown_is_error() {
-        let resp = call(6, "skills_load", json!({"name": "no-such-skill"}));
-        assert_eq!(resp["result"]["isError"], true);
-        assert!(call_text(&resp).contains("unknown skill"));
+        empty_home(|| {
+            let resp = call(6, "skills_load", json!({"name": "no-such-skill"}));
+            assert_eq!(resp["result"]["isError"], true);
+            assert!(call_text(&resp).contains("unknown skill"));
+        });
     }
 }
