@@ -618,6 +618,16 @@ fn load_skills_from_dir(
                 .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, ignore)
             {
+                if !stays_under(&path, dir) {
+                    skips.push(SkillSkip {
+                        path,
+                        name: None,
+                        kind: SkipKind::Unreadable,
+                        detail: "SKILL.md symlink escapes walk root".to_owned(),
+                        winner_path: None,
+                    });
+                    continue;
+                }
                 let name = match read_skill_md(&path) {
                     Ok(content) => peek_frontmatter_name(&content),
                     Err(_) => None,
@@ -2546,6 +2556,74 @@ mod tests {
             "escaped package must be named, not unknown: {msg}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
+        let root = tempfile::tempdir().expect("tmp");
+        let outside = tempfile::tempdir().expect("out");
+        fs::write(
+            outside.path().join("secret.md"),
+            "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        std::os::unix::fs::symlink(outside.path().join("secret.md"), skills.join("SKILL.md"))
+            .expect("symlink");
+        write_skill(&skills.join("public"), "public", "ok");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "skills-root SKILL.md symlink must not load the escaped file: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped SKILL.md body must not be loaded: {:?}",
+            report.skills
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling packages must still load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.detail.contains("escapes")
+                    && s.path.ends_with("SKILL.md")
+            }),
+            "escaped skills-root SKILL.md must be unreadable, not peeked: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "escaped SKILL.md must not become a root_file peek: {:?}",
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.name.as_deref() != Some("stolen")),
+            "must not peek frontmatter from an escaped SKILL.md: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("stolen", &report.skips);
+        assert!(
+            msg.contains("unknown skill: stolen"),
+            "escaped root SKILL.md must not identify as stolen: {msg}"
+        );
     }
 
     #[cfg(unix)]
