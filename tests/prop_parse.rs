@@ -1,6 +1,8 @@
 //! Property tests for `parse_skill` (name charset, description length, missing ---).
 
-use craftbag::{ParseError, SKILL_DESCRIPTION_MAX_CHARS, parse_skill, validate_skill_name};
+use craftbag::{
+    ParseError, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS, parse_skill, validate_skill_name,
+};
 use proptest::prelude::*;
 
 fn valid_name() -> impl Strategy<Value = String> {
@@ -63,6 +65,14 @@ proptest! {
         } else {
             format!("{core}-")
         };
+        prop_assert!(validate_skill_name(&name).is_err());
+        let md = format!("---\nname: {name}\ndescription: d\n---\n");
+        prop_assert!(parse_skill(&md).is_err());
+    }
+
+    #[test]
+    fn name_over_max_is_rejected(over in 1usize..16) {
+        let name = "a".repeat(SKILL_NAME_MAX_CHARS + over);
         prop_assert!(validate_skill_name(&name).is_err());
         let md = format!("---\nname: {name}\ndescription: d\n---\n");
         prop_assert!(parse_skill(&md).is_err());
