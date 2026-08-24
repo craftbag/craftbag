@@ -288,16 +288,20 @@ fn load_extra_path(
         .map(|name| expanded.join(name))
         .find(|p| p.is_file());
     if let Some(skill_file) = package_md {
-        try_load_skill_file(
-            &skill_file,
-            &SkillSource::ExtraPath,
-            ignore,
-            disabled,
-            &[],
-            skills,
-            skips,
-        );
-        return;
+        // A lone SKILL.md is a package. The same file next to named
+        // packages is a loose root file; scan so those packages load.
+        if !dir_has_child_skill_packages(&expanded) {
+            try_load_skill_file(
+                &skill_file,
+                &SkillSource::ExtraPath,
+                ignore,
+                disabled,
+                &[],
+                skills,
+                skips,
+            );
+            return;
+        }
     }
     let skills_subdir = expanded.join("skills");
     let scan = if skills_subdir.is_dir() {
@@ -317,6 +321,19 @@ fn load_extra_path(
         skills,
         skips,
     );
+}
+
+fn dir_has_child_skill_packages(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.filter_map(Result::ok).any(|entry| {
+        let path = entry.path();
+        path.is_dir()
+            && ["SKILL.md", "skill.md"]
+                .into_iter()
+                .any(|name| path.join(name).is_file())
+    })
 }
 
 fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
@@ -1009,6 +1026,192 @@ mod tests {
         assert_eq!(why.skips.len(), 1);
         assert_eq!(why.skips[0].kind, SkipKind::RootFile);
         assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn nameless_root_file_stays_unknown_on_load_and_why() {
+        let root = tempfile::tempdir().expect("tmp");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        fs::write(
+            skills.join("SKILL.md"),
+            "---\ndescription: no name\n---\nbody\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(report.skills.is_empty(), "skills={:?}", report.skills);
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::RootFile);
+        assert_eq!(report.skips[0].name, None);
+        assert_eq!(
+            unknown_or_skipped_skill_message("skills", &report.skips),
+            "unknown skill: skills"
+        );
+        let why = crate::why(&report, Some("skills"), None, None);
+        assert!(why.skips.is_empty());
+        assert_eq!(
+            why.unknown_skill_message().as_deref(),
+            Some("unknown skill: skills")
+        );
+    }
+
+    #[test]
+    fn root_file_same_name_as_package_does_not_block_load() {
+        let root = tempfile::tempdir().expect("tmp");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        fs::write(
+            skills.join("SKILL.md"),
+            "---\nname: demo\ndescription: loose\n---\nloose body\n",
+        )
+        .expect("write");
+        write_skill(&skills.join("demo"), "demo", "package body");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["demo"],
+            "package must still load: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(report.skills[0].content.trim(), "package body");
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("demo")),
+            "loose file must stay a named root_file skip: {:?}",
+            report.skips
+        );
+        let loaded = find_skill_by_name(&report.skills, "demo");
+        assert!(loaded.is_some(), "load demo must hit the package");
+        let load_msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        let why = crate::why(&report, Some("demo"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert_eq!(why.skips.len(), 1, "why skips={:?}", why.skips);
+        assert_eq!(why.skips[0].kind, SkipKind::RootFile);
+        assert!(
+            why.unknown_skill_message().is_none(),
+            "why must not call a loaded name unknown"
+        );
+        assert!(
+            loaded.is_some(),
+            "load/why disagree: load={load_msg} why_unknown={:?}",
+            why.unknown_skill_message()
+        );
+    }
+
+    #[test]
+    fn extra_path_skills_subdir_root_file_and_package_same_name() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let skills = extra.path().join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        fs::write(
+            skills.join("SKILL.md"),
+            "---\nname: demo\ndescription: loose\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&skills.join("demo"), "demo", "from extra");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["demo"],
+            "extra-path skills/ package must load: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("demo")),
+            "skips={:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("DEMO"), None, None);
+        assert_eq!(why.loaded.len(), 1);
+        assert_eq!(why.skips.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+        assert!(find_skill_by_name(&report.skills, "demo").is_some());
+    }
+
+    #[test]
+    fn extra_path_dir_loose_file_does_not_hide_same_name_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: demo\ndescription: loose\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&extra.path().join("demo"), "demo", "package");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["demo"],
+            "child package must not vanish behind a loose SKILL.md: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("demo")),
+            "loose extra-path SKILL.md must be root_file, not a package: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("demo"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(
+            why.skips.iter().any(|s| s.kind == SkipKind::RootFile),
+            "why skips={:?}",
+            why.skips
+        );
+        assert!(why.unknown_skill_message().is_none());
+        assert!(find_skill_by_name(&report.skills, "demo").is_some());
+    }
+
+    #[test]
+    fn extra_path_single_package_dir_still_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        write_skill(&pkg, "demo", "only package");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "demo");
+        assert!(report.skips.is_empty(), "skips={:?}", report.skips);
     }
 
     #[test]
