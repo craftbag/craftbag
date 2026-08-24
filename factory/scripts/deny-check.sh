@@ -8,9 +8,9 @@
 # never checked.
 set -euo pipefail
 
-echo "PLAN: cargo deny (workspace + fuzz)"
-echo "DO: cargo deny --workspace check"
-cargo deny --workspace check
-echo "DO: cargo deny --manifest-path fuzz/Cargo.toml check"
-cargo deny --manifest-path fuzz/Cargo.toml check
+echo "PLAN: cargo deny (workspace + fuzz, locked)"
+echo "DO: cargo deny --workspace --locked check"
+cargo deny --workspace --locked check
+echo "DO: cargo deny --manifest-path fuzz/Cargo.toml --locked check"
+cargo deny --manifest-path fuzz/Cargo.toml --locked check
 echo "DONE: ok=true"

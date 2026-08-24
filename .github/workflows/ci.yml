@@ -75,7 +75,7 @@ jobs:
           tool: cargo-deny
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: bash factory/scripts/deny-check.sh
 
   test:
@@ -100,8 +100,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo nextest run --workspace
-      - run: cargo test --workspace --doc
+      - run: cargo nextest run --locked --workspace
+      - run: cargo test --locked --workspace --doc
 
   fuzz-smoke:
     name: Fuzz smoke
@@ -160,8 +160,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo nextest run --workspace
-      - run: cargo test --workspace --doc
+      - run: cargo nextest run --locked --workspace
+      - run: cargo test --locked --workspace --doc
 
   test-macos:
     name: Test (macOS)
@@ -186,8 +186,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo nextest run --workspace
-      - run: cargo test --workspace --doc
+      - run: cargo nextest run --locked --workspace
+      - run: cargo test --locked --workspace --doc
 
   workflows:
     name: Workflows
@@ -205,6 +205,7 @@ jobs:
         run: |
           python3 -m pip install --user 'zizmor==1.16.1'
           "$HOME/.local/bin/zizmor" --min-severity=high .github/workflows
+      - run: bash factory/scripts/write-ledger.sh --self-test
 
   gitleaks:
     name: Gitleaks
