@@ -58,40 +58,19 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 /// the `SKILL.md` parent directory for unreadable and parse skips.
 pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
     let want = name.trim();
-    let skip = skips.iter().find(|s| skip_matches_requested_name(s, want));
+    let skip = skips.iter().find(|s| s.matches_requested_name(want));
     match skip {
         Some(skip) => format!(
             "skipped skill: {} ({}): {}",
             skip.name
                 .as_deref()
-                .or_else(|| skill_md_package_name(&skip.path))
+                .or_else(|| crate::skip::skill_md_package_name(&skip.path))
                 .unwrap_or(want),
             skip.kind.as_str(),
             skip.detail
         ),
         None => format!("unknown skill: {name}"),
     }
-}
-
-fn skip_matches_requested_name(skip: &SkillSkip, want: &str) -> bool {
-    if want.is_empty() {
-        return false;
-    }
-    if let Some(n) = skip.name.as_deref() {
-        return n.eq_ignore_ascii_case(want);
-    }
-    matches!(skip.kind, SkipKind::Unreadable | SkipKind::ParseError)
-        && skill_md_package_name(&skip.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
-}
-
-fn skill_md_package_name(path: &Path) -> Option<&str> {
-    let file = path.file_name().and_then(|n| n.to_str())?;
-    if !file.eq_ignore_ascii_case("SKILL.md") {
-        return None;
-    }
-    path.parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
 }
 
 /// Result of validating one SKILL.md path.

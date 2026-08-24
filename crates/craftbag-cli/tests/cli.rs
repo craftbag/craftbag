@@ -135,6 +135,43 @@ fn load_parse_skip_without_frontmatter_name_is_not_unknown() {
 }
 
 #[test]
+fn why_parse_skip_without_frontmatter_name_is_not_unknown() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\ndescription: no name\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(tmp.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("\"kind\": \"parse_error\""),
+        "why JSON must keep parse_error: {stdout}"
+    );
+    assert!(
+        stdout.contains("demo"),
+        "why JSON must keep the package path: {stdout}"
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
+}
+
+#[test]
 fn why_unknown_exits_1() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();

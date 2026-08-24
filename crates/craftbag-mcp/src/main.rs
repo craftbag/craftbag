@@ -123,6 +123,9 @@ fn why_json(args: WhyArgs) -> Result<String, String> {
         args.context.as_deref(),
         Some(budgets),
     );
+    if let Some(msg) = why.unknown_skill_message() {
+        return Err(msg);
+    }
     serde_json::to_string_pretty(&why).map_err(|e| e.to_string())
 }
 
@@ -436,6 +439,40 @@ mod tests {
             assert!(
                 !text.contains("unknown skill"),
                 "nameless parse skip must not look missing: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_unknown_is_error() {
+        empty_home(|| {
+            let resp = call(10, "skills_why", json!({"name": "no-such-skill"}));
+            assert_eq!(resp["result"]["isError"], true);
+            let text = call_text(&resp);
+            assert!(text.contains("unknown skill: no-such-skill"), "{text}");
+        });
+    }
+
+    #[test]
+    fn skills_why_parse_skip_without_frontmatter_name_is_not_unknown() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let pkg = tmp.path().join("demo");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\ndescription: no name\n---\nbody\n",
+            )
+            .expect("write");
+            let parent = tmp.path().to_string_lossy().into_owned();
+            let why = call(11, "skills_why", json!({"name": "demo", "paths": [parent]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            let why_text = call_text(&why);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
+            assert!(
+                why_text.contains("demo"),
+                "why JSON must keep the package path: {why_text}"
             );
         });
     }
