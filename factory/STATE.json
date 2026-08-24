@@ -6,32 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "4d447feb065cb229b0318fb7f0a2a7f2d9b45e14",
+  "ledger_sha": "567465f9c757abefd92c227c5fbf838500e999b7",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
-  "last_adversary_head": "ed0e0cbb9e36a931dcdae9fc69f35a98a268d827",
+  "last_adversary_head": "6d4c37d277bbccf8f2ffaeda0d9c370535653f8b",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-nfkc-ignore-47",
+    "id": "adversary-xml-illegal-48",
     "work_source": "adversary",
-    "started_at": "2026-08-24T21:34:11Z",
-    "finished_at": "2026-08-24T21:34:11Z",
+    "started_at": "2026-08-24T21:53:56Z",
+    "finished_at": "2026-08-24T21:53:56Z",
     "result": "landed",
-    "head": "6d4c37d277bbccf8f2ffaeda0d9c370535653f8b",
-    "pr": 47,
+    "head": "3825248d231cd339d25114b2c58999a7be51d069",
+    "pr": 48,
     "files": [
-      "src/discover.rs"
+      "src/activate.rs"
     ],
-    "tests": "NFKC ignore-prefix dots join like extra-path; nextest 200; PR CI green",
+    "tests": "drop XML 1.0-illegal chars from catalog; nextest 201; PR CI green",
     "review": "0"
   },
-  "last_sha": "6d4c37d277bbccf8f2ffaeda0d9c370535653f8b",
+  "last_sha": "3825248d231cd339d25114b2c58999a7be51d069",
   "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "pending",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T21:34:11Z",
+    "checked_at": "2026-08-24T21:53:56Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
