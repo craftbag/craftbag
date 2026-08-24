@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use craftbag::{
     DiscoveryOptions, FormatOptions, discover, find_skill_by_name, format_load_message,
-    progressive_budgets, why,
+    progressive_budgets, unknown_or_skipped_skill_message, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -108,7 +108,7 @@ fn load_text(args: LoadArgs) -> Result<String, String> {
             args.args.as_deref().unwrap_or(""),
             FormatOptions::default(),
         )),
-        None => Err(format!("unknown skill: {}", args.name)),
+        None => Err(unknown_or_skipped_skill_message(&args.name, &report.skips)),
     }
 }
 
@@ -381,7 +381,35 @@ mod tests {
         empty_home(|| {
             let resp = call(6, "skills_load", json!({"name": "no-such-skill"}));
             assert_eq!(resp["result"]["isError"], true);
-            assert!(call_text(&resp).contains("unknown skill"));
+            let text = call_text(&resp);
+            assert!(text.contains("unknown skill"), "{text}");
+            assert!(!text.contains("skipped skill"), "{text}");
+        });
+    }
+
+    #[test]
+    fn skills_load_parse_error_skip_is_not_unknown() {
+        empty_home(|| {
+            let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/corpus/agentskills/invalid-name")
+                .to_string_lossy()
+                .into_owned();
+            let resp = call(
+                8,
+                "skills_load",
+                json!({"name": "Bad_Name", "paths": [parent]}),
+            );
+            assert_eq!(resp["result"]["isError"], true);
+            let text = call_text(&resp);
+            assert!(
+                text.contains("skipped skill: Bad_Name"),
+                "load must name the skipped skill: {text}"
+            );
+            assert!(text.contains("parse_error"), "{text}");
+            assert!(
+                !text.contains("unknown skill"),
+                "skipped parse error must not look missing: {text}"
+            );
         });
     }
 

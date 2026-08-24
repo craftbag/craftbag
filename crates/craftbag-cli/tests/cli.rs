@@ -55,6 +55,44 @@ fn load_unknown_exits_2() {
         .output()
         .expect("run");
     assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill: no-such-skill"),
+        "stderr={stderr}"
+    );
+    assert!(!stderr.contains("skipped skill"), "stderr={stderr}");
+}
+
+#[test]
+fn load_parse_error_skip_is_not_unknown() {
+    let parent = corpus().join("agentskills/invalid-name");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("Bad_Name")
+        .arg("--path")
+        .arg(&parent)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("skipped skill: Bad_Name"),
+        "load must name the skipped skill, not call it unknown: {stderr}"
+    );
+    assert!(
+        stderr.contains("parse_error"),
+        "load must include skip kind: {stderr}"
+    );
+    assert!(
+        !stderr.contains("unknown skill"),
+        "skipped parse error must not look missing: {stderr}"
+    );
 }
 
 #[test]
