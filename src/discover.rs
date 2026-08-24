@@ -302,6 +302,21 @@ fn load_extra_path(
             );
             return;
         }
+        // Unreadable or oversized SKILL.md cannot be proven to be a loose
+        // collection root. Load it as this path's package (skip) so nested
+        // SKILL.md files do not leak.
+        if skill_md_stays_in_package(&skill_file) && read_skill_md(&skill_file).is_err() {
+            try_load_skill_file(
+                &skill_file,
+                &SkillSource::ExtraPath,
+                ignore,
+                disabled,
+                &[],
+                skills,
+                skips,
+            );
+            return;
+        }
         // A lone SKILL.md is a package. The same file next to named
         // packages is a loose root file; scan so those packages load.
         if !dir_has_child_skill_packages(&expanded) {
@@ -2004,5 +2019,103 @@ mod tests {
             "skills-subdir escape must be an unreadable skip: {:?}",
             report.skips
         );
+    }
+
+    #[test]
+    fn extra_path_oversized_skill_md_does_not_scan_nested_skill() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let mut huge = String::from("---\nname: wanted\ndescription: huge\n---\n");
+        huge.push_str(&"x".repeat(SKILL_MD_MAX_BYTES as usize + 1));
+        fs::write(pkg.join("SKILL.md"), huge).expect("write");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "oversized extra-path package must not load nested SKILL.md: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::Unreadable && s.path.ends_with("wanted/SKILL.md")),
+            "oversized SKILL.md must stay an unreadable package skip: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "oversized wanted/SKILL.md must not become a root_file skip: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "oversized extra-path package must not look missing: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_unreadable_skill_md_does_not_scan_nested_skill() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let skill_file = pkg.join("SKILL.md");
+        let mut perms = fs::metadata(&skill_file).expect("meta").permissions();
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o000);
+        fs::set_permissions(&skill_file, perms).expect("chmod");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let _ = fs::set_permissions(&skill_file, fs::Permissions::from_mode(0o644));
+        assert!(
+            report.skills.is_empty(),
+            "unreadable extra-path package must not load nested SKILL.md: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::Unreadable && s.path.ends_with("wanted/SKILL.md")),
+            "unreadable SKILL.md must stay an unreadable package skip: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "unreadable wanted/SKILL.md must not become a root_file skip: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "unreadable extra-path package must not look missing: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
     }
 }
