@@ -1,0 +1,1 @@
+{"ts":"2026-08-24T00:40:00Z","job_id":"bootstrap","work_source":"bootstrap","result":"landed","head":"904b58a","pr":null,"tests":"cargo test --workspace -> 1 passed","noop":false,"ledger_sha_before":null}

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "phase": "contract",
+  "stealth_mode": true,
+  "session_branch": null,
+  "ready_pr": null,
+  "lease": null,
+  "human_gate": null,
+  "ledger_sha": null,
+  "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
+  "last_adversary_head": null,
+  "expand_cursor": 0,
+  "expand_noop_streak": 0,
+  "last_job": {
+    "id": "bootstrap",
+    "work_source": "bootstrap",
+    "started_at": null,
+    "finished_at": null,
+    "result": "landed",
+    "head": "904b58a",
+    "pr": null,
+    "files": [],
+    "tests": "cargo test --workspace -> 1 passed",
+    "review": "0"
+  },
+  "last_sha": "904b58a",
+  "next_work_source": "contract",
+  "consecutive_noop": 0,
+  "ci_status": {
+    "main": "unknown",
+    "ready_pr": "unknown",
+    "checked_at": null,
+    "failing_jobs": [],
+    "app_merge_attribution": false
+  },
+  "mpi": {
+    "cycle": 0,
+    "next_perspective": 1,
+    "clean_cycles": 0
+  },
+  "pr_plan_cursor": "pr-2",
+  "prove": {
+    "trees": [],
+    "last_why_summary": null
+  },
+  "budgets": {
+    "max_cycles": null,
+    "max_ready_prs": 1,
+    "max_child_agents": 4,
+    "max_usd": null,
+    "lease_minutes": 20
+  },
+  "clone_path": "/Users/sebastientardif/craftbag",
+  "forbidden_trees": [
+    "findbug",
+    "sebastientardif-bline",
+    "/Users/sebastientardif/bline"
+  ]
+}
