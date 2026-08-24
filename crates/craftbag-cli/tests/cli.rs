@@ -96,6 +96,45 @@ fn load_parse_error_skip_is_not_unknown() {
 }
 
 #[test]
+fn load_parse_skip_without_frontmatter_name_is_not_unknown() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\ndescription: no name\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("demo")
+        .arg("--path")
+        .arg(tmp.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("skipped skill: demo"),
+        "load must use the package dir when peek name is missing: {stderr}"
+    );
+    assert!(
+        stderr.contains("parse_error"),
+        "load must include skip kind: {stderr}"
+    );
+    assert!(
+        !stderr.contains("unknown skill"),
+        "nameless parse skip must not look missing: {stderr}"
+    );
+}
+
+#[test]
 fn why_unknown_exits_1() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();

@@ -53,22 +53,45 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 
 /// Error text when `load` cannot return a skill.
 ///
-/// A matching skip row (parse error, name/dir mismatch) is not "unknown".
+/// A matching skip row (parse error, name/dir mismatch, unreadable
+/// package) is not "unknown". Rows with no frontmatter name still match
+/// the `SKILL.md` parent directory for unreadable and parse skips.
 pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
     let want = name.trim();
-    let skip = skips.iter().find(|s| match s.name.as_deref() {
-        Some(n) if !want.is_empty() => n.eq_ignore_ascii_case(want),
-        _ => false,
-    });
+    let skip = skips.iter().find(|s| skip_matches_requested_name(s, want));
     match skip {
         Some(skip) => format!(
             "skipped skill: {} ({}): {}",
-            skip.name.as_deref().unwrap_or(want),
+            skip.name
+                .as_deref()
+                .or_else(|| skill_md_package_name(&skip.path))
+                .unwrap_or(want),
             skip.kind.as_str(),
             skip.detail
         ),
         None => format!("unknown skill: {name}"),
     }
+}
+
+fn skip_matches_requested_name(skip: &SkillSkip, want: &str) -> bool {
+    if want.is_empty() {
+        return false;
+    }
+    if let Some(n) = skip.name.as_deref() {
+        return n.eq_ignore_ascii_case(want);
+    }
+    matches!(skip.kind, SkipKind::Unreadable | SkipKind::ParseError)
+        && skill_md_package_name(&skip.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
+}
+
+fn skill_md_package_name(path: &Path) -> Option<&str> {
+    let file = path.file_name().and_then(|n| n.to_str())?;
+    if !file.eq_ignore_ascii_case("SKILL.md") {
+        return None;
+    }
+    path.parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
 }
 
 /// Result of validating one SKILL.md path.
@@ -649,6 +672,72 @@ mod tests {
     }
 
     #[test]
+    fn load_miss_names_unreadable_package_skip_not_unknown() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("demo", &[skip]);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "unreadable package must not look missing: {msg}"
+        );
+        assert!(msg.contains("unreadable"), "msg={msg}");
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn load_miss_parse_skip_without_frontmatter_name_uses_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/skill.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("DEMO", &[skip]);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "package dir is the identity when peek name is missing: {msg}"
+        );
+        assert!(msg.contains("parse_error"), "msg={msg}");
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn load_miss_root_file_and_empty_name_stay_unknown() {
+        let root = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
+            name: None,
+            kind: SkipKind::RootFile,
+            detail: "put the file in a named subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        let dir = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+        };
+        assert_eq!(
+            unknown_or_skipped_skill_message("skills", std::slice::from_ref(&root)),
+            "unknown skill: skills"
+        );
+        assert_eq!(
+            unknown_or_skipped_skill_message("skills", &[dir]),
+            "unknown skill: skills"
+        );
+        assert_eq!(
+            unknown_or_skipped_skill_message("   ", &[root]),
+            "unknown skill:    "
+        );
+    }
+
+    #[test]
     fn agents_root_loads_named_package() {
         let root = tempfile::tempdir().expect("tmp");
         write_skill(
@@ -845,6 +934,14 @@ mod tests {
         assert_eq!(report.skips.len(), 1);
         assert_eq!(report.skips[0].kind, SkipKind::Unreadable);
         assert!(report.skips[0].detail.contains("escapes"));
+        assert!(report.skips[0].name.is_none());
+        let msg = unknown_or_skipped_skill_message("escape", &report.skips);
+        assert!(
+            msg.contains("skipped skill: escape"),
+            "symlink-escape skip must name the package, not unknown: {msg}"
+        );
+        assert!(msg.contains("unreadable"), "msg={msg}");
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
     }
 
     fn corpus_dir() -> PathBuf {
