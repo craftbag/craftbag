@@ -114,6 +114,10 @@ pub fn validate_path(path: &Path) -> ValidationReport {
 /// discover and [`validate_path`] stay ignore-unknown so host extensions
 /// (`triggers`, `disable_model_invocation`, …) still load.
 pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport {
+    // Same NFKC `.` / `..` rewrite as extra-path, so
+    // `wanted/evil/‥/SKILL.md` is the `wanted` package.
+    let path = nfkc_dot_path_components(path);
+    let path = path.as_path();
     let path_buf = path.to_path_buf();
     let content = match read_skill_md(path) {
         Ok(c) => c,
@@ -2238,6 +2242,23 @@ mod tests {
             "---\nname: demo\ndescription: d\nmade_up_field: x\n---\nbody\n",
         )
         .expect("write");
+    }
+
+    #[test]
+    fn validate_path_nfkc_dotdot_component_is_package_like_extra_path() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let via = pkg.join("evil").join("‥").join("SKILL.md");
+        let report = validate_path(&via);
+        assert!(
+            report.ok,
+            "validate must rewrite NFKC `..` like extra-path and read wanted/SKILL.md: {:?}",
+            report
+        );
+        assert_eq!(report.name.as_deref(), Some("wanted"));
+        assert!(report.skip.is_none());
     }
 
     #[test]
