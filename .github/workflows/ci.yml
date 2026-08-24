@@ -47,6 +47,7 @@ jobs:
               - 'Cargo.lock'
               - 'rustfmt.toml'
               - 'deny.toml'
+              - '.github/workflows/ci.yml'
 
   lint:
     name: Lint
@@ -85,6 +86,58 @@ jobs:
       CARGO_TARGET_DIR: target/ci-test
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.85"
+      - uses: taiki-e/install-action@6cd13508893c0e7eab5f273c2575d3859bd7229a # v2
+        with:
+          tool: cargo-nextest
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo nextest run --workspace
+      - run: cargo test --workspace --doc
+
+  test-windows:
+    name: Test (Windows)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      CARGO_TARGET_DIR: target/ci-test
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        if: runner.os == 'Linux'
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.85"
+      - uses: taiki-e/install-action@6cd13508893c0e7eab5f273c2575d3859bd7229a # v2
+        with:
+          tool: cargo-nextest
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo nextest run --workspace
+      - run: cargo test --workspace --doc
+
+  test-macos:
+    name: Test (macOS)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      CARGO_TARGET_DIR: target/ci-test
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        if: runner.os == 'Linux'
         with:
           egress-policy: audit
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -155,13 +208,14 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [lint, test, workflows, gitleaks, stealth]
+    needs: [lint, test, test-windows, test-macos, workflows, gitleaks, stealth]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check job results
         run: |
           for r in "${{ needs.lint.result }}" "${{ needs.test.result }}" \
+                   "${{ needs.test-windows.result }}" "${{ needs.test-macos.result }}" \
                    "${{ needs.workflows.result }}" "${{ needs.gitleaks.result }}" \
                    "${{ needs.stealth.result }}"; do
             if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
