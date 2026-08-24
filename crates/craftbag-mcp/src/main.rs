@@ -384,4 +384,24 @@ mod tests {
             assert!(call_text(&resp).contains("unknown skill"));
         });
     }
+
+    #[test]
+    fn skills_why_parse_error_keeps_name() {
+        empty_home(|| {
+            let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/corpus/agentskills/invalid-name")
+                .to_string_lossy()
+                .into_owned();
+            let why = call(
+                7,
+                "skills_why",
+                json!({"name": "Bad_Name", "paths": [parent]}),
+            );
+            assert_eq!(why["result"]["isError"], false);
+            let why_text = call_text(&why);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert_eq!(why_v["skips"][0]["name"], "Bad_Name", "{why_text}");
+            assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
+        });
+    }
 }

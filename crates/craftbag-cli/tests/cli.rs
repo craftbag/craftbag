@@ -71,6 +71,36 @@ fn why_unknown_exits_1() {
 }
 
 #[test]
+fn why_parse_error_name_is_not_unknown() {
+    let parent = corpus().join("agentskills/invalid-name");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("Bad_Name")
+        .arg("--json")
+        .arg("--path")
+        .arg(&parent)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("\"name\": \"Bad_Name\""),
+        "why JSON must keep frontmatter name: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"kind\": \"parse_error\""),
+        "why JSON must keep parse_error: {stdout}"
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
+}
+
+#[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
