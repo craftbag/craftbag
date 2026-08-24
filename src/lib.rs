@@ -7,6 +7,7 @@ mod parse;
 mod skill;
 mod skip;
 mod source;
+mod why;
 
 pub use activate::{
     DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills, format_body_header,
@@ -14,7 +15,10 @@ pub use activate::{
     rank_skills_for_catalog, skill_relevance_score, trigger_matches,
     truncate_skill_body_for_budget,
 };
-pub use discover::{CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name};
+pub use discover::{
+    CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
+    validate_path,
+};
 pub use error::{Error, ParseError};
 pub use parse::{parse_skill, skill_name_matches_directory, validate_skill_name};
 pub use skill::{
@@ -23,6 +27,7 @@ pub use skill::{
 };
 pub use skip::{DiscoveryReport, SkillSkip, SkipKind};
 pub use source::SkillSource;
+pub use why::{ActivationDecision, ActivationReason, SkillSummary, WhyReport, why};
 
 /// Package version from `Cargo.toml`.
 pub fn version() -> &'static str {
