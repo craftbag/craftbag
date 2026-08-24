@@ -495,8 +495,9 @@ fn skill_md_stays_in_package(skill_file: &Path) -> bool {
     file_canon.starts_with(&pkg_canon)
 }
 
-#[cfg(test)]
-fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T {
+/// Override the home directory for in-process tests. Not a host API.
+#[doc(hidden)]
+pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T {
     HOME_OVERRIDE.with(|o| *o.borrow_mut() = home);
     let out = f();
     HOME_OVERRIDE.with(|o| *o.borrow_mut() = None);
