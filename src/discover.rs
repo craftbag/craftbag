@@ -1652,6 +1652,40 @@ mod tests {
         assert!(find_skill_by_name(&skills, "").is_none());
     }
 
+    #[test]
+    fn extra_path_unicode_package_why_matches_folded_name() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("перевод"), "перевод", "docs");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["перевод"],
+            "extra-path Unicode dir must load: {:?}",
+            report
+        );
+        assert!(find_skill_by_name(&report.skills, "ПЕРЕВОД").is_some());
+        let why = crate::why(&report, Some("ПЕРЕВОД"), None, None);
+        assert_eq!(
+            why.loaded.len(),
+            1,
+            "why must find the Unicode package under the folded query: {:?}",
+            why
+        );
+        assert_eq!(why.loaded[0].name, "перевод");
+        assert!(why.unknown_skill_message().is_none());
+    }
+
     #[cfg(unix)]
     #[test]
     fn unreadable_skills_dir_is_skip_not_silent() {

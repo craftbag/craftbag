@@ -153,10 +153,8 @@ pub fn why(
 fn name_matches(query: Option<&str>, name: &str) -> bool {
     match query {
         None => true,
-        Some(want) => {
-            let want = want.trim();
-            !want.is_empty() && name.eq_ignore_ascii_case(want)
-        }
+        // Same identity as load / skip matching: NFKC then Unicode case fold.
+        Some(want) => crate::parse::skill_names_equal(name, want),
     }
 }
 
@@ -369,6 +367,39 @@ mod tests {
             why.unknown_skill_message().as_deref(),
             Some("unknown skill: no-such")
         );
+    }
+
+    #[test]
+    fn why_unicode_query_matches_nfkc_loaded_name() {
+        let skill = Skill::new("перевод", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![skill],
+            skips: vec![],
+        };
+        let folded = why(&report, Some("ПЕРЕВОД"), None, None);
+        assert_eq!(
+            folded.loaded.len(),
+            1,
+            "why must NFKC-fold Cyrillic like load, not ASCII-only: {:?}",
+            folded.loaded
+        );
+        assert_eq!(folded.loaded[0].name, "перевод");
+        assert!(folded.unknown_skill_message().is_none());
+
+        let nfc = Skill::new("café", "d", "body");
+        let nfc_report = DiscoveryReport {
+            skills: vec![nfc],
+            skips: vec![],
+        };
+        let nfd = why(&nfc_report, Some("cafe\u{0301}"), None, None);
+        assert_eq!(
+            nfd.loaded.len(),
+            1,
+            "why must treat NFD query as the NFC package: {:?}",
+            nfd.loaded
+        );
+        assert_eq!(nfd.loaded[0].name, "café");
+        assert!(nfd.unknown_skill_message().is_none());
     }
 
     #[test]
