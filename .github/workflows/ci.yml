@@ -46,6 +46,7 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rustfmt.toml'
+              - 'rust-toolchain.toml'
               - 'deny.toml'
               - '.github/workflows/ci.yml'
               - 'factory/scripts/deny-check.sh'
