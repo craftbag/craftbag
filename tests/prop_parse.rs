@@ -1,7 +1,8 @@
 //! Property tests for `parse_skill` (name charset, description length, missing ---).
 
 use craftbag::{
-    ParseError, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS, parse_skill, validate_skill_name,
+    ParseError, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS,
+    parse_skill, validate_skill_name,
 };
 use proptest::prelude::*;
 
@@ -68,6 +69,14 @@ proptest! {
         prop_assert!(validate_skill_name(&name).is_err());
         let md = format!("---\nname: {name}\ndescription: d\n---\n");
         prop_assert!(parse_skill(&md).is_err());
+    }
+
+    #[test]
+    fn compatibility_over_max_is_rejected(over in 1usize..16) {
+        let compat = "c".repeat(SKILL_COMPATIBILITY_MAX_CHARS + over);
+        let md = format!("---\nname: ok-name\ndescription: d\ncompatibility: {compat}\n---\n");
+        let err = parse_skill(&md).unwrap_err();
+        prop_assert!(matches!(err, ParseError::InvalidYaml(_)));
     }
 
     #[test]
