@@ -15,6 +15,21 @@ Priority (first match wins):
 
 Never ask "should I continue?" after clean MPI cycles.
 
+## Competitor study (automatic)
+
+Do not wait for the user to ask. Canonical rules:
+`~/.grok/skills/competitor-analysis/SKILL.md` **Automatic triggers**.
+
+After `contract` completes, and again whenever MPI reaches Product
+Manager (8) or expand lands on the compete slot:
+
+1. If `~/market-research/agent-skills-craftbag/COMPETITOR-ANALYSIS.md`
+   is missing or older than 14 days, run `/competitor-analysis`.
+2. Read the steal list. Grep production callers. Land live gaps
+   (one ready PR).
+3. A missing analysis is not a `human_gate`. Act, then continue
+   `next-job.sh`.
+
 ## PR plan cursor
 
 Bootstrap (this tree) is already on `main`. Remaining slices:
@@ -59,3 +74,4 @@ Improve children: one perspective, no "should I continue?", `REVIEW: 0` plus emp
 2. Fuzz smoke
 3. Incumbent layout (Vercel / Anthropic)
 4. New prove tree
+5. Refresh competitor analysis and land steal-list items
