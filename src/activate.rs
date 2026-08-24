@@ -43,7 +43,10 @@ pub fn progressive_budgets(context_tokens: usize) -> ProgressiveBudgets {
     let catalog_token_budget = (ctx / 100).clamp(250, 25_000);
     let catalog_max_chars = catalog_token_budget.saturating_mul(4);
     let catalog_max_entries = (catalog_token_budget / 20).clamp(8, 1_000);
-    let body_token_budget = ((ctx * 2) / 100).clamp(300, 100_000);
+    let body_token_budget = ctx
+        .saturating_mul(2)
+        .saturating_div(100)
+        .clamp(300, 100_000);
     ProgressiveBudgets {
         catalog_max_entries,
         catalog_max_chars,
@@ -466,6 +469,14 @@ mod tests {
         let tiny = progressive_budgets(0);
         assert_eq!(tiny.body_token_budget, 300);
         assert_eq!(tiny.catalog_max_entries, 12);
+    }
+
+    #[test]
+    fn progressive_budgets_max_context_does_not_overflow() {
+        let huge = progressive_budgets(usize::MAX);
+        assert_eq!(huge.body_token_budget, 100_000);
+        assert_eq!(huge.catalog_max_entries, 1_000);
+        assert_eq!(huge.catalog_max_chars, 100_000);
     }
 
     #[test]
