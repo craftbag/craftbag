@@ -289,9 +289,10 @@ fn load_extra_path(
         .find(|p| p.is_file());
     if let Some(skill_file) = package_md {
         // This extra path is that package unless we can prove the SKILL.md
-        // is a loose collection root (readable name that is not this
-        // directory, plus sibling packages). Nested SKILL.md stays inside
-        // the package tree.
+        // is a loose collection root (a real name that is not this
+        // directory, plus sibling packages). `.` / `..` are path
+        // components, not names. Nested SKILL.md stays inside the
+        // package tree.
         if !extra_path_is_loose_collection(&expanded, &skill_file) {
             try_load_skill_file(
                 &skill_file,
@@ -350,7 +351,13 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
         return false;
     };
     let name = name.trim();
-    if name.is_empty() || skill_name_matches_directory(skill_file, name) {
+    // `.` / `..` never match a package dir after lexical collapse, and
+    // they are not skill names. Treat them like a missing peek name.
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || skill_name_matches_directory(skill_file, name)
+    {
         return false;
     }
     dir_has_child_skill_packages(dir)
@@ -2237,5 +2244,67 @@ mod tests {
         let why = crate::why(&report, Some("wanted"), None, None);
         assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
         assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_dot_or_dotdot_frontmatter_name_does_not_scan_nested() {
+        for peeked in [".", ".."] {
+            let cwd = tempfile::tempdir().expect("cwd");
+            let extra = tempfile::tempdir().expect("extra");
+            let pkg = extra.path().join("wanted");
+            fs::create_dir_all(&pkg).expect("mkdir");
+            fs::write(
+                pkg.join("SKILL.md"),
+                format!("---\nname: {peeked}\ndescription: path-like name\n---\nPACKAGE_BODY\n"),
+            )
+            .expect("write");
+            write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+            let report = empty_home_discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![pkg.display().to_string()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert!(
+                report.skills.is_empty(),
+                "name `{peeked}` must not prove a loose collection: {:?}",
+                report
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| !s.content.contains("NESTED_SECRET")),
+                "nested skill body must not load for name `{peeked}`: {:?}",
+                report.skills
+            );
+            assert!(
+                report.skips.iter().any(|s| {
+                    s.kind == SkipKind::ParseError && s.path.ends_with("wanted/SKILL.md")
+                }),
+                "name `{peeked}` must stay a parse_error package skip: {:?}",
+                report.skips
+            );
+            assert!(
+                report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+                "wanted/SKILL.md with name `{peeked}` must not become a root_file skip: {:?}",
+                report.skips
+            );
+            assert!(find_skill_by_name(&report.skills, "evil").is_none());
+            let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+            assert!(
+                msg.contains("skipped skill"),
+                "package wanted with peeked name `{peeked}` must not look missing: {msg}"
+            );
+            assert!(!msg.contains("unknown skill"), "msg={msg}");
+            let why = crate::why(&report, Some("wanted"), None, None);
+            assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+            assert!(
+                why.unknown_skill_message().is_none(),
+                "why wanted must find the package skip, not unknown: {:?}",
+                why.unknown_skill_message()
+            );
+        }
     }
 }
