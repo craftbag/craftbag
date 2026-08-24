@@ -1,35 +1,35 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "63f6e7b8abadc347bf207f50c6f858d8759db2d6",
+  "ledger_sha": "b2615d92863c918591599ecc24131730dc139243",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "5026422322952f34bd6e4754ad13af7b83174bb9",
   "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-pr-9",
-    "work_source": "adversary",
-    "started_at": "2026-08-24T02:29:00Z",
-    "finished_at": "2026-08-24T02:29:00Z",
+    "id": "prove-pr-9",
+    "work_source": "prove",
+    "started_at": "2026-08-24T02:29:40Z",
+    "finished_at": "2026-08-24T02:29:40Z",
     "result": "landed",
     "head": "5026422322952f34bd6e4754ad13af7b83174bb9",
     "pr": null,
     "files": [],
-    "tests": "adversary check-work + scoped audit -> 0 must-fix",
+    "tests": "craftbag why --json corpus + ~/.grok/skills",
     "review": "0"
   },
   "last_sha": "5026422322952f34bd6e4754ad13af7b83174bb9",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T02:29:00Z",
+    "checked_at": "2026-08-24T02:29:40Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -40,8 +40,13 @@
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
-    "trees": [],
-    "last_why_summary": null
+    "trees": [
+      "tests/corpus/agentskills/minimal-valid",
+      "tests/corpus/collision",
+      "tests/corpus",
+      "~/.grok/skills"
+    ],
+    "last_why_summary": "minimal-valid: 1 loaded. collision extra-path: 0 (needs package or skills/ children). corpus root-file dir as package: name_directory_mismatch. ~/.grok/skills: 332 loaded, 0 skips."
   },
   "budgets": {
     "max_cycles": null,
