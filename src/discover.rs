@@ -1,7 +1,7 @@
 //! Multi-root SKILL.md discovery. First name wins.
 
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,7 @@ thread_local! {
 pub struct DiscoveryOptions {
     /// Extra paths (`~` expanded).
     pub paths: Vec<String>,
-    /// Path prefixes to ignore (`~` expanded).
+    /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     pub disabled: Vec<String>,
@@ -134,7 +134,7 @@ pub fn validate_path(path: &Path) -> ValidationReport {
 }
 
 fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
-    let ignore = expand_path_list(&opts.ignore);
+    let ignore = expand_ignore_list(cwd, &opts.ignore);
     let disabled = opts.disabled.clone();
     let mut skills = Vec::new();
     let mut skips = Vec::new();
@@ -332,8 +332,36 @@ fn expand_tilde(raw: &str) -> PathBuf {
     PathBuf::from(raw)
 }
 
-fn expand_path_list(paths: &[String]) -> Vec<PathBuf> {
-    paths.iter().map(|p| expand_tilde(p)).collect()
+fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<PathBuf> {
+    let cwd_abs = cwd
+        .canonicalize()
+        .unwrap_or_else(|_| lexical_normalize(cwd));
+    paths
+        .iter()
+        .map(|p| {
+            let expanded = expand_tilde(p);
+            let joined = if expanded.is_absolute() {
+                expanded
+            } else {
+                cwd_abs.join(expanded)
+            };
+            lexical_normalize(&joined)
+        })
+        .collect()
+}
+
+fn lexical_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::ParentDir => {
+                let _ = out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn path_is_ignored(path: &Path, ignore: &[PathBuf]) -> bool {
@@ -346,13 +374,16 @@ fn path_is_ignored(path: &Path, ignore: &[PathBuf]) -> bool {
 }
 
 fn path_has_ignore_prefix(path: &Path, prefix: &Path) -> bool {
-    if path.starts_with(prefix) {
+    let path_lex = lexical_normalize(path);
+    let prefix_lex = lexical_normalize(prefix);
+    if path_lex.starts_with(&prefix_lex) || path.starts_with(prefix) {
         return true;
     }
-    let Ok(prefix_canon) = prefix.canonicalize() else {
-        return false;
+    let prefix_canon = match prefix.canonicalize().or_else(|_| prefix_lex.canonicalize()) {
+        Ok(p) => p,
+        Err(_) => return false,
     };
-    if path.starts_with(&prefix_canon) {
+    if path.starts_with(&prefix_canon) || path_lex.starts_with(&prefix_canon) {
         return true;
     }
     match path.canonicalize() {
@@ -1058,5 +1089,63 @@ mod tests {
         );
         assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
         assert_eq!(report.skills[0].name, "public");
+    }
+
+    fn project_with_secret_and_public() -> tempfile::TempDir {
+        let root = tempfile::tempdir().expect("tmp");
+        write_skill(
+            &root.path().join(".agents").join("skills").join("secret"),
+            "secret",
+            "x",
+        );
+        write_skill(
+            &root.path().join(".agents").join("skills").join("public"),
+            "public",
+            "x",
+        );
+        root
+    }
+
+    fn assert_secret_ignored(report: &crate::skip::DiscoveryReport) {
+        assert!(
+            report.skills.iter().all(|s| s.name != "secret"),
+            "secret skill must be ignored, skills={:?}",
+            report.skills
+        );
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "public");
+    }
+
+    #[test]
+    fn ignore_relative_prefix_matches_absolute_walked_path() {
+        let root = project_with_secret_and_public();
+        let report = empty_home_discover(
+            root.path(),
+            &DiscoveryOptions {
+                ignore: vec![".agents/skills/secret".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_secret_ignored(&report);
+    }
+
+    #[test]
+    fn ignore_dotdot_through_missing_component_matches() {
+        let root = project_with_secret_and_public();
+        let ignore = root
+            .path()
+            .join(".agents")
+            .join("skills")
+            .join("missing")
+            .join("..")
+            .join("secret");
+        let report = empty_home_discover(
+            root.path(),
+            &DiscoveryOptions {
+                ignore: vec![ignore.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_secret_ignored(&report);
     }
 }
