@@ -6,30 +6,30 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "7efda0cbd4ea9cec154253a8c8cfae16798f6df9",
+  "ledger_sha": "6d370bad2cab42b00f541e9c50456749b0f04b4f",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
-  "expand_cursor": 2,
+  "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-enduser-4",
-    "work_source": "improve",
-    "started_at": "2026-08-24T03:49:26Z",
-    "finished_at": "2026-08-24T03:49:26Z",
-    "result": "noop",
+    "id": "expand-2-3-4",
+    "work_source": "expand",
+    "started_at": "2026-08-24T03:50:44Z",
+    "finished_at": "2026-08-24T03:50:44Z",
+    "result": "landed",
     "head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
     "pr": null,
     "files": [],
-    "tests": "End User: no banner, no emoji, envelope lists only",
+    "tests": "fuzz+incumbent present; why lc-pack agents+extraPath",
     "review": "0"
   },
   "last_sha": "4ca5a88c26742329e2c1c735b58452fee70a1879",
   "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:49:26Z",
+    "checked_at": "2026-08-24T03:50:44Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -47,9 +47,11 @@
       "~/.grok/skills",
       "tests/corpus/incumbent/claude-project (cwd + --vendor claude)",
       "tests/corpus/incumbent/vercel-npx (--path)",
-      "tests/corpus/agentskills/package-full"
+      "tests/corpus/agentskills/package-full",
+      "tests/corpus/lowercase-skill-md (cwd)",
+      "tests/corpus/lowercase-skill-md/.agents/skills/lc-pack (--path)"
     ],
-    "last_why_summary": "package-full extraPath loaded, 0 skips. No ~/.agents/skills or ~/.claude/skills on this machine."
+    "last_why_summary": "lowercase lc-pack loads as ExtraPath via --path and as Agents via cwd. fuzz-smoke and incumbent corpus still on main."
   },
   "budgets": {
     "max_cycles": null,
