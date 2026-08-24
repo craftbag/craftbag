@@ -48,6 +48,7 @@ jobs:
               - 'rustfmt.toml'
               - 'deny.toml'
               - '.github/workflows/ci.yml'
+              - 'fuzz/**'
 
   lint:
     name: Lint
@@ -100,6 +101,36 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo nextest run --workspace
       - run: cargo test --workspace --doc
+
+  fuzz-smoke:
+    name: Fuzz smoke
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: nightly
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: nightly
+      - uses: taiki-e/install-action@6cd13508893c0e7eab5f273c2575d3859bd7229a # v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            .
+            fuzz
+          shared-key: fuzz
+          cache-on-failure: true
+      - run: cargo fuzz run parse_skill -- -max_total_time=5
 
   test-windows:
     name: Test (Windows)
@@ -208,13 +239,14 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [lint, test, test-windows, test-macos, workflows, gitleaks, stealth]
+    needs: [lint, test, fuzz-smoke, test-windows, test-macos, workflows, gitleaks, stealth]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check job results
         run: |
           for r in "${{ needs.lint.result }}" "${{ needs.test.result }}" \
+                   "${{ needs.fuzz-smoke.result }}" \
                    "${{ needs.test-windows.result }}" "${{ needs.test-macos.result }}" \
                    "${{ needs.workflows.result }}" "${{ needs.gitleaks.result }}" \
                    "${{ needs.stealth.result }}"; do

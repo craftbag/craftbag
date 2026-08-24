@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/craftbag-cli", "crates/craftbag-mcp"]
+exclude = ["fuzz"]
 resolver = "2"
 
 [package]
@@ -19,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
 [dev-dependencies]
+proptest = "1"
 serde_json = "1"
 tempfile = "3"
 
