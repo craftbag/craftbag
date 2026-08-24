@@ -9,6 +9,7 @@ cargo nextest run --workspace
 cargo test --workspace --doc
 cargo deny check
 bash factory/scripts/assert-stealth.sh craftbag/craftbag
+bash factory/scripts/write-ledger.sh --self-test
 ```
 
 Every commit needs `git commit -s`. Sign-off email is `git config user.email`.

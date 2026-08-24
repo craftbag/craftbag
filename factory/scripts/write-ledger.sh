@@ -1,7 +1,41 @@
 #!/usr/bin/env bash
 # CAS write STATE + append LEDGER on factory/ledger.
 # Exit 0 = wrote or crash-replay no-op. Exit 2 = lost race. Exit 1 = hard fail.
+#
+# Push lease uses the fetched git HEAD (remote tip). STATE.ledger_sha may
+# be HEAD or HEAD^ (the last write commits ledger_sha=parent and does not
+# leave a dirty post-push stamp).
 set -euo pipefail
+
+cas_ok() {
+  # args: expected_sha head parent
+  python3 -c '
+import sys
+expected, head, parent = sys.argv[1], sys.argv[2], sys.argv[3]
+if not expected:
+    sys.exit(0)
+sys.exit(0 if expected in (head, parent) else 1)
+' "$1" "$2" "$3"
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  echo "PLAN: write-ledger CAS self-test"
+  fail=0
+  cas_ok "" "aaa" "bbb" || fail=1
+  cas_ok "aaa" "aaa" "bbb" || fail=1
+  cas_ok "bbb" "aaa" "bbb" || fail=1
+  if cas_ok "ccc" "aaa" "bbb"; then
+    fail=1
+  fi
+  if [[ "$fail" -ne 0 ]]; then
+    echo "FAIL: CAS predicate"
+    echo "DONE: ok=false error=self-test"
+    exit 1
+  fi
+  echo "OK: empty, HEAD, and HEAD^ accepted; other rejected"
+  echo "DONE: ok=true"
+  exit 0
+fi
 
 echo "PLAN: write factory ledger"
 
@@ -36,9 +70,10 @@ fi
 
 expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("ledger_sha") or "")' "$STATE")"
 head="$(git -C "$LEDGER_WT" rev-parse HEAD)"
-echo "DO: compare HEAD=$head ledger_sha=${expected:-empty}"
-if [[ -n "$expected" && "$head" != "$expected" ]]; then
-  echo "WAIT: lost race HEAD!=ledger_sha"
+parent="$(git -C "$LEDGER_WT" rev-parse --verify "${head}^" 2>/dev/null || true)"
+echo "DO: compare HEAD=$head parent=${parent:-none} ledger_sha=${expected:-empty}"
+if ! cas_ok "$expected" "$head" "$parent"; then
+  echo "WAIT: lost race ledger_sha matches neither HEAD nor parent"
   echo "DONE: ok=false error=cas_mismatch"
   echo "NEXT: re-read STATE and retry once"
   exit 2
@@ -67,6 +102,8 @@ if [[ -n "$NEW_LINE" ]]; then
   printf '%s\n' "$NEW_LINE" >> "$LEDGER"
 fi
 
+# Stamp parent tip into the commit. After this lands, ledger_sha == HEAD^
+# on a clean tree. The next cycle accepts that (cas_ok HEAD^).
 python3 - "$STATE" "$head" <<'PY'
 import json, sys
 path, head = sys.argv[1], sys.argv[2]
@@ -85,7 +122,8 @@ if git -C "$LEDGER_WT" diff --cached --quiet; then
   exit 0
 fi
 git -C "$LEDGER_WT" commit -s -m "chore: factory ledger"
-if ! git -C "$LEDGER_WT" push --force-with-lease="factory/ledger:${expected:-$head}" origin "factory/ledger"; then
+# Lease the fetched remote tip, not STATE.ledger_sha (that may be HEAD^).
+if ! git -C "$LEDGER_WT" push --force-with-lease="factory/ledger:${head}" origin "factory/ledger"; then
   echo "WAIT: push lease rejected"
   echo "DONE: ok=false error=push_lease"
   echo "NEXT: re-read STATE and retry once"
@@ -93,15 +131,6 @@ if ! git -C "$LEDGER_WT" push --force-with-lease="factory/ledger:${expected:-$he
 fi
 
 new_head="$(git -C "$LEDGER_WT" rev-parse HEAD)"
-python3 - "$STATE" "$new_head" <<'PY'
-import json, sys
-path, head = sys.argv[1], sys.argv[2]
-state = json.load(open(path))
-state["ledger_sha"] = head
-json.dump(state, open(path, "w"), indent=2)
-open(path, "a").write("\n")
-PY
-
 echo "DONE: ok=true head=$new_head"
 echo "NEXT: next-cycle"
 exit 0
