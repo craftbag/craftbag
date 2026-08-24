@@ -6,37 +6,37 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f67f4613e25ae7545fdc833b6545326445960e2f",
+  "ledger_sha": "7efda0cbd4ea9cec154253a8c8cfae16798f6df9",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-developer-3",
+    "id": "improve-enduser-4",
     "work_source": "improve",
-    "started_at": "2026-08-24T03:48:32Z",
-    "finished_at": "2026-08-24T03:48:32Z",
+    "started_at": "2026-08-24T03:49:26Z",
+    "finished_at": "2026-08-24T03:49:26Z",
     "result": "noop",
     "head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
     "pr": null,
     "files": [],
-    "tests": "Developer: name_over_max + 1.85 prop_parse 8 passed",
+    "tests": "End User: no banner, no emoji, envelope lists only",
     "review": "0"
   },
   "last_sha": "4ca5a88c26742329e2c1c735b58452fee70a1879",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:48:32Z",
+    "checked_at": "2026-08-24T03:49:26Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 16,
-    "next_perspective": 4,
-    "clean_cycles": 16
+    "cycle": 17,
+    "next_perspective": 5,
+    "clean_cycles": 17
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
