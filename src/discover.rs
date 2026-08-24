@@ -3,6 +3,8 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::Error;
 use crate::parse::{parse_skill, skill_name_matches_directory};
 use crate::skill::Skill;
@@ -47,6 +49,85 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
         return None;
     }
     skills.iter().find(|s| s.name.to_lowercase() == want)
+}
+
+/// Result of validating one SKILL.md path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationReport {
+    pub path: PathBuf,
+    pub ok: bool,
+    pub name: Option<String>,
+    pub errors: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip: Option<SkillSkip>,
+}
+
+/// Validate a SKILL.md path: readable, parse, and name/dir match.
+pub fn validate_path(path: &Path) -> ValidationReport {
+    let path_buf = path.to_path_buf();
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            return ValidationReport {
+                path: path_buf.clone(),
+                ok: false,
+                name: None,
+                errors: vec![e.to_string()],
+                skip: Some(SkillSkip {
+                    path: path_buf,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail: e.to_string(),
+                    winner_path: None,
+                }),
+            };
+        }
+    };
+    match parse_skill(&content) {
+        Ok(skill) => {
+            if skill_name_matches_directory(path, &skill.name) {
+                ValidationReport {
+                    path: path_buf,
+                    ok: true,
+                    name: Some(skill.name),
+                    errors: Vec::new(),
+                    skip: None,
+                }
+            } else {
+                let detail = format!(
+                    "frontmatter name `{}` must match parent directory name",
+                    skill.name
+                );
+                ValidationReport {
+                    path: path_buf.clone(),
+                    ok: false,
+                    name: Some(skill.name.clone()),
+                    errors: vec![detail.clone()],
+                    skip: Some(SkillSkip {
+                        path: path_buf,
+                        name: Some(skill.name),
+                        kind: SkipKind::NameDirectoryMismatch,
+                        detail,
+                        winner_path: None,
+                    }),
+                }
+            }
+        }
+        Err(e) => ValidationReport {
+            path: path_buf.clone(),
+            ok: false,
+            name: None,
+            errors: vec![e.to_string()],
+            skip: Some(SkillSkip {
+                path: path_buf,
+                name: None,
+                kind: SkipKind::ParseError,
+                detail: e.to_string(),
+                winner_path: None,
+            }),
+        },
+    }
 }
 
 fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
