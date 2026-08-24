@@ -43,12 +43,12 @@ pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
             "description exceeds {SKILL_DESCRIPTION_MAX_CHARS} characters"
         )));
     }
-    if let Some(ref c) = skill.compatibility
-        && c.chars().count() > SKILL_COMPATIBILITY_MAX_CHARS
-    {
-        return Err(ParseError::InvalidYaml(format!(
-            "compatibility exceeds {SKILL_COMPATIBILITY_MAX_CHARS} characters"
-        )));
+    if let Some(c) = &skill.compatibility {
+        if c.chars().count() > SKILL_COMPATIBILITY_MAX_CHARS {
+            return Err(ParseError::InvalidYaml(format!(
+                "compatibility exceeds {SKILL_COMPATIBILITY_MAX_CHARS} characters"
+            )));
+        }
     }
 
     Ok(skill)
