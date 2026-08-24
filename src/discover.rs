@@ -34,7 +34,7 @@ pub struct DiscoveryOptions {
     pub disabled: Vec<String>,
     /// Host names: `bline`, `claude`, `cursor`, `grok`.
     pub vendor_roots: Vec<String>,
-    /// Host-supplied user skills dir.
+    /// Host-supplied user skills dir (`~` / `~/` expanded, same as `paths`).
     pub user_skills_dir: Option<PathBuf>,
 }
 
@@ -235,8 +235,14 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     }
 
     if let Some(user_dir) = &opts.user_skills_dir {
+        // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
+        // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
+        let user_dir = match user_dir.to_str() {
+            Some(raw) => expand_tilde(raw),
+            None => user_dir.clone(),
+        };
         load_skills_from_dir(
-            user_dir,
+            &user_dir,
             &SkillSource::User,
             &ignore,
             &opts.disabled,
@@ -1828,6 +1834,39 @@ mod tests {
         );
         assert_eq!(report.skills.len(), 1);
         assert_eq!(report.skills[0].source, SkillSource::User);
+    }
+
+    #[test]
+    fn user_skills_dir_expands_tilde_like_extra_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        write_skill(
+            &home.path().join("myskills").join("mine"),
+            "mine",
+            "from-home",
+        );
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    user_skills_dir: Some(PathBuf::from("~/myskills")),
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["mine"],
+            "user_dir ~/myskills must expand like extra-path ~/: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].source, SkillSource::User);
+        assert_eq!(report.skills[0].content.trim(), "from-home");
     }
 
     #[test]
