@@ -284,6 +284,24 @@ mod tests {
     }
 
     #[test]
+    fn matches_requested_name_nfkc_dot_components_in_path() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/wanted/evil/‥/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            skip.matches_requested_name("wanted"),
+            "package dir must collapse NFKC `..` like extra-path, not treat ‥ as the name"
+        );
+        assert!(!skip.matches_requested_name("evil"));
+        assert!(!skip.matches_requested_name(".."));
+        assert!(!skip.matches_requested_name("‥"));
+    }
+
+    #[test]
     fn matches_requested_name_nfkc_dot_peek_is_not_identity() {
         let skip = SkillSkip {
             path: PathBuf::from("/tmp/wanted/SKILL.md"),

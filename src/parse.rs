@@ -219,13 +219,27 @@ fn scan_frontmatter_name(yaml: &str) -> Option<String> {
 /// Parent directory name of a `SKILL.md` path after stripping `.` / `..`.
 ///
 /// `wanted/./SKILL.md` and `wanted/other/../SKILL.md` are the `wanted`
-/// package, same as `wanted/SKILL.md`.
+/// package, same as `wanted/SKILL.md`. NFKC compatibility dots (`．`,
+/// `‥`, …) are the same components, matching extra-path and ignore.
 pub(crate) fn skill_md_package_dir_name(skill_md: &Path) -> Option<&str> {
     let parent = skill_md.parent()?;
     let mut stack: Vec<&std::ffi::OsStr> = Vec::new();
     for c in parent.components() {
         match c {
-            Component::Normal(s) => stack.push(s),
+            Component::Normal(s) => {
+                if let Some(text) = s.to_str() {
+                    let n = normalize_skill_name(text);
+                    let n = n.trim();
+                    if n == "." {
+                        continue;
+                    }
+                    if n == ".." {
+                        let _ = stack.pop();
+                        continue;
+                    }
+                }
+                stack.push(s);
+            }
             Component::ParentDir => {
                 let _ = stack.pop();
             }
@@ -829,6 +843,39 @@ Use pdftotext.
             Path::new("/tmp/перевод/SKILL.md"),
             "ПЕРЕВОД"
         ));
+    }
+
+    #[test]
+    fn skill_name_matches_directory_nfkc_dot_components() {
+        use std::path::Path;
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/./SKILL.md"), "wanted"),
+            "ASCII `.` must collapse like extra-path"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/other/../SKILL.md"), "wanted"),
+            "ASCII `..` must collapse like extra-path"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/．/SKILL.md"), "wanted"),
+            "fullwidth `.` must collapse, not become the package name"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/evil/‥/SKILL.md"), "wanted"),
+            "two-dot leader must collapse like extra-path `wanted/evil/..`"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/evil/︰/SKILL.md"), "wanted"),
+            "vertical two-dot leader must collapse like `..`"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("wanted/․/SKILL.md"), "wanted"),
+            "one-dot leader must collapse like `.`"
+        );
+        assert!(
+            !skill_name_matches_directory(Path::new("wanted/．/SKILL.md"), "．"),
+            "NFKC `.` is a path component, not a skill name"
+        );
     }
 
     #[test]
