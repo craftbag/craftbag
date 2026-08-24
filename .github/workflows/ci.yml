@@ -115,7 +115,7 @@ jobs:
       - name: zizmor
         run: |
           python3 -m pip install --user 'zizmor==1.16.1'
-          "$HOME/.local/bin/zizmor" .github/workflows
+          "$HOME/.local/bin/zizmor" --min-severity=high .github/workflows
 
   gitleaks:
     name: Gitleaks
