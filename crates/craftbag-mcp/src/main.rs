@@ -856,6 +856,32 @@ mod tests {
     }
 
     #[test]
+    fn skills_list_user_dir_tilde_expands() {
+        let home = tempfile::tempdir().expect("home");
+        let pkg = home.path().join("myskills").join("mine");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: mine\ndescription: from-home\n---\nfrom-home\n",
+        )
+        .expect("write");
+        craftbag::with_home_override(Some(home.path().to_path_buf()), || {
+            let resp = call(27, "skills_list", json!({"user_dir": "~/myskills"}));
+            assert_eq!(
+                resp["result"]["isError"],
+                false,
+                "user_dir ~/myskills must expand like paths: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("mine"),
+                "MCP user_dir tilde must load the home skill: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_list_null_user_dir_is_error() {
         empty_home(|| {
             let resp = call(26, "skills_list", json!({"user_dir": null}));

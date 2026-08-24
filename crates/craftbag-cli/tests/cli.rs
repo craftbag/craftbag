@@ -89,6 +89,27 @@ fn list_extra_path_json() {
 }
 
 #[test]
+fn list_user_dir_expands_tilde() {
+    let (home, mut cmd) = bin();
+    let pkg = home.path().join("myskills").join("mine");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: mine\ndescription: from-home\n---\nfrom-home\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    cmd.current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--user-dir")
+        .arg("~/myskills")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("mine"));
+}
+
+#[test]
 fn list_xml_available_skills() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
