@@ -6,37 +6,34 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "d287e090a3d9787de83adafc435c52ccf5de4a45",
+  "ledger_sha": "77f24add1a8686c6ae41def510c12f6b7eb8d608",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": null,
   "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "contract-pr-5",
+    "id": "contract-pr-6",
     "work_source": "contract",
-    "started_at": "2026-08-24T01:50:00Z",
-    "finished_at": "2026-08-24T01:55:11Z",
+    "started_at": "2026-08-24T02:00:00Z",
+    "finished_at": "2026-08-24T02:06:16Z",
     "result": "landed",
-    "head": "64ddbfca787867c172ef335d7de1727a72775bc0",
-    "pr": 6,
+    "head": "566bc8eab5a837ce80cba4846b79231ad7039525",
+    "pr": 7,
     "files": [
-      "src/why.rs",
-      "src/discover.rs",
-      "src/lib.rs",
-      "crates/craftbag-cli/",
+      "crates/craftbag-mcp/",
       "Cargo.toml",
       "Cargo.lock"
     ],
-    "tests": "cargo nextest run --workspace -> 79 passed",
+    "tests": "cargo nextest run --workspace -> 86 passed",
     "review": "0"
   },
-  "last_sha": "64ddbfca787867c172ef335d7de1727a72775bc0",
+  "last_sha": "566bc8eab5a837ce80cba4846b79231ad7039525",
   "next_work_source": "contract",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T01:55:11Z",
+    "checked_at": "2026-08-24T02:06:16Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -45,7 +42,7 @@
     "next_perspective": 1,
     "clean_cycles": 0
   },
-  "pr_plan_cursor": "pr-6",
+  "pr_plan_cursor": "pr-7",
   "prove": {
     "trees": [],
     "last_why_summary": null
