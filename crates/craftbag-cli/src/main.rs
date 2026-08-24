@@ -152,12 +152,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             let report = discover_cwd(&paths, &vendor, user_dir)?;
             let budgets = progressive_budgets(context_tokens);
             let why = why(&report, name.as_deref(), context.as_deref(), Some(budgets));
-            if let Some(want) = name.as_deref() {
-                let known = !why.loaded.is_empty() || !why.skips.is_empty();
-                if !known {
-                    let _ = writeln!(io::stderr(), "unknown skill: {want}");
-                    return Ok(ExitCode::from(1));
-                }
+            if let Some(msg) = why.unknown_skill_message() {
+                let _ = writeln!(io::stderr(), "{msg}");
+                return Ok(ExitCode::from(1));
             }
             if json {
                 println!(

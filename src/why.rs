@@ -62,6 +62,18 @@ pub struct WhyReport {
     pub query: Option<String>,
 }
 
+impl WhyReport {
+    /// Message when a non-empty name query matched neither a loaded skill nor a skip.
+    pub fn unknown_skill_message(&self) -> Option<String> {
+        let want = self.query.as_deref()?;
+        if self.loaded.is_empty() && self.skips.is_empty() {
+            Some(format!("unknown skill: {want}"))
+        } else {
+            None
+        }
+    }
+}
+
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and vendor
@@ -88,10 +100,7 @@ pub fn why(
         .iter()
         .filter(|s| match q {
             None => true,
-            Some(want) => s
-                .name
-                .as_deref()
-                .is_some_and(|n| n.eq_ignore_ascii_case(want)),
+            Some(want) => s.matches_requested_name(want),
         })
         .cloned()
         .collect();
@@ -218,6 +227,85 @@ mod tests {
         assert_eq!(why.skips.len(), 1);
         assert!(why.skips[0].winner_path.is_some());
         assert!(why.activation.is_empty());
+    }
+
+    #[test]
+    fn why_nameless_parse_skip_matches_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let why = why(&report, Some("DEMO"), None, None);
+        assert_eq!(
+            why.skips.len(),
+            1,
+            "why must find nameless parse skip by package dir"
+        );
+        assert_eq!(why.skips[0].kind, SkipKind::ParseError);
+        assert!(
+            why.unknown_skill_message().is_none(),
+            "nameless parse skip is not unknown"
+        );
+    }
+
+    #[test]
+    fn why_nameless_unreadable_skip_matches_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/skill.md"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let why = why(&report, Some("demo"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::Unreadable);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn why_nameless_root_file_skip_stays_unknown() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
+            name: None,
+            kind: SkipKind::RootFile,
+            detail: "put the file in a named subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let why = why(&report, Some("skills"), None, None);
+        assert!(
+            why.skips.is_empty(),
+            "root-file skip is not a named package"
+        );
+        assert_eq!(
+            why.unknown_skill_message().as_deref(),
+            Some("unknown skill: skills")
+        );
+    }
+
+    #[test]
+    fn why_unknown_name_is_unknown() {
+        let report = DiscoveryReport::default();
+        let why = why(&report, Some("no-such"), None, None);
+        assert_eq!(
+            why.unknown_skill_message().as_deref(),
+            Some("unknown skill: no-such")
+        );
     }
 
     #[test]

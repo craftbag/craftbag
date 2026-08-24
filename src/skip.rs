@@ -1,7 +1,7 @@
 //! Skip-kind taxonomy. Frozen after this PR.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,36 @@ pub struct SkillSkip {
     /// Winning path when `kind` is [`SkipKind::NameCollision`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub winner_path: Option<PathBuf>,
+}
+
+impl SkillSkip {
+    /// Whether `load`/`why` should treat this skip as the requested name.
+    ///
+    /// Frontmatter `name` wins when present. Nameless unreadable and parse
+    /// skips still match the `SKILL.md` parent directory so they are not
+    /// reported as unknown.
+    pub fn matches_requested_name(&self, want: &str) -> bool {
+        let want = want.trim();
+        if want.is_empty() {
+            return false;
+        }
+        if let Some(n) = self.name.as_deref() {
+            return n.eq_ignore_ascii_case(want);
+        }
+        matches!(self.kind, SkipKind::Unreadable | SkipKind::ParseError)
+            && skill_md_package_name(&self.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
+    }
+}
+
+/// Parent directory of a `SKILL.md` / `skill.md` path, when that is the file name.
+pub(crate) fn skill_md_package_name(path: &Path) -> Option<&str> {
+    let file = path.file_name().and_then(|n| n.to_str())?;
+    if !file.eq_ignore_ascii_case("SKILL.md") {
+        return None;
+    }
+    path.parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
 }
 
 /// Result of multi-root skill discovery, including skips for `why`.
@@ -160,6 +190,28 @@ mod tests {
             back.winner_path.as_deref(),
             Some(std::path::Path::new("/tmp/a/foo/SKILL.md"))
         );
+    }
+
+    #[test]
+    fn matches_requested_name_uses_package_dir_when_nameless() {
+        let parse = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        assert!(parse.matches_requested_name("DEMO"));
+        assert!(!parse.matches_requested_name("other"));
+        let root = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
+            name: None,
+            kind: SkipKind::RootFile,
+            detail: "put the file in a named subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        assert!(!root.matches_requested_name("skills"));
+        assert!(!root.matches_requested_name("   "));
     }
 
     #[test]
