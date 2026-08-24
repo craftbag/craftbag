@@ -1,0 +1,376 @@
+//! MCP stdio server: `skills_list`, `skills_load`, `skills_why`.
+//!
+//! Official `rmcp` 1.0+ uses let-chains and does not compile on MSRV 1.85.
+//! This binary speaks MCP JSON-RPC over stdio and wraps the same library
+//! the CLI uses.
+
+use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
+
+use craftbag::{
+    DiscoveryOptions, FormatOptions, discover, find_skill_by_name, format_load_message,
+    progressive_budgets, why,
+};
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+#[derive(Debug, Deserialize)]
+struct RpcRequest {
+    jsonrpc: Option<String>,
+    id: Option<Value>,
+    method: Option<String>,
+    #[serde(default)]
+    params: Value,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DiscoverArgs {
+    #[serde(default)]
+    paths: Vec<String>,
+    #[serde(default)]
+    vendor: Vec<String>,
+    #[serde(default)]
+    user_dir: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoadArgs {
+    name: String,
+    #[serde(default)]
+    args: Option<String>,
+    #[serde(default)]
+    paths: Vec<String>,
+    #[serde(default)]
+    vendor: Vec<String>,
+    #[serde(default)]
+    user_dir: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct WhyArgs {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    context: Option<String>,
+    #[serde(default)]
+    context_tokens: Option<usize>,
+    #[serde(default)]
+    paths: Vec<String>,
+    #[serde(default)]
+    vendor: Vec<String>,
+    #[serde(default)]
+    user_dir: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CallParams {
+    name: String,
+    #[serde(default)]
+    arguments: Value,
+}
+
+fn opts_from(
+    paths: Vec<String>,
+    vendor: Vec<String>,
+    user_dir: Option<String>,
+) -> DiscoveryOptions {
+    DiscoveryOptions {
+        paths,
+        vendor_roots: vendor,
+        user_skills_dir: user_dir.map(PathBuf::from),
+        ..DiscoveryOptions::default()
+    }
+}
+
+fn list_json(args: DiscoverArgs) -> Result<String, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+        .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&json!({
+        "skills": report.skills.iter().map(|s| json!({
+            "name": s.name,
+            "description": s.description,
+            "source": s.source,
+            "path": s.source_path,
+        })).collect::<Vec<_>>(),
+        "skips": report.skips,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+fn load_text(args: LoadArgs) -> Result<String, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+        .map_err(|e| e.to_string())?;
+    match find_skill_by_name(&report.skills, &args.name) {
+        Some(skill) => Ok(format_load_message(
+            skill,
+            args.args.as_deref().unwrap_or(""),
+            FormatOptions::default(),
+        )),
+        None => Err(format!("unknown skill: {}", args.name)),
+    }
+}
+
+fn why_json(args: WhyArgs) -> Result<String, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+        .map_err(|e| e.to_string())?;
+    let budgets = progressive_budgets(args.context_tokens.unwrap_or(8_000));
+    let why = why(
+        &report,
+        args.name.as_deref(),
+        args.context.as_deref(),
+        Some(budgets),
+    );
+    serde_json::to_string_pretty(&why).map_err(|e| e.to_string())
+}
+
+fn discover_properties() -> Value {
+    json!({
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md roots."},
+        "vendor": {"type": "array", "items": {"type": "string"}, "description": "Vendor roots: bline, claude, cursor, grok."},
+        "user_dir": {"type": "string", "description": "Host user skills directory."}
+    })
+}
+
+fn tools() -> Value {
+    let list_props = discover_properties();
+    let mut load_props = discover_properties();
+    load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
+    load_props["args"] =
+        json!({"type": "string", "description": "Optional arguments passed into the envelope."});
+    let mut why_props = discover_properties();
+    why_props["name"] = json!({"type": "string", "description": "Optional skill name filter."});
+    why_props["context"] = json!({"type": "string", "description": "Activation context text."});
+    why_props["context_tokens"] =
+        json!({"type": "integer", "description": "Token budget for activation (default 8000)."});
+    json!([
+        {
+            "name": "skills_list",
+            "description": "List discovered skills.",
+            "inputSchema": {"type": "object", "properties": list_props}
+        },
+        {
+            "name": "skills_load",
+            "description": "Load one skill body and package envelope. Does not dump scripts/ or references/ file bodies.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": load_props
+            }
+        },
+        {
+            "name": "skills_why",
+            "description": "Explain loaded, skipped, and activation decisions.",
+            "inputSchema": {"type": "object", "properties": why_props}
+        }
+    ])
+}
+
+fn ok(id: Value, result: Value) -> Value {
+    json!({"jsonrpc": "2.0", "id": id, "result": result})
+}
+
+fn err(id: Value, code: i64, message: &str) -> Value {
+    json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
+}
+
+fn handle(req: RpcRequest) -> Option<Value> {
+    let method = req.method.unwrap_or_default();
+    let id = req.id?;
+    if req.jsonrpc.as_deref() != Some("2.0") && req.jsonrpc.is_some() {
+        return Some(err(id, -32600, "invalid jsonrpc"));
+    }
+    match method.as_str() {
+        "initialize" => Some(ok(
+            id,
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "craftbag", "version": env!("CARGO_PKG_VERSION")}
+            }),
+        )),
+        "ping" => Some(ok(id, json!({}))),
+        "tools/list" => Some(ok(id, json!({"tools": tools()}))),
+        "tools/call" => {
+            let params: CallParams = match serde_json::from_value(req.params) {
+                Ok(p) => p,
+                Err(e) => return Some(err(id, -32602, &e.to_string())),
+            };
+            let (text, is_err) = match params.name.as_str() {
+                "skills_list" => {
+                    let args = serde_json::from_value(params.arguments).unwrap_or_default();
+                    match list_json(args) {
+                        Ok(s) => (s, false),
+                        Err(e) => (e, true),
+                    }
+                }
+                "skills_load" => match serde_json::from_value::<LoadArgs>(params.arguments) {
+                    Ok(args) => match load_text(args) {
+                        Ok(s) => (s, false),
+                        Err(e) => (e, true),
+                    },
+                    Err(e) => (e.to_string(), true),
+                },
+                "skills_why" => {
+                    let args = serde_json::from_value(params.arguments).unwrap_or_default();
+                    match why_json(args) {
+                        Ok(s) => (s, false),
+                        Err(e) => (e, true),
+                    }
+                }
+                other => return Some(err(id, -32601, &format!("unknown tool: {other}"))),
+            };
+            Some(ok(
+                id,
+                json!({
+                    "content": [{"type": "text", "text": text}],
+                    "isError": is_err
+                }),
+            ))
+        }
+        other => Some(err(id, -32601, &format!("method not found: {other}"))),
+    }
+}
+
+fn main() {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else {
+            break;
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let req: RpcRequest = match serde_json::from_str(&line) {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = writeln!(stdout, "{}", err(Value::Null, -32700, &e.to_string()));
+                let _ = stdout.flush();
+                continue;
+            }
+        };
+        if let Some(resp) = handle(req) {
+            let _ = writeln!(stdout, "{resp}");
+            let _ = stdout.flush();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DiscoverArgs, RpcRequest, handle, list_json};
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    fn corpus_pkg() -> String {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/corpus/agentskills/minimal-valid")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn call(id: i64, name: &str, arguments: serde_json::Value) -> serde_json::Value {
+        handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(id)),
+            method: Some("tools/call".into()),
+            params: json!({"name": name, "arguments": arguments}),
+        })
+        .expect("resp")
+    }
+
+    fn call_text(resp: &serde_json::Value) -> &str {
+        resp["result"]["content"][0]["text"].as_str().expect("text")
+    }
+
+    #[test]
+    fn initialize_advertises_tools() {
+        let req = RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(1)),
+            method: Some("initialize".into()),
+            params: json!({}),
+        };
+        let resp = handle(req).expect("resp");
+        assert_eq!(resp["result"]["capabilities"]["tools"], json!({}));
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(2)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let got: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(got, ["skills_list", "skills_load", "skills_why"]);
+        assert!(
+            tools[1]["inputSchema"]["required"]
+                .as_array()
+                .expect("req")
+                .iter()
+                .any(|v| v == "name")
+        );
+    }
+
+    #[test]
+    fn notification_has_no_response() {
+        let resp = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: None,
+            method: Some("notifications/initialized".into()),
+            params: json!({}),
+        });
+        assert!(resp.is_none());
+    }
+
+    #[test]
+    fn list_json_shape() {
+        let out = list_json(DiscoverArgs {
+            paths: vec![corpus_pkg()],
+            ..DiscoverArgs::default()
+        })
+        .expect("list");
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        assert!(v.get("skills").is_some(), "{out}");
+        assert!(v.get("skips").is_some(), "{out}");
+        assert!(out.contains("minimal-valid"), "{out}");
+    }
+
+    #[test]
+    fn skills_list_and_load_and_why() {
+        let pkg = corpus_pkg();
+        let list = call(3, "skills_list", json!({"paths": [pkg.clone()]}));
+        assert_eq!(list["result"]["isError"], false);
+        assert!(call_text(&list).contains("minimal-valid"));
+
+        let load = call(
+            4,
+            "skills_load",
+            json!({"name": "minimal-valid", "paths": [pkg.clone()]}),
+        );
+        assert_eq!(load["result"]["isError"], false);
+        let load_text = call_text(&load);
+        assert!(
+            load_text.contains("[Activated skill: minimal-valid]"),
+            "{load_text}"
+        );
+
+        let why = call(5, "skills_why", json!({"paths": [pkg]}));
+        assert_eq!(why["result"]["isError"], false);
+        let why_text = call_text(&why);
+        let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+        assert!(why_v.get("loaded").is_some(), "{why_text}");
+        assert!(why_v.get("skips").is_some(), "{why_text}");
+        assert!(why_v.get("activation").is_some(), "{why_text}");
+    }
+
+    #[test]
+    fn skills_load_unknown_is_error() {
+        let resp = call(6, "skills_load", json!({"name": "no-such-skill"}));
+        assert_eq!(resp["result"]["isError"], true);
+        assert!(call_text(&resp).contains("unknown skill"));
+    }
+}
