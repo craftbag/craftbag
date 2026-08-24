@@ -6,32 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f8b97c543a98afca3d91e215fe6705be0c0de0ae",
+  "ledger_sha": "591a4f4ebd412ac65ca86bbbdd714abc51c2104e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
-  "last_adversary_head": "8039b66f4f705c8e78f1f1db20094a7f060de072",
+  "last_adversary_head": "ea227fedf65fedae4f1a220d22b6ac0825a8b603",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-skills-root-symlink-52",
+    "id": "adversary-mcp-null-53",
     "work_source": "adversary",
-    "started_at": "2026-08-24T23:00:52Z",
-    "finished_at": "2026-08-24T23:00:52Z",
+    "started_at": "2026-08-24T23:22:01Z",
+    "finished_at": "2026-08-24T23:22:01Z",
     "result": "landed",
-    "head": "ea227fedf65fedae4f1a220d22b6ac0825a8b603",
-    "pr": 52,
+    "head": "535a637e1884a3cbaeb62a30b115472fb9e18d9d",
+    "pr": 53,
     "files": [
-      "src/discover.rs"
+      "crates/craftbag-mcp/src/main.rs"
     ],
-    "tests": "escaped skills-root SKILL.md is Unreadable before peek; nextest 208; PR CI green",
+    "tests": "reject present-null MCP args; nextest 214; PR CI green",
     "review": "0"
   },
-  "last_sha": "ea227fedf65fedae4f1a220d22b6ac0825a8b603",
+  "last_sha": "535a637e1884a3cbaeb62a30b115472fb9e18d9d",
   "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "pending",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T23:00:52Z",
+    "checked_at": "2026-08-24T23:22:01Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
