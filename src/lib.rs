@@ -1,5 +1,6 @@
-//! Public types, SKILL.md parse, and multi-root discovery.
+//! Public types, SKILL.md parse, discovery, and activation selector.
 
+mod activate;
 mod discover;
 mod error;
 mod parse;
@@ -7,6 +8,12 @@ mod skill;
 mod skip;
 mod source;
 
+pub use activate::{
+    DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills, format_body_header,
+    format_catalog, format_load_message, format_package_envelope, progressive_budgets,
+    rank_skills_for_catalog, skill_relevance_score, trigger_matches,
+    truncate_skill_body_for_budget,
+};
 pub use discover::{CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name};
 pub use error::{Error, ParseError};
 pub use parse::{parse_skill, skill_name_matches_directory, validate_skill_name};
