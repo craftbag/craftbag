@@ -218,6 +218,19 @@ mod tests {
         };
         assert!(!root.matches_requested_name("skills"));
         assert!(!root.matches_requested_name("   "));
+        let named_root = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
+            name: Some("loose".to_owned()),
+            kind: SkipKind::RootFile,
+            detail: "put the file in a named subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            named_root.matches_requested_name("loose"),
+            "frontmatter name remains an identity on root_file skips"
+        );
+        assert!(named_root.matches_requested_name("LOOSE"));
+        assert!(!named_root.matches_requested_name("skills"));
     }
 
     #[test]

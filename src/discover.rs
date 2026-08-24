@@ -483,9 +483,13 @@ fn load_skills_from_dir(
                 .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, ignore)
             {
+                let name = match read_skill_md(&path) {
+                    Ok(content) => peek_frontmatter_name(&content),
+                    Err(_) => None,
+                };
                 skips.push(SkillSkip {
                     path,
-                    name: None,
+                    name,
                     kind: SkipKind::RootFile,
                     detail: "put the file in a named subdirectory.".to_owned(),
                     winner_path: None,
@@ -984,6 +988,27 @@ mod tests {
         assert!(report.skills.is_empty());
         assert_eq!(report.skips.len(), 1);
         assert_eq!(report.skips[0].kind, SkipKind::RootFile);
+        assert_eq!(
+            report.skips[0].name.as_deref(),
+            Some("loose"),
+            "root_file skip must keep the frontmatter name so load/why do not call it unknown"
+        );
+        let msg = unknown_or_skipped_skill_message("loose", &report.skips);
+        assert!(
+            msg.contains("skipped skill: loose"),
+            "load must name the skipped root file: {msg}"
+        );
+        assert!(msg.contains("root_file"), "msg={msg}");
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        assert_eq!(
+            unknown_or_skipped_skill_message("skills", &report.skips),
+            "unknown skill: skills",
+            "skills-root parent dir is still not a package identity"
+        );
+        let why = crate::why(&report, Some("loose"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::RootFile);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[test]
@@ -1206,7 +1231,10 @@ mod tests {
         let report = empty_home_discover(cwd.path(), &DiscoveryOptions::default());
         assert!(report.skills.is_empty());
         assert!(
-            report.skips.iter().any(|s| s.kind == SkipKind::RootFile),
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose") }),
             "skips={:?}",
             report.skips
         );

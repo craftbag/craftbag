@@ -215,6 +215,77 @@ fn why_parse_error_name_is_not_unknown() {
 }
 
 #[test]
+fn load_named_root_file_skip_is_not_unknown() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let skills = tmp.path().join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    fs::write(
+        skills.join("SKILL.md"),
+        "---\nname: loose\ndescription: loose\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("load")
+        .arg("loose")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("skipped skill: loose"),
+        "load must name the root-file skip, not call it unknown: {stderr}"
+    );
+    assert!(stderr.contains("root_file"), "stderr={stderr}");
+    assert!(
+        !stderr.contains("unknown skill"),
+        "named root-file skip must not look missing: {stderr}"
+    );
+}
+
+#[test]
+fn why_named_root_file_skip_is_not_unknown() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let skills = tmp.path().join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    fs::write(
+        skills.join("SKILL.md"),
+        "---\nname: loose\ndescription: loose\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("why")
+        .arg("loose")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("\"name\": \"loose\""),
+        "why JSON must keep frontmatter name: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"kind\": \"root_file\""),
+        "why JSON must keep root_file: {stdout}"
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
+}
+
+#[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

@@ -456,6 +456,60 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_named_root_file_skip_is_not_unknown() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let skills = tmp.path().join("skills");
+            std::fs::create_dir_all(&skills).expect("mkdir");
+            std::fs::write(
+                skills.join("SKILL.md"),
+                "---\nname: loose\ndescription: loose\n---\nbody\n",
+            )
+            .expect("write");
+            let resp = call(
+                17,
+                "skills_load",
+                json!({"name": "loose", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], true);
+            let text = call_text(&resp);
+            assert!(
+                text.contains("skipped skill: loose"),
+                "load must name the root-file skip: {text}"
+            );
+            assert!(text.contains("root_file"), "{text}");
+            assert!(
+                !text.contains("unknown skill"),
+                "named root-file skip must not look missing: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_named_root_file_skip_is_not_unknown() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let skills = tmp.path().join("skills");
+            std::fs::create_dir_all(&skills).expect("mkdir");
+            std::fs::write(
+                skills.join("SKILL.md"),
+                "---\nname: loose\ndescription: loose\n---\nbody\n",
+            )
+            .expect("write");
+            let why = call(
+                18,
+                "skills_why",
+                json!({"name": "loose", "paths": [tmp.path()]}),
+            );
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            let why_text = call_text(&why);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert_eq!(why_v["skips"][0]["name"], "loose", "{why_text}");
+            assert_eq!(why_v["skips"][0]["kind"], "root_file", "{why_text}");
+        });
+    }
+
+    #[test]
     fn skills_why_unknown_is_error() {
         empty_home(|| {
             let resp = call(10, "skills_why", json!({"name": "no-such-skill"}));
