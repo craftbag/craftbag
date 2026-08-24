@@ -6,37 +6,37 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ad8c0271931a521420cd5fe94d7fee834750ee7a",
+  "ledger_sha": "b135b551fe8462a677314bc69d02d9c8bd401e4b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
   "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "advance-mpi-to-ops-6",
+    "id": "improve-ops-6b",
     "work_source": "improve",
-    "started_at": "2026-08-24T03:51:13Z",
-    "finished_at": "2026-08-24T03:51:13Z",
+    "started_at": "2026-08-24T03:52:16Z",
+    "finished_at": "2026-08-24T03:52:16Z",
     "result": "noop",
     "head": "4ca5a88c26742329e2c1c735b58452fee70a1879",
     "pr": null,
     "files": [],
-    "tests": "skip duplicate Maintainer; next Ops",
+    "tests": "Ops: gnu fuzz, timeouts, MSRV 1.85",
     "review": "0"
   },
   "last_sha": "4ca5a88c26742329e2c1c735b58452fee70a1879",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:51:13Z",
+    "checked_at": "2026-08-24T03:52:16Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 17,
-    "next_perspective": 6,
-    "clean_cycles": 17
+    "cycle": 18,
+    "next_perspective": 7,
+    "clean_cycles": 18
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
