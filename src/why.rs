@@ -63,7 +63,10 @@ pub struct WhyReport {
 }
 
 impl WhyReport {
-    /// Message when a non-empty name query matched neither a loaded skill nor a skip.
+    /// Message when a name query matched neither a loaded skill nor a skip.
+    ///
+    /// Omitted name is not a query. Whitespace-only name is a query and
+    /// is unknown.
     pub fn unknown_skill_message(&self) -> Option<String> {
         let want = self.query.as_deref()?;
         if self.loaded.is_empty() && self.skips.is_empty() {
@@ -84,7 +87,9 @@ pub fn why(
     context: Option<&str>,
     budgets: Option<ProgressiveBudgets>,
 ) -> WhyReport {
-    let q = query.map(str::trim).filter(|s| !s.is_empty());
+    // Trim for matching. Keep Some("") when the caller passed only
+    // whitespace so that is an unknown name, not an omitted filter.
+    let q = query.map(str::trim);
     let loaded: Vec<SkillSummary> = report
         .skills
         .iter()
@@ -114,14 +119,17 @@ pub fn why(
         loaded,
         skips,
         activation,
-        query: q.map(ToOwned::to_owned),
+        query: query.map(ToOwned::to_owned),
     }
 }
 
 fn name_matches(query: Option<&str>, name: &str) -> bool {
     match query {
         None => true,
-        Some(want) => name.eq_ignore_ascii_case(want),
+        Some(want) => {
+            let want = want.trim();
+            !want.is_empty() && name.eq_ignore_ascii_case(want)
+        }
     }
 }
 
@@ -306,6 +314,73 @@ mod tests {
             why.unknown_skill_message().as_deref(),
             Some("unknown skill: no-such")
         );
+    }
+
+    #[test]
+    fn why_whitespace_query_is_unknown_not_unfiltered() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let filtered = why(&report, Some("   "), None, None);
+        assert!(
+            filtered.skips.is_empty(),
+            "whitespace is an explicit name, not omit-filter: {:?}",
+            filtered.skips
+        );
+        assert_eq!(
+            filtered.unknown_skill_message().as_deref(),
+            Some("unknown skill:    "),
+            "why must agree with load that a whitespace name is unknown"
+        );
+        let omitted = why(&report, None, None, None);
+        assert_eq!(
+            omitted.skips.len(),
+            1,
+            "omitted name still lists every skip"
+        );
+        assert!(omitted.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn why_named_and_nameless_collision_keeps_both() {
+        let named = SkillSkip {
+            path: PathBuf::from("/tmp/other/SKILL.md"),
+            name: Some("alpha".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML".to_owned(),
+            winner_path: None,
+        };
+        let nameless = SkillSkip {
+            path: PathBuf::from("/tmp/alpha/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![named, nameless],
+        };
+        let by_name = why(&report, Some("alpha"), None, None);
+        assert_eq!(by_name.skips.len(), 2, "both skips identify as alpha");
+        assert!(by_name.unknown_skill_message().is_none());
+        let by_dir = why(&report, Some("other"), None, None);
+        assert_eq!(
+            by_dir.skips.len(),
+            1,
+            "only the named skip lives in other/: {:?}",
+            by_dir.skips
+        );
+        assert_eq!(by_dir.skips[0].name.as_deref(), Some("alpha"));
+        assert!(by_dir.unknown_skill_message().is_none());
     }
 
     #[test]
