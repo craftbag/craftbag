@@ -89,6 +89,20 @@ fn list_extra_path_json() {
 }
 
 #[test]
+fn list_xml_available_skills() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--xml")
+        .arg("--path")
+        .arg(&pkg)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("<available_skills>"))
+        .stdout(predicates::str::contains("<name>minimal-valid</name>"));
+}
+
+#[test]
 fn load_unknown_exits_2() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();

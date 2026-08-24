@@ -10,10 +10,10 @@ mod source;
 mod why;
 
 pub use activate::{
-    DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills, format_body_header,
-    format_catalog, format_load_message, format_package_envelope, progressive_budgets,
-    rank_skills_for_catalog, skill_relevance_score, trigger_matches,
-    truncate_skill_body_for_budget,
+    DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills,
+    format_available_skills_xml, format_body_header, format_catalog, format_load_message,
+    format_package_envelope, progressive_budgets, rank_skills_for_catalog, skill_relevance_score,
+    trigger_matches, truncate_skill_body_for_budget,
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
@@ -21,7 +21,10 @@ pub use discover::{
     with_home_override,
 };
 pub use error::{Error, ParseError};
-pub use parse::{parse_skill, skill_name_matches_directory, validate_skill_name};
+pub use parse::{
+    normalize_skill_name, parse_skill, skill_name_matches_directory, skill_names_equal,
+    validate_skill_name,
+};
 pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
     SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
