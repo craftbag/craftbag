@@ -54,8 +54,8 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 /// Error text when `load` cannot return a skill.
 ///
 /// A matching skip row (parse error, name/dir mismatch, unreadable
-/// package) is not "unknown". Rows with no frontmatter name still match
-/// the `SKILL.md` parent directory for unreadable and parse skips.
+/// package) is not "unknown". Blank peeked names and the `SKILL.md`
+/// parent directory (except root-file skips) are identities too.
 pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
     let want = name.trim();
     let skip = skips.iter().find(|s| s.matches_requested_name(want));
@@ -64,6 +64,8 @@ pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> Stri
             "skipped skill: {} ({}): {}",
             skip.name
                 .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
                 .or_else(|| crate::skip::skill_md_package_name(&skip.path))
                 .unwrap_or(want),
             skip.kind.as_str(),
@@ -730,6 +732,129 @@ mod tests {
         );
         assert!(msg.contains("parse_error"), "msg={msg}");
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn load_miss_blank_peeked_name_uses_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/skill.md"),
+            name: Some("  ".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("demo", &[skip]);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "blank peek name must not hide the package dir: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn load_and_why_agree_on_named_and_nameless_collision() {
+        let named = SkillSkip {
+            path: PathBuf::from("/tmp/other/SKILL.md"),
+            name: Some("alpha".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML".to_owned(),
+            winner_path: None,
+        };
+        let nameless = SkillSkip {
+            path: PathBuf::from("/tmp/alpha/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let skips = [named, nameless];
+        let load_alpha = unknown_or_skipped_skill_message("alpha", &skips);
+        let why_alpha = crate::why(
+            &crate::skip::DiscoveryReport {
+                skills: vec![],
+                skips: skips.to_vec(),
+            },
+            Some("alpha"),
+            None,
+            None,
+        );
+        assert!(
+            load_alpha.contains("skipped skill"),
+            "load alpha must not be unknown: {load_alpha}"
+        );
+        assert!(why_alpha.unknown_skill_message().is_none());
+        assert_eq!(why_alpha.skips.len(), 2);
+        let load_other = unknown_or_skipped_skill_message("other", &skips);
+        let why_other = crate::why(
+            &crate::skip::DiscoveryReport {
+                skills: vec![],
+                skips: skips.to_vec(),
+            },
+            Some("other"),
+            None,
+            None,
+        );
+        assert!(
+            load_other.contains("skipped skill: alpha"),
+            "named skip in other/ must not look missing: {load_other}"
+        );
+        assert!(why_other.unknown_skill_message().is_none());
+        assert_eq!(why_other.skips.len(), 1);
+    }
+
+    #[test]
+    fn padded_frontmatter_name_discover_is_skipped_not_unknown() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join(".agents").join("skills").join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: \"demo \"\ndescription: trailing space in name\n---\nbody\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(report.skills.is_empty(), "skills={:?}", report.skills);
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::ParseError);
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill"),
+            "padded peek name must still be the demo package: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("demo"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn lowercase_skill_md_nameless_parse_matches_case_fold() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let pkg = cwd.path().join("extra").join("Demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("skill.md"),
+            "---\ndescription: no name\n---\nbody\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![cwd.path().join("extra").display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(report.skills.is_empty(), "skills={:?}", report.skills);
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: Demo"),
+            "lowercase skill.md parent dir must case-fold: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("DEMO"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[test]

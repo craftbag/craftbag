@@ -77,19 +77,25 @@ pub struct SkillSkip {
 impl SkillSkip {
     /// Whether `load`/`why` should treat this skip as the requested name.
     ///
-    /// Frontmatter `name` wins when present. Nameless unreadable and parse
-    /// skips still match the `SKILL.md` parent directory so they are not
-    /// reported as unknown.
+    /// A non-blank frontmatter `name` is an identity. The `SKILL.md` parent
+    /// directory is also an identity for every skip except [`SkipKind::RootFile`]
+    /// (that parent is the skills root, not a package). Blank or
+    /// whitespace-only peeked names fall through to the package directory.
     pub fn matches_requested_name(&self, want: &str) -> bool {
         let want = want.trim();
         if want.is_empty() {
             return false;
         }
-        if let Some(n) = self.name.as_deref() {
-            return n.eq_ignore_ascii_case(want);
+        if self.name.as_deref().is_some_and(|n| {
+            let n = n.trim();
+            !n.is_empty() && n.eq_ignore_ascii_case(want)
+        }) {
+            return true;
         }
-        matches!(self.kind, SkipKind::Unreadable | SkipKind::ParseError)
-            && skill_md_package_name(&self.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
+        if matches!(self.kind, SkipKind::RootFile) {
+            return false;
+        }
+        skill_md_package_name(&self.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
     }
 }
 
@@ -212,6 +218,64 @@ mod tests {
         };
         assert!(!root.matches_requested_name("skills"));
         assert!(!root.matches_requested_name("   "));
+    }
+
+    #[test]
+    fn matches_requested_name_blank_peeked_name_uses_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/demo/skill.md"),
+            name: Some("  ".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            skip.matches_requested_name("demo"),
+            "whitespace-only peek name is not an identity"
+        );
+        assert!(skip.matches_requested_name("DEMO"));
+        assert!(!skip.matches_requested_name("   "));
+    }
+
+    #[test]
+    fn matches_requested_name_trims_padded_peeked_name() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/other/SKILL.md"),
+            name: Some(" foo ".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        assert!(skip.matches_requested_name("foo"));
+        assert!(
+            skip.matches_requested_name("other"),
+            "package dir remains an identity when the peeked name is different"
+        );
+    }
+
+    #[test]
+    fn matches_requested_name_named_and_nameless_keep_distinct_identities() {
+        let named = SkillSkip {
+            path: PathBuf::from("/tmp/other/SKILL.md"),
+            name: Some("alpha".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        let nameless = SkillSkip {
+            path: PathBuf::from("/tmp/alpha/SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        assert!(named.matches_requested_name("alpha"));
+        assert!(nameless.matches_requested_name("alpha"));
+        assert!(
+            named.matches_requested_name("other"),
+            "named skip still matches its package dir so why/load do not call it unknown"
+        );
+        assert!(!nameless.matches_requested_name("other"));
     }
 
     #[test]

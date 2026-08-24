@@ -454,6 +454,24 @@ mod tests {
     }
 
     #[test]
+    fn skills_why_whitespace_name_is_error_not_empty_json() {
+        empty_home(|| {
+            let resp = call(12, "skills_why", json!({"name": "   "}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "whitespace name must not return empty why JSON: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("unknown skill"),
+                "whitespace name is unknown, not an omitted filter: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_why_parse_skip_without_frontmatter_name_is_not_unknown() {
         empty_home(|| {
             let tmp = tempfile::tempdir().expect("tmp");
