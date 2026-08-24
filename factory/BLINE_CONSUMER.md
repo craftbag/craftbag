@@ -79,9 +79,36 @@ Not skip kinds in v1 (silent or activation-only):
 Do not add those four as `SkipKind` variants until they have corpus
 fixtures.
 
+## Corpus skip-row compare (2026-08-24)
+
+Issue [#54](https://github.com/craftbag/craftbag/issues/54). Isolated
+`HOME`. Corpus copied to `/tmp/prove-corpus` so a Bline cwd walk does
+not climb the craftbag git root. craftbag: `craftbag why --json`.
+Bline: `discover_skills_for_cwd_report` (the doctor skip source).
+`bline skills list --json` does not emit skip rows.
+
+| Tree | How | craftbag | Bline | Class |
+|------|-----|----------|-------|-------|
+| `lowercase-skill-md` | cwd (`.agents/skills`) | load `lc-pack` | load `lc-pack` | match |
+| `agentskills/minimal-valid` | extra path | load `minimal-valid` | load `minimal-valid` | match |
+| `agentskills/package-full` | extra path | load `package-full` | load `package-full` | match |
+| `agentskills/name-mismatch` | extra path | skip `name_directory_mismatch` `good-name` | same kind, name, path | match |
+| `agentskills/invalid-name` | extra path | skip `parse_error` name `Bad_Name` | same kind; `name` is null; detail is ASCII-only | expected (peek + name policy wording) |
+| `root-file` | extra path as package dir | skip `name_directory_mismatch` `loose` | same | expected (this extra path is a package, not a skills-root loose file) |
+| `collision/a` + `collision/b` | two extra paths | load `a/foo`; skip `name_collision` `b/foo` `winnerPath`=`a/foo` | same | match |
+| `incumbent/claude-project` | cwd + `--vendor claude` | load `pdf-helper` source vendor claude | load `pdf-helper` | expected (source wire: vendor vs Claude) |
+| `incumbent/vercel-npx` | extra path | load `deploy-hint` via `skills/` | load `deploy-hint` via `skills/` | match |
+
+`--path` on a project root (`lowercase-skill-md`) does not walk
+`.agents/skills` (extra-path package/collection rules). Bline cwd
+walk does. The compare used cwd for that tree.
+
+Unexpected skip-kind or `winnerPath` mismatches: none.
+
 ## Out of scope here
 
 - Editing Bline source.
-- Filing the Bline consumer issue.
+- Bline path-dep (that is
+  [blineai/bline#3497](https://github.com/blineai/bline/issues/3497)).
 - crates.io publish.
 - MCP Registry / Smithery listings.
