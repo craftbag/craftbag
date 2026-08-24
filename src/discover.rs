@@ -340,7 +340,25 @@ fn path_is_ignored(path: &Path, ignore: &[PathBuf]) -> bool {
     if ignore.is_empty() {
         return false;
     }
-    ignore.iter().any(|prefix| path.starts_with(prefix))
+    ignore
+        .iter()
+        .any(|prefix| path_has_ignore_prefix(path, prefix))
+}
+
+fn path_has_ignore_prefix(path: &Path, prefix: &Path) -> bool {
+    if path.starts_with(prefix) {
+        return true;
+    }
+    let Ok(prefix_canon) = prefix.canonicalize() else {
+        return false;
+    };
+    if path.starts_with(&prefix_canon) {
+        return true;
+    }
+    match path.canonicalize() {
+        Ok(path_canon) => path_canon.starts_with(&prefix_canon),
+        Err(_) => false,
+    }
 }
 
 fn load_skills_from_dir(
@@ -1006,5 +1024,39 @@ mod tests {
             assert_eq!(report.skills[0].name, "outer");
         });
         assert_eq!(super::home_dir(), env_home());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignore_prefix_matches_canonical_walked_path() {
+        let root = tempfile::tempdir().expect("tmp");
+        write_skill(
+            &root.path().join(".agents").join("skills").join("secret"),
+            "secret",
+            "x",
+        );
+        write_skill(
+            &root.path().join(".agents").join("skills").join("public"),
+            "public",
+            "x",
+        );
+        let links = tempfile::tempdir().expect("links");
+        let cwd_link = links.path().join("cwd-link");
+        std::os::unix::fs::symlink(root.path(), &cwd_link).expect("symlink cwd");
+        let ignore = cwd_link.join(".agents").join("skills").join("secret");
+        let report = empty_home_discover(
+            &cwd_link,
+            &DiscoveryOptions {
+                ignore: vec![ignore.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "secret"),
+            "ignore prefix must skip the skill after cwd canonicalize: {:?}",
+            report.skills
+        );
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "public");
     }
 }
