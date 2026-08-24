@@ -784,6 +784,12 @@ Use pdftotext.
         assert!(super::skill_names_equal("перевод", "ПЕРЕВОД"));
         assert!(super::skill_names_equal("cafe", "cafe"));
         assert!(super::skill_names_equal("é", "e\u{0301}"));
+        assert!(
+            super::skill_names_equal("ᾼ", "ᾳ"),
+            "Greek titlecase and lowercase are one identity after case fold"
+        );
+        assert!(super::validate_skill_name("ᾼ-pack").is_ok());
+        assert!(super::validate_skill_name("ᾳ-pack").is_ok());
         assert!(!super::skill_names_equal("перевод", "other"));
         assert!(!super::skill_names_equal(".", "wanted"));
         assert!(super::skill_names_equal("demo\u{00A0}", "demo"));
