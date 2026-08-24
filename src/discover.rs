@@ -503,6 +503,9 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
             } else {
                 cwd.join(expanded)
             };
+            // Same NFKC `.` / `..` rewrite as extra-path arguments, then
+            // lexical collapse so `wanted/evil/‥` is the `wanted` prefix.
+            let joined = nfkc_dot_path_components(&joined);
             let lexical = lexical_normalize(&joined);
             let canonical = joined
                 .canonicalize()
@@ -2284,6 +2287,62 @@ mod tests {
         assert_secret_ignored(&report);
     }
 
+    #[test]
+    fn ignore_nfkc_dot_argument_is_cwd_like_extra_path() {
+        for raw in ["．", "․", "﹒", " ． ", "\u{00A0}．\u{00A0}"] {
+            let root = project_with_secret_and_public();
+            let report = empty_home_discover(
+                root.path(),
+                &DiscoveryOptions {
+                    ignore: vec![raw.to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert!(
+                report.skills.is_empty(),
+                "ignore `{raw}` must be cwd like extra-path `.`: {:?}",
+                report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn ignore_nfkc_dotdot_component_collapses_like_ascii() {
+        let root = project_with_secret_and_public();
+        let via = root
+            .path()
+            .join(".agents")
+            .join("skills")
+            .join("secret")
+            .join("evil")
+            .join("‥");
+        let report = empty_home_discover(
+            root.path(),
+            &DiscoveryOptions {
+                ignore: vec![via.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_secret_ignored(&report);
+    }
+
+    #[test]
+    fn ignore_mixed_ascii_and_nfkc_dots_collapse_like_ascii() {
+        let root = project_with_secret_and_public();
+        // `.．` and `．.` NFKC to `..`; padded two-dot leader is `..` after trim.
+        for suffix in [".．", "．.", " ‥ ", "．．"] {
+            let ignore = format!(".agents/skills/secret/evil/{suffix}");
+            let report = empty_home_discover(
+                root.path(),
+                &DiscoveryOptions {
+                    ignore: vec![ignore.clone()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert_secret_ignored(&report);
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn package_dir_symlink_escape_is_unreadable() {
@@ -2769,6 +2828,83 @@ mod tests {
         );
         assert!(find_skill_by_name(&report.skills, "wanted").is_some());
         assert!(find_skill_by_name(&report.skills, "evil").is_none());
+    }
+
+    #[test]
+    fn ignore_nfkc_dotdot_skips_extra_path_sibling_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        write_skill(&extra.path().join("public"), "public", "keep");
+        let extra_root = extra.path().display().to_string();
+        let via_fullwidth = pkg.join("evil").join("‥").display().to_string();
+        let loaded = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra_root.clone()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&loaded.skills, "wanted").is_some(),
+            "collection extra-path must load wanted: {:?}",
+            loaded.skills
+        );
+        assert!(find_skill_by_name(&loaded.skills, "public").is_some());
+        let ignored = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra_root],
+                ignore: vec![via_fullwidth.clone()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            ignored.skills.iter().all(|s| s.name != "wanted"),
+            "ignore `{via_fullwidth}` must collapse like extra-path and skip wanted: {:?}",
+            ignored.skills
+        );
+        assert!(
+            find_skill_by_name(&ignored.skills, "public").is_some(),
+            "sibling extra-path package must still load: {:?}",
+            ignored.skills
+        );
+    }
+
+    #[test]
+    fn extra_path_and_ignore_nfkc_dotdot_argument_agree() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let child = pkg.join("evil");
+        let loaded = empty_home_discover(
+            &child,
+            &DiscoveryOptions {
+                paths: vec!["‥".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&loaded.skills, "wanted").is_some(),
+            "extra-path ‥ must load wanted: {:?}",
+            loaded.skills
+        );
+        let ignored = empty_home_discover(
+            &child,
+            &DiscoveryOptions {
+                paths: vec!["‥".to_owned()],
+                ignore: vec!["‥".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            ignored.skills.iter().all(|s| s.name != "wanted"),
+            "ignore ‥ must skip the extra-path ‥ package: {:?}",
+            ignored.skills
+        );
     }
 
     #[test]
