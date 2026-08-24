@@ -23,44 +23,53 @@ struct RpcRequest {
     params: Value,
 }
 
+/// Present JSON `null` is a type error. Missing fields still default.
+fn present_non_null<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct DiscoverArgs {
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
     vendor: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct LoadArgs {
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     args: Option<String>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
     vendor: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct WhyArgs {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     name: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     context: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     context_tokens: Option<usize>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
     vendor: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
 }
 
@@ -186,6 +195,8 @@ fn tools() -> Value {
 
 /// Decode tool arguments. Null/omitted is the empty object; a type
 /// mismatch against `inputSchema` is an error (not a silent default).
+/// Present `null` on a typed property is a type error, same as a
+/// wrong JSON type. Omitted properties still use the field default.
 fn tool_args<T>(value: Value) -> Result<T, String>
 where
     T: Default + serde::de::DeserializeOwned,
@@ -748,6 +759,143 @@ mod tests {
             let v: serde_json::Value = serde_json::from_str(text).expect("list json");
             assert!(v.get("skills").is_some(), "{text}");
             assert!(v.get("skips").is_some(), "{text}");
+        });
+    }
+
+    #[test]
+    fn skills_why_null_name_is_error_not_unfiltered_report() {
+        empty_home(|| {
+            let resp = call(21, "skills_why", json!({"name": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says name is string; null must not mean omit-filter: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"loaded\""),
+                "must not return default why JSON for null name: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_null_context_tokens_is_error_not_default_budget() {
+        empty_home(|| {
+            let resp = call(22, "skills_why", json!({"context_tokens": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says context_tokens is integer; null must not default: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"loaded\""),
+                "must not return default why JSON for null context_tokens: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_null_context_is_error_not_no_activation() {
+        empty_home(|| {
+            let resp = call(24, "skills_why", json!({"context": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says context is string; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"activation\""),
+                "must not return why JSON for null context: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_load_null_args_is_error_not_empty_args() {
+        empty_home(|| {
+            let pkg = corpus_pkg();
+            let resp = call(
+                25,
+                "skills_load",
+                json!({"name": "minimal-valid", "paths": [pkg], "args": null}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says args is string; null must not mean empty: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("[Activated skill:"),
+                "must not load with default empty args: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_null_user_dir_is_error() {
+        empty_home(|| {
+            let resp = call(26, "skills_list", json!({"user_dir": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says user_dir is string; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog for null user_dir: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_null_format_is_error_not_json_default() {
+        empty_home(|| {
+            let resp = call(23, "skills_list", json!({"format": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says format is string; null must not default to json: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog JSON for null format: {text}"
+            );
         });
     }
 }
