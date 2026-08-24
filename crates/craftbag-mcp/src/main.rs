@@ -171,6 +171,18 @@ fn tools() -> Value {
     ])
 }
 
+/// Decode tool arguments. Null/omitted is the empty object; a type
+/// mismatch against `inputSchema` is an error (not a silent default).
+fn tool_args<T>(value: Value) -> Result<T, String>
+where
+    T: Default + serde::de::DeserializeOwned,
+{
+    if value.is_null() {
+        return Ok(T::default());
+    }
+    serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
 fn ok(id: Value, result: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "result": result})
 }
@@ -202,13 +214,13 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 Err(e) => return Some(err(id, -32602, &e.to_string())),
             };
             let (text, is_err) = match params.name.as_str() {
-                "skills_list" => {
-                    let args = serde_json::from_value(params.arguments).unwrap_or_default();
-                    match list_json(args) {
+                "skills_list" => match tool_args(params.arguments) {
+                    Ok(args) => match list_json(args) {
                         Ok(s) => (s, false),
                         Err(e) => (e, true),
-                    }
-                }
+                    },
+                    Err(e) => (e, true),
+                },
                 "skills_load" => match serde_json::from_value::<LoadArgs>(params.arguments) {
                     Ok(args) => match load_text(args) {
                         Ok(s) => (s, false),
@@ -216,13 +228,13 @@ fn handle(req: RpcRequest) -> Option<Value> {
                     },
                     Err(e) => (e.to_string(), true),
                 },
-                "skills_why" => {
-                    let args = serde_json::from_value(params.arguments).unwrap_or_default();
-                    match why_json(args) {
+                "skills_why" => match tool_args(params.arguments) {
+                    Ok(args) => match why_json(args) {
                         Ok(s) => (s, false),
                         Err(e) => (e, true),
-                    }
-                }
+                    },
+                    Err(e) => (e, true),
+                },
                 other => return Some(err(id, -32601, &format!("unknown tool: {other}"))),
             };
             Some(ok(
@@ -512,6 +524,84 @@ mod tests {
             let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
             assert_eq!(why_v["skips"][0]["name"], "Bad_Name", "{why_text}");
             assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
+        });
+    }
+
+    #[test]
+    fn skills_list_invalid_paths_type_is_error_not_default_catalog() {
+        empty_home(|| {
+            let resp = call(13, "skills_list", json!({"paths": "/not/an/array"}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says paths is string[]; must not list cwd: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return a default catalog JSON: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_invalid_context_tokens_type_is_error_not_default_report() {
+        empty_home(|| {
+            let resp = call(
+                14,
+                "skills_why",
+                json!({"name": "demo", "context_tokens": "8000"}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says context_tokens is integer; must not run default why: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"loaded\""),
+                "must not return default why JSON: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_invalid_name_type_is_error() {
+        empty_home(|| {
+            let resp = call(15, "skills_why", json!({"name": 123}));
+            assert_eq!(resp["result"]["isError"], true, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                !text.contains("\"activation\""),
+                "must not return why JSON for a non-string name: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_null_arguments_still_lists() {
+        empty_home(|| {
+            let resp = call(16, "skills_list", serde_json::Value::Null);
+            assert_eq!(
+                resp["result"]["isError"],
+                false,
+                "omitted arguments are the empty object: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+            assert!(v.get("skills").is_some(), "{text}");
+            assert!(v.get("skips").is_some(), "{text}");
         });
     }
 }
