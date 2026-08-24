@@ -1,0 +1,46 @@
+name: Auto-approve
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  auto-approve:
+    name: Auto-approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'github-actions[bot]' &&
+      !github.event.pull_request.draft &&
+      !contains(github.event.pull_request.labels.*.name, 'autorelease: pending') &&
+      !startsWith(github.event.pull_request.title, 'release:') &&
+      !startsWith(github.event.pull_request.title, 'chore(release)') &&
+      !startsWith(github.event.pull_request.title, 'publish') &&
+      github.event.pull_request.title != 'chore: amend constitution' &&
+      (github.actor == 'SebTardif' || github.actor == 'dependabot[bot]')
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - name: Guard paths then approve and auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          paths=$(gh pr diff --name-only "$PR" --repo "$REPO")
+          if echo "$paths" | grep -qx 'factory/CONSTITUTION.md' \
+            || echo "$paths" | grep -qx 'factory/scripts/assert-stealth.sh'; then
+            echo "Skip approve/auto-merge: constitution or stealth script in diff"
+            exit 0
+          fi
+          gh pr review --approve "$PR" --repo "$REPO"
+          gh pr merge --auto --squash "$PR" --repo "$REPO"

@@ -1,0 +1,15 @@
+# Constitution
+
+Immutable. Changing this file requires a PR titled `chore: amend constitution`. Auto-merge is skipped for that title and for diffs that touch this file or `factory/scripts/assert-stealth.sh`.
+
+1. **Stealth until the drop-stealth gate.** Empty GitHub description, no topics, no FUNDING, README is `# craftbag` / `Not ready.` Stealth is a job inside `ci.yml` and a `needs:` of aggregator `CI`.
+2. **Not a parser pitch.** README, crate description, issues, and PR titles must not sell a YAML frontmatter parser.
+3. **Apache-2.0 only.** Keep copyright headers on ported Bline files. No CLA. DCO on every commit (`git commit -s`).
+4. **Independent org.** Never `blineai/`. Never copy this product into findbug.
+5. **Executable tests.** Impl + tests + related docs in the same commit. A feature without a test that would fail if reverted is incomplete. Fixtures fail CI before product modules.
+6. **Find many, land few.** One session branch. At most one ready feature PR. Theme batches, not one peel per PR.
+7. **Host-neutral API.** No required Bline types in the public crate.
+8. **Skip-kind taxonomy is frozen after PR 2.** Additions are a versioned enum variant plus a corpus fixture. Do not add `BudgetOmitted` or `InvocationOff` until they are real skip rows with fixtures.
+9. **No auto-merge** for release, publish, constitution amend, or stealth-script PRs. Title skips in the job `if:`. Path skips in the same step as approve/merge.
+10. **Forbidden trees.** Children must refuse to write under findbug or durable `~/bline`.
+11. **Methodology.** Constitution + `/design` + executable tests + `/greenfield-project` + `/execute-plan`. Spec Kit is ritual only.

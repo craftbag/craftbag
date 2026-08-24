@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craftbag/craftbag/factory/STATE.schema.json",
+  "title": "craftbag factory STATE",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "next_work_source", "stealth_mode"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "phase": {
+      "type": "string",
+      "enum": ["bootstrap", "ci", "issues", "contract", "implement", "prove", "improve", "adversary", "expand"]
+    },
+    "stealth_mode": { "type": "boolean" },
+    "session_branch": { "type": ["string", "null"] },
+    "ready_pr": { "type": ["integer", "null"] },
+    "lease": {
+      "type": ["object", "null"],
+      "properties": {
+        "job_id": { "type": "string" },
+        "started_at": { "type": "string" },
+        "expires_at": { "type": "string" },
+        "agent": { "type": "string" }
+      }
+    },
+    "human_gate": {
+      "type": ["object", "null"],
+      "properties": {
+        "kind": { "type": "string" },
+        "message": { "type": "string" },
+        "since": { "type": "string" }
+      }
+    },
+    "ledger_sha": { "type": ["string", "null"] },
+    "ledger_worktree": { "type": ["string", "null"] },
+    "last_adversary_head": { "type": ["string", "null"] },
+    "expand_cursor": { "type": "integer" },
+    "expand_noop_streak": { "type": "integer" },
+    "next_work_source": {
+      "type": "string",
+      "enum": ["bootstrap", "ci", "issues", "contract", "implement", "prove", "improve", "adversary", "expand"]
+    },
+    "consecutive_noop": { "type": "integer" },
+    "pr_plan_cursor": { "type": "string" },
+    "clone_path": { "type": ["string", "null"] },
+    "forbidden_trees": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

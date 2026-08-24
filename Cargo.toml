@@ -1,0 +1,16 @@
+[package]
+name = "craftbag"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Reserved."
+repository = "https://github.com/craftbag/craftbag"
+keywords = []
+categories = []
+publish = false
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"
