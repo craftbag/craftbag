@@ -792,6 +792,20 @@ Use pdftotext.
             super::is_path_component_skill_name("‥"),
             "two-dot leader is a path component after NFKC"
         );
+        assert!(
+            super::is_path_component_skill_name("․"),
+            "one-dot leader is a path component after NFKC"
+        );
+        assert!(
+            super::is_path_component_skill_name("﹒"),
+            "small full stop is a path component after NFKC"
+        );
+        assert!(
+            super::is_path_component_skill_name("︰"),
+            "vertical two-dot leader is a path component after NFKC"
+        );
+        assert!(super::is_path_component_skill_name("．．"));
+        assert!(super::is_path_component_skill_name("․․"));
         assert!(super::is_path_component_skill_name("\u{00A0}"));
         assert!(!super::is_path_component_skill_name("wanted"));
         assert!(!super::is_path_component_skill_name("evil"));

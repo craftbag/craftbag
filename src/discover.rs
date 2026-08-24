@@ -313,12 +313,14 @@ fn load_extra_path(
 ) {
     let expanded = expand_tilde(raw);
     // Relative extra paths join `cwd`, same as ignore prefixes. `.` / `..`
-    // then keep a real package dir name after lexical collapse.
+    // then keep a real package dir name after lexical collapse. NFKC
+    // compatibility dots (`．`, `‥`, …) are the same components.
     let expanded = if expanded.is_absolute() {
         expanded
     } else {
         cwd.join(expanded)
     };
+    let expanded = nfkc_dot_path_components(&expanded);
     if expanded.is_file()
         && expanded
             .file_name()
@@ -445,6 +447,33 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
+}
+
+/// Rewrite NFKC-equivalent `.` / `..` components to ASCII so join and
+/// `Path::is_dir` treat them as cwd / parent, not as extra-path names.
+fn nfkc_dot_path_components(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::Normal(s) => {
+                if let Some(text) = s.to_str() {
+                    let n = crate::parse::normalize_skill_name(text);
+                    let n = n.trim();
+                    if n == "." {
+                        out.push(".");
+                        continue;
+                    }
+                    if n == ".." {
+                        out.push("..");
+                        continue;
+                    }
+                }
+                out.push(s);
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn expand_tilde(raw: &str) -> PathBuf {
@@ -2513,7 +2542,7 @@ mod tests {
 
     #[test]
     fn extra_path_dot_or_dotdot_frontmatter_name_does_not_scan_nested() {
-        for peeked in [".", "..", "．", "‥"] {
+        for peeked in [".", "..", "．", "‥", "․", "﹒", "︰"] {
             let cwd = tempfile::tempdir().expect("cwd");
             let extra = tempfile::tempdir().expect("extra");
             let pkg = extra.path().join("wanted");
@@ -2621,6 +2650,125 @@ mod tests {
         let why = crate::why(&report, Some("wanted"), None, None);
         assert_eq!(why.skips.len(), 1);
         assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_nfkc_dot_argument_joins_like_ascii_dot() {
+        for raw in ["．", "․", "﹒"] {
+            let extra = tempfile::tempdir().expect("extra");
+            let pkg = extra.path().join("wanted");
+            write_skill(&pkg, "wanted", "PACKAGE_BODY");
+            write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+            let report = empty_home_discover(
+                &pkg,
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert_eq!(
+                report
+                    .skills
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["wanted"],
+                "extra-path `{raw}` must join cwd like ASCII `.`: {:?}",
+                report
+            );
+            assert_eq!(report.skills[0].content.trim(), "PACKAGE_BODY");
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| !s.content.contains("NESTED_SECRET")),
+                "nested skill body must not load from extra-path `{raw}`: {:?}",
+                report.skills
+            );
+            assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+            assert!(find_skill_by_name(&report.skills, "evil").is_none());
+            let why = crate::why(&report, Some("wanted"), None, None);
+            assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+            assert!(why.unknown_skill_message().is_none());
+        }
+    }
+
+    #[test]
+    fn extra_path_nfkc_dotdot_argument_joins_like_ascii_dotdot() {
+        for raw in ["‥", "︰", "．．", "․․"] {
+            let extra = tempfile::tempdir().expect("extra");
+            let pkg = extra.path().join("wanted");
+            write_skill(&pkg, "wanted", "PACKAGE_BODY");
+            write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+            let report = empty_home_discover(
+                &pkg.join("evil"),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert_eq!(
+                report
+                    .skills
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["wanted"],
+                "extra-path `{raw}` must join like ASCII `..`: {:?}",
+                report
+            );
+            assert_eq!(report.skills[0].content.trim(), "PACKAGE_BODY");
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| !s.content.contains("NESTED_SECRET")),
+                "nested skill body must not load from extra-path `{raw}`: {:?}",
+                report.skills
+            );
+            assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+            assert!(find_skill_by_name(&report.skills, "evil").is_none());
+            let why = crate::why(&report, Some("wanted"), None, None);
+            assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+            assert!(why.unknown_skill_message().is_none());
+        }
+    }
+
+    #[test]
+    fn extra_path_nfkc_dot_component_in_joined_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let via_fullwidth = pkg.join("evil").join("‥");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![via_fullwidth.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "wanted/evil/‥ must be the wanted package: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load from wanted/evil/‥: {:?}",
+            report.skills
+        );
+        assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
     }
 
     #[test]
