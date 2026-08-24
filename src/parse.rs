@@ -3,6 +3,8 @@
 use std::collections::BTreeMap;
 use std::path::{Component, Path};
 
+use unicode_normalization::UnicodeNormalization;
+
 use crate::error::ParseError;
 use crate::skill::{
     SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS, Skill,
@@ -94,6 +96,7 @@ pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
 
     let mut skill = parse_frontmatter(yaml_block)?;
     skill.content = body.to_owned();
+    skill.name = normalize_skill_name(&skill.name);
 
     validate_skill_name(&skill.name)?;
     if skill.description.is_empty() {
@@ -115,8 +118,33 @@ pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
     Ok(skill)
 }
 
-/// Validate agentskills.io `name` field rules.
+/// NFKC form of a skill name (skills-ref / agentskills Unicode policy).
+pub fn normalize_skill_name(name: &str) -> String {
+    name.nfkc().collect()
+}
+
+/// True when two names are the same package after NFKC and case fold.
+///
+/// Directory names on APFS may be NFD; frontmatter is usually NFC.
+pub fn skill_names_equal(a: &str, b: &str) -> bool {
+    let a = normalize_skill_name(a.trim());
+    let b = normalize_skill_name(b.trim());
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    a.to_lowercase() == b.to_lowercase()
+}
+
+fn is_skill_name_char(c: char) -> bool {
+    if c == '-' {
+        return true;
+    }
+    c.is_alphanumeric() && !c.is_uppercase()
+}
+
+/// Validate agentskills.io `name` field rules after NFKC.
 pub fn validate_skill_name(name: &str) -> Result<(), ParseError> {
+    let name = normalize_skill_name(name);
     let len = name.chars().count();
     if len == 0 || len > SKILL_NAME_MAX_CHARS {
         return Err(ParseError::InvalidYaml(format!(
@@ -133,12 +161,9 @@ pub fn validate_skill_name(name: &str) -> Result<(), ParseError> {
             "name must not contain consecutive hyphens".to_owned(),
         ));
     }
-    if !name
-        .chars()
-        .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
-    {
+    if !name.chars().all(is_skill_name_char) {
         return Err(ParseError::InvalidYaml(
-            "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            "name must be lowercase alphanumeric (Unicode, NFKC) and hyphens only".to_owned(),
         ));
     }
     Ok(())
@@ -203,7 +228,10 @@ pub(crate) fn skill_md_package_dir_name(skill_md: &Path) -> Option<&str> {
 
 /// True when the parent directory name of `skill_md` matches `name`.
 pub fn skill_name_matches_directory(skill_md: &Path, name: &str) -> bool {
-    skill_md_package_dir_name(skill_md) == Some(name)
+    match skill_md_package_dir_name(skill_md) {
+        Some(dir) => skill_names_equal(dir, name),
+        None => false,
+    }
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -480,7 +508,7 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
 mod tests {
     use super::{
         is_known_frontmatter_key, parse_frontmatter, parse_skill, peek_frontmatter_name,
-        unknown_frontmatter_keys, validate_skill_name,
+        skill_name_matches_directory, unknown_frontmatter_keys, validate_skill_name,
     };
     use crate::error::ParseError;
     use crate::skill::SKILL_DESCRIPTION_MAX_CHARS;
@@ -716,6 +744,44 @@ Use pdftotext.
         assert!(validate_skill_name("").is_err());
         let long = "a".repeat(crate::skill::SKILL_NAME_MAX_CHARS + 1);
         assert!(validate_skill_name(&long).is_err());
+    }
+
+    #[test]
+    fn validate_skill_name_accepts_unicode_lowercase() {
+        assert!(validate_skill_name("перевод").is_ok());
+        assert!(validate_skill_name("技能").is_ok());
+        assert!(validate_skill_name("übersicht").is_ok());
+        assert!(validate_skill_name("пере-вод").is_ok());
+        assert!(validate_skill_name("Перевод").is_err());
+    }
+
+    #[test]
+    fn skill_names_equal_nfkc_and_case() {
+        assert!(super::skill_names_equal("перевод", "ПЕРЕВОД"));
+        assert!(super::skill_names_equal("cafe", "cafe"));
+        assert!(super::skill_names_equal("é", "e\u{0301}"));
+        assert!(!super::skill_names_equal("перевод", "other"));
+        assert!(!super::skill_names_equal(".", "wanted"));
+    }
+
+    #[test]
+    fn parse_skill_stores_nfkc_unicode_name() {
+        let input = "---\nname: перевод\ndescription: docs\n---\nBody.\n";
+        let skill = parse_skill(input).expect("unicode name");
+        assert_eq!(skill.name, "перевод");
+    }
+
+    #[test]
+    fn skill_name_matches_directory_nfkc() {
+        use std::path::Path;
+        assert!(skill_name_matches_directory(
+            Path::new("/tmp/перевод/SKILL.md"),
+            "перевод"
+        ));
+        assert!(skill_name_matches_directory(
+            Path::new("/tmp/перевод/SKILL.md"),
+            "ПЕРЕВОД"
+        ));
     }
 
     #[test]

@@ -119,14 +119,14 @@ impl SkillSkip {
         }
         if self.name.as_deref().is_some_and(|n| {
             let n = n.trim();
-            !n.is_empty() && n.eq_ignore_ascii_case(want)
+            !n.is_empty() && crate::parse::skill_names_equal(n, want)
         }) {
             return true;
         }
         if matches!(self.kind, SkipKind::RootFile) {
             return false;
         }
-        skill_md_package_name(&self.path).is_some_and(|n| n.eq_ignore_ascii_case(want))
+        skill_md_package_name(&self.path).is_some_and(|n| crate::parse::skill_names_equal(n, want))
     }
 }
 

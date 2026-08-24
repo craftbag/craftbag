@@ -45,13 +45,14 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
     Ok(discover_report(cwd, opts))
 }
 
-/// Case-insensitive skill lookup by frontmatter `name`.
+/// Case-insensitive skill lookup by frontmatter `name` (NFKC).
 pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Skill> {
-    let want = name.trim().to_lowercase();
-    if want.is_empty() {
+    if name.trim().is_empty() {
         return None;
     }
-    skills.iter().find(|s| s.name.to_lowercase() == want)
+    skills
+        .iter()
+        .find(|s| crate::parse::skill_names_equal(&s.name, name))
 }
 
 /// Error text when `load` cannot return a skill.

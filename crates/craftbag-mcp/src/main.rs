@@ -8,8 +8,8 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, discover, find_skill_by_name, format_load_message,
-    progressive_budgets, unknown_or_skipped_skill_message, why,
+    DiscoveryOptions, FormatOptions, discover, find_skill_by_name, format_available_skills_xml,
+    format_load_message, progressive_budgets, unknown_or_skipped_skill_message, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -31,6 +31,8 @@ struct DiscoverArgs {
     vendor: Vec<String>,
     #[serde(default)]
     user_dir: Option<String>,
+    #[serde(default)]
+    format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +88,13 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
         .map_err(|e| e.to_string())?;
+    let format = args.format.as_deref().unwrap_or("json");
+    if format == "xml" {
+        return Ok(format_available_skills_xml(&report.skills));
+    }
+    if format != "json" {
+        return Err(format!("unknown format: {format}"));
+    }
     serde_json::to_string_pretty(&json!({
         "skills": report.skills.iter().map(|s| json!({
             "name": s.name,
@@ -138,7 +147,11 @@ fn discover_properties() -> Value {
 }
 
 fn tools() -> Value {
-    let list_props = discover_properties();
+    let mut list_props = discover_properties();
+    list_props["format"] = json!({
+        "type": "string",
+        "description": "json (default) or xml (skills-ref <available_skills>)."
+    });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
     load_props["args"] =
@@ -359,6 +372,20 @@ mod tests {
         assert!(v.get("skills").is_some(), "{out}");
         assert!(v.get("skips").is_some(), "{out}");
         assert!(out.contains("minimal-valid"), "{out}");
+    }
+
+    #[test]
+    fn list_xml_shape() {
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![corpus_pkg()],
+                format: Some("xml".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(out.contains("<available_skills>"), "{out}");
+        assert!(out.contains("<name>minimal-valid</name>"), "{out}");
     }
 
     #[test]

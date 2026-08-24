@@ -311,6 +311,46 @@ pub fn format_catalog(
     out
 }
 
+/// Official skills-ref `<available_skills>` XML for host system prompts.
+pub fn format_available_skills_xml(skills: &[Skill]) -> String {
+    let mut out = String::from("<available_skills>\n");
+    for skill in skills {
+        let location = skill
+            .source_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        out.push_str("<skill>\n");
+        out.push_str("<name>");
+        out.push_str(&xml_escape(&skill.name));
+        out.push_str("</name>\n");
+        out.push_str("<description>");
+        out.push_str(&xml_escape(&skill.description));
+        out.push_str("</description>\n");
+        out.push_str("<location>");
+        out.push_str(&xml_escape(&location));
+        out.push_str("</location>\n");
+        out.push_str("</skill>\n");
+    }
+    out.push_str("</available_skills>\n");
+    out
+}
+
+fn xml_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn truncate_at_char_boundary(s: &mut String, max: usize) {
     if s.len() <= max {
         return;
@@ -437,9 +477,9 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills, format_catalog,
-        format_load_message, format_package_envelope, progressive_budgets, trigger_matches,
-        truncate_skill_body_for_budget,
+        DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills,
+        format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
+        progressive_budgets, trigger_matches, truncate_skill_body_for_budget,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -595,6 +635,25 @@ mod tests {
         assert!(cat.contains(DEFAULT_ACTIVATE_HINT), "{cat}");
         assert!(!cat.contains("/skill"), "{cat}");
         assert!(!cat.contains("Available skills"), "{cat}");
+    }
+
+    #[test]
+    fn format_available_skills_xml_escapes_and_lists_location() {
+        let mut skill = make_skill("ampersand", &[], 10);
+        skill.description = "A & B <tag>".to_owned();
+        skill.source_path = Some(PathBuf::from("/tmp/ampersand/SKILL.md"));
+        let xml = format_available_skills_xml(&[skill]);
+        assert!(xml.starts_with("<available_skills>\n"), "{xml}");
+        assert!(xml.contains("<name>ampersand</name>"), "{xml}");
+        assert!(
+            xml.contains("<description>A &amp; B &lt;tag&gt;</description>"),
+            "{xml}"
+        );
+        assert!(
+            xml.contains("<location>/tmp/ampersand/SKILL.md</location>"),
+            "{xml}"
+        );
+        assert!(xml.ends_with("</available_skills>\n"), "{xml}");
     }
 
     #[test]
