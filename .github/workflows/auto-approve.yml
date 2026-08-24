@@ -24,9 +24,9 @@ jobs:
       !startsWith(github.event.pull_request.title, 'chore(release)') &&
       !startsWith(github.event.pull_request.title, 'publish') &&
       github.event.pull_request.title != 'chore: amend constitution' &&
-      (github.actor == 'SebTardif' || github.actor == 'dependabot[bot]')
+      github.actor == 'SebTardif'
     steps:
-      - uses: step-security/harden-runner@v2
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
       - name: Guard paths then approve and auto-merge
