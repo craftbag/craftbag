@@ -345,10 +345,25 @@ fn xml_escape(s: &str) -> String {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&apos;"),
-            _ => out.push(c),
+            c if is_xml10_char(c) => out.push(c),
+            // XML 1.0 cannot represent these even as character references.
+            _ => {}
         }
     }
     out
+}
+
+/// XML 1.0 `Char` production (https://www.w3.org/TR/xml/#charsets).
+fn is_xml10_char(c: char) -> bool {
+    matches!(
+        c,
+        '\t'
+            | '\n'
+            | '\r'
+            | '\u{20}'..='\u{D7FF}'
+            | '\u{E000}'..='\u{FFFD}'
+            | '\u{10000}'..='\u{10FFFF}'
+    )
 }
 
 fn truncate_at_char_boundary(s: &mut String, max: usize) {
@@ -652,6 +667,27 @@ mod tests {
         assert!(
             xml.contains("<location>/tmp/ampersand/SKILL.md</location>"),
             "{xml}"
+        );
+        assert!(xml.ends_with("</available_skills>\n"), "{xml}");
+    }
+
+    #[test]
+    fn format_available_skills_xml_strips_invalid_xml_chars() {
+        let mut skill = make_skill("ctrl", &[], 10);
+        skill.description = "ok\u{0000}bad\u{0001}\u{0008}\u{000B}\u{000C}\u{000E}".to_owned();
+        skill.source_path = Some(PathBuf::from("/tmp/ctrl\u{0000}/SKILL.md"));
+        let xml = format_available_skills_xml(&[skill]);
+        assert!(
+            !xml.chars().any(|c| !super::is_xml10_char(c)),
+            "catalog must be XML 1.0: {xml:?}"
+        );
+        assert!(
+            xml.contains("<description>okbad</description>"),
+            "illegal controls are dropped, text remains: {xml}"
+        );
+        assert!(
+            xml.contains("<location>/tmp/ctrl/SKILL.md</location>"),
+            "location must drop NUL: {xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
     }
