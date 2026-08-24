@@ -1,5 +1,7 @@
 # Agents
 
+MSRV 1.85 (`rust-toolchain.toml`). No let-chains.
+
 Local gate before every commit:
 
 ```bash
