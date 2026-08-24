@@ -6,32 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "567465f9c757abefd92c227c5fbf838500e999b7",
+  "ledger_sha": "3f23bce4774c9fe6cfa1973f0a90211eb1c75d75",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
-  "last_adversary_head": "6d4c37d277bbccf8f2ffaeda0d9c370535653f8b",
+  "last_adversary_head": "3825248d231cd339d25114b2c58999a7be51d069",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-xml-illegal-48",
+    "id": "adversary-disabled-nfkc-49",
     "work_source": "adversary",
-    "started_at": "2026-08-24T21:53:56Z",
-    "finished_at": "2026-08-24T21:53:56Z",
+    "started_at": "2026-08-24T22:09:59Z",
+    "finished_at": "2026-08-24T22:09:59Z",
     "result": "landed",
-    "head": "3825248d231cd339d25114b2c58999a7be51d069",
-    "pr": 48,
+    "head": "7940109755e7a8e198d392fb6f84bbbf3e37c22e",
+    "pr": 49,
     "files": [
-      "src/activate.rs"
+      "src/discover.rs"
     ],
-    "tests": "drop XML 1.0-illegal chars from catalog; nextest 201; PR CI green",
+    "tests": "disabled/Cursor denylist NFKC identity; nextest 202; PR CI green",
     "review": "0"
   },
-  "last_sha": "3825248d231cd339d25114b2c58999a7be51d069",
+  "last_sha": "7940109755e7a8e198d392fb6f84bbbf3e37c22e",
   "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "pending",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T21:53:56Z",
+    "checked_at": "2026-08-24T22:09:59Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
