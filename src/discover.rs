@@ -317,6 +317,9 @@ fn load_extra_path(
     }
     let skills_subdir = expanded.join("skills");
     let scan = if skills_subdir.is_dir() {
+        if skip_if_dir_escapes(&skills_subdir, &expanded, skips) {
+            return;
+        }
         skills_subdir
     } else {
         expanded
@@ -1447,5 +1450,43 @@ mod tests {
         assert_eq!(report.skills[0].name, "wanted");
         assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
         assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_skills_subdir_symlink_escape_is_unreadable() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let extra = tempfile::tempdir().expect("extra");
+        std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "extra-path skills/ symlink must not load the escaped tree: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped skill body must not be loaded: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("escapes") }),
+            "skills-subdir escape must be an unreadable skip: {:?}",
+            report.skips
+        );
     }
 }
