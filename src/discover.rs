@@ -30,6 +30,7 @@ pub struct DiscoveryOptions {
     /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
+    /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
     pub disabled: Vec<String>,
     /// Host names: `bline`, `claude`, `cursor`, `grok`.
     pub vendor_roots: Vec<String>,
@@ -697,10 +698,16 @@ fn try_load_skill_file(
 
     match parse_skill(&content) {
         Ok(mut skill) => {
-            if disabled.iter().any(|d| d == &skill.name) {
+            if disabled
+                .iter()
+                .any(|d| crate::parse::skill_names_equal(d, &skill.name))
+            {
                 return;
             }
-            if denylist.iter().any(|d| *d == skill.name) {
+            if denylist
+                .iter()
+                .any(|d| crate::parse::skill_names_equal(d, &skill.name))
+            {
                 return;
             }
             if !skill_name_matches_directory(skill_file, &skill.name) {
@@ -1656,6 +1663,41 @@ mod tests {
         );
         assert!(report.skills.is_empty());
         assert!(report.skips.is_empty());
+    }
+
+    #[test]
+    fn disabled_name_uses_nfkc_identity_like_why_and_load() {
+        let root = tempfile::tempdir().expect("tmp");
+        write_skill(
+            &root.path().join(".agents").join("skills").join("перевод"),
+            "перевод",
+            "docs",
+        );
+        write_skill(
+            &root.path().join(".agents").join("skills").join("café"),
+            "café",
+            "coffee",
+        );
+        let report = empty_home_discover(
+            root.path(),
+            &DiscoveryOptions {
+                disabled: vec!["ПЕРЕВОД".to_owned(), "cafe\u{0301}".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "disabled must NFKC-fold like why/load, not == : {:?}",
+            report.skills
+        );
+        assert!(report.skips.is_empty());
+        let why = crate::why(&report, Some("ПЕРЕВОД"), None, None);
+        assert!(
+            why.loaded.is_empty(),
+            "why must not list a skill disabled under a folded name: {:?}",
+            why.loaded
+        );
+        assert!(why.unknown_skill_message().is_some());
     }
 
     #[test]
