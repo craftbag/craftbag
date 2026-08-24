@@ -288,38 +288,11 @@ fn load_extra_path(
         .map(|name| expanded.join(name))
         .find(|p| p.is_file());
     if let Some(skill_file) = package_md {
-        // A directory whose SKILL.md name matches the directory is that
-        // package. Nested SKILL.md files stay inside the package tree.
-        if skill_md_stays_in_package(&skill_file) && extra_path_dir_is_named_package(&skill_file) {
-            try_load_skill_file(
-                &skill_file,
-                &SkillSource::ExtraPath,
-                ignore,
-                disabled,
-                &[],
-                skills,
-                skips,
-            );
-            return;
-        }
-        // Unreadable or oversized SKILL.md cannot be proven to be a loose
-        // collection root. Load it as this path's package (skip) so nested
-        // SKILL.md files do not leak.
-        if skill_md_stays_in_package(&skill_file) && read_skill_md(&skill_file).is_err() {
-            try_load_skill_file(
-                &skill_file,
-                &SkillSource::ExtraPath,
-                ignore,
-                disabled,
-                &[],
-                skills,
-                skips,
-            );
-            return;
-        }
-        // A lone SKILL.md is a package. The same file next to named
-        // packages is a loose root file; scan so those packages load.
-        if !dir_has_child_skill_packages(&expanded) {
+        // This extra path is that package unless we can prove the SKILL.md
+        // is a loose collection root (readable name that is not this
+        // directory, plus sibling packages). Nested SKILL.md stays inside
+        // the package tree.
+        if !extra_path_is_loose_collection(&expanded, &skill_file) {
             try_load_skill_file(
                 &skill_file,
                 &SkillSource::ExtraPath,
@@ -365,18 +338,22 @@ fn dir_has_child_skill_packages(dir: &Path) -> bool {
     })
 }
 
-/// True when this extra path is itself a named skill package.
-fn extra_path_dir_is_named_package(skill_file: &Path) -> bool {
+/// True when this extra-path SKILL.md is a loose root next to sibling packages.
+fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
+    if !skill_md_stays_in_package(skill_file) {
+        return false;
+    }
     let Ok(content) = read_skill_md(skill_file) else {
         return false;
     };
-    match peek_frontmatter_name(&content) {
-        Some(name) => {
-            let name = name.trim();
-            !name.is_empty() && skill_name_matches_directory(skill_file, name)
-        }
-        None => false,
+    let Some(name) = peek_frontmatter_name(&content) else {
+        return false;
+    };
+    let name = name.trim();
+    if name.is_empty() || skill_name_matches_directory(skill_file, name) {
+        return false;
     }
+    dir_has_child_skill_packages(dir)
 }
 
 fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
@@ -1299,6 +1276,149 @@ mod tests {
         assert!(find_skill_by_name(&report.skills, "evil").is_none());
         let why = crate::why(&report, Some("wanted"), None, None);
         assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_parentdir_is_same_named_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let via_parent = pkg.join("evil").join("..");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![via_parent.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "wanted/evil/.. must be the wanted package, not a collection scan: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].content.trim(), "PACKAGE_BODY");
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load from wanted/evil/..: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.kind != SkipKind::RootFile && s.kind != SkipKind::NameDirectoryMismatch),
+            "wanted/evil/.. must not become root_file or name_directory_mismatch: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_parentdir_skill_md_file_is_same_named_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "FILE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let via_parent_file = pkg.join("evil").join("..").join("SKILL.md");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![via_parent_file.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "wanted/evil/../SKILL.md must load as wanted: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].content.trim(), "FILE_BODY");
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "file extra-path must not scan nested SKILL.md: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.kind != SkipKind::NameDirectoryMismatch),
+            "wanted/evil/../SKILL.md must match directory wanted: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+    }
+
+    #[test]
+    fn extra_path_nameless_parse_error_does_not_scan_nested_skill() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\ndescription: no name\n---\nPACKAGE_BODY\n",
+        )
+        .expect("write");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "nameless extra-path SKILL.md must not load nested SKILL.md: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::ParseError && s.path.ends_with("wanted/SKILL.md")),
+            "nameless SKILL.md must stay a parse_error package skip: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "nameless wanted/SKILL.md must not become a root_file skip: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "nameless extra-path package must not look missing: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
         assert!(why.unknown_skill_message().is_none());
     }
 

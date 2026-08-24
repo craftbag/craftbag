@@ -1,7 +1,7 @@
 //! Hand-rolled SKILL.md frontmatter parser. Do not add `serde_yaml`.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use crate::error::ParseError;
 use crate::skill::{
@@ -120,13 +120,29 @@ fn scan_frontmatter_name(yaml: &str) -> Option<String> {
     None
 }
 
+/// Parent directory name of a `SKILL.md` path after stripping `.` / `..`.
+///
+/// `wanted/./SKILL.md` and `wanted/other/../SKILL.md` are the `wanted`
+/// package, same as `wanted/SKILL.md`.
+pub(crate) fn skill_md_package_dir_name(skill_md: &Path) -> Option<&str> {
+    let parent = skill_md.parent()?;
+    let mut stack: Vec<&std::ffi::OsStr> = Vec::new();
+    for c in parent.components() {
+        match c {
+            Component::Normal(s) => stack.push(s),
+            Component::ParentDir => {
+                let _ = stack.pop();
+            }
+            Component::CurDir => {}
+            Component::Prefix(_) | Component::RootDir => stack.clear(),
+        }
+    }
+    stack.last().and_then(|s| s.to_str())
+}
+
 /// True when the parent directory name of `skill_md` matches `name`.
 pub fn skill_name_matches_directory(skill_md: &Path, name: &str) -> bool {
-    skill_md
-        .parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
-        == Some(name)
+    skill_md_package_dir_name(skill_md) == Some(name)
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -672,5 +688,32 @@ Should fail parse.
             peek_frontmatter_name(missing_desc).as_deref(),
             Some("only-name")
         );
+    }
+
+    #[test]
+    fn skill_name_matches_directory_strips_curdir_and_parentdir() {
+        use super::skill_name_matches_directory;
+        use std::path::Path;
+
+        assert!(skill_name_matches_directory(
+            Path::new("/tmp/wanted/SKILL.md"),
+            "wanted"
+        ));
+        assert!(
+            skill_name_matches_directory(Path::new("/tmp/wanted/./SKILL.md"), "wanted"),
+            "wanted/./SKILL.md is the wanted package"
+        );
+        assert!(
+            skill_name_matches_directory(Path::new("/tmp/wanted/other/../SKILL.md"), "wanted"),
+            "wanted/other/../SKILL.md is the wanted package"
+        );
+        assert!(!skill_name_matches_directory(
+            Path::new("/tmp/wanted/./SKILL.md"),
+            "."
+        ));
+        assert!(!skill_name_matches_directory(
+            Path::new("/tmp/other/wanted/../SKILL.md"),
+            "wanted"
+        ));
     }
 }
