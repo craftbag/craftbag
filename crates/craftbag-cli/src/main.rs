@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, Skill, discover, find_skill_by_name, format_load_message,
-    progressive_budgets, validate_path, why,
+    progressive_budgets, unknown_or_skipped_skill_message, validate_path, why,
 };
 
 #[derive(Parser)]
@@ -131,7 +131,11 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     Ok(ExitCode::SUCCESS)
                 }
                 None => {
-                    let _ = writeln!(io::stderr(), "unknown skill: {name}");
+                    let _ = writeln!(
+                        io::stderr(),
+                        "{}",
+                        unknown_or_skipped_skill_message(&name, &report.skips)
+                    );
                     Ok(ExitCode::from(2))
                 }
             }

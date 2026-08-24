@@ -51,6 +51,26 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
     skills.iter().find(|s| s.name.to_lowercase() == want)
 }
 
+/// Error text when `load` cannot return a skill.
+///
+/// A matching skip row (parse error, name/dir mismatch) is not "unknown".
+pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
+    let want = name.trim();
+    let skip = skips.iter().find(|s| match s.name.as_deref() {
+        Some(n) if !want.is_empty() => n.eq_ignore_ascii_case(want),
+        _ => false,
+    });
+    match skip {
+        Some(skip) => format!(
+            "skipped skill: {} ({}): {}",
+            skip.name.as_deref().unwrap_or(want),
+            skip.kind.as_str(),
+            skip.detail
+        ),
+        None => format!("unknown skill: {name}"),
+    }
+}
+
 /// Result of validating one SKILL.md path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -577,9 +597,10 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 #[cfg(test)]
 mod tests {
     use super::{
-        CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name, with_home_override,
+        CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name,
+        unknown_or_skipped_skill_message, with_home_override,
     };
-    use crate::skip::SkipKind;
+    use crate::skip::{SkillSkip, SkipKind};
     use crate::source::SkillSource;
     use std::fs;
     use std::path::PathBuf;
@@ -606,6 +627,25 @@ mod tests {
     #[test]
     fn cursor_vendor_denylist_is_frozen() {
         assert_eq!(CURSOR_VENDOR_DENYLIST, &["shell", "canvas", "statusline"]);
+    }
+
+    #[test]
+    fn load_miss_names_parse_skip_not_unknown() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/Bad_Name/SKILL.md"),
+            name: Some("Bad_Name".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("bad_name", &[skip]);
+        assert!(msg.contains("skipped skill: Bad_Name"), "msg={msg}");
+        assert!(msg.contains("parse_error"), "msg={msg}");
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        assert_eq!(
+            unknown_or_skipped_skill_message("no-such", &[]),
+            "unknown skill: no-such"
+        );
     }
 
     #[test]
