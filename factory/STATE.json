@@ -1,35 +1,35 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "cce243ccb7d2e9e4f3fb23da91d6f7f4b7101f5c",
+  "ledger_sha": "1a062e6707df961aab2240c838c7ddb989016537",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "0d25cb27d06afc05f602112f41b55c4f6f060039",
   "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-incumbent-12",
-    "work_source": "adversary",
-    "started_at": "2026-08-24T03:19:11Z",
-    "finished_at": "2026-08-24T03:19:11Z",
+    "id": "prove-incumbent-12",
+    "work_source": "prove",
+    "started_at": "2026-08-24T03:19:38Z",
+    "finished_at": "2026-08-24T03:19:38Z",
     "result": "landed",
     "head": "0d25cb27d06afc05f602112f41b55c4f6f060039",
     "pr": null,
     "files": [],
-    "tests": "adversary: incumbent tests on main, nextest 95, REVIEW 0",
+    "tests": "craftbag why incumbent claude+vercel",
     "review": "0"
   },
   "last_sha": "0d25cb27d06afc05f602112f41b55c4f6f060039",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:19:11Z",
+    "checked_at": "2026-08-24T03:19:38Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -44,9 +44,11 @@
       "tests/corpus/agentskills/minimal-valid",
       "tests/corpus/collision",
       "tests/corpus",
-      "~/.grok/skills"
+      "~/.grok/skills",
+      "tests/corpus/incumbent/claude-project (cwd + --vendor claude)",
+      "tests/corpus/incumbent/vercel-npx (--path)"
     ],
-    "last_why_summary": "minimal-valid: 1 loaded. collision extra-path: 0 (needs package or skills/ children). corpus root-file dir as package: name_directory_mismatch. ~/.grok/skills: 332 loaded, 0 skips."
+    "last_why_summary": "incumbent claude cwd: pdf-helper vendor. incumbent vercel extra: deploy-hint ExtraPath. --path on claude-project dir is empty (vendor is cwd, not extra-path)."
   },
   "budgets": {
     "max_cycles": null,
