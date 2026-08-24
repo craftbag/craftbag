@@ -357,7 +357,10 @@ fn load_skills_from_dir(
     for entry in entries.filter_map(Result::ok) {
         let path = entry.path();
         if !path.is_dir() {
-            if path.file_name().and_then(|n| n.to_str()) == Some("SKILL.md")
+            if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, ignore)
             {
                 skips.push(SkillSkip {
@@ -371,10 +374,13 @@ fn load_skills_from_dir(
             continue;
         }
 
-        let skill_file = path.join("SKILL.md");
-        if !skill_file.is_file() {
+        let skill_file = ["SKILL.md", "skill.md"]
+            .into_iter()
+            .map(|name| path.join(name))
+            .find(|p| p.is_file());
+        let Some(skill_file) = skill_file else {
             continue;
-        }
+        };
         try_load_skill_file(
             &skill_file,
             source.clone(),
@@ -790,6 +796,18 @@ mod tests {
             "skips={:?}",
             report.skips
         );
+    }
+
+    #[test]
+    fn lowercase_skill_md_in_agents_package_loads() {
+        let cwd = corpus_dir().join("lowercase-skill-md");
+        let report = empty_home_discover(cwd.as_path(), &DiscoveryOptions::default());
+        let skill = report
+            .skills
+            .iter()
+            .find(|s| s.name == "lc-pack")
+            .expect("lc-pack");
+        assert_eq!(skill.source, SkillSource::Agents);
     }
 
     #[test]
