@@ -496,12 +496,20 @@ fn skill_md_stays_in_package(skill_file: &Path) -> bool {
 }
 
 /// Override the home directory for in-process tests. Not a host API.
+///
+/// Restores the previous override on return and on panic. Nested calls
+/// restore the outer value, not always `None`.
 #[doc(hidden)]
 pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T {
-    HOME_OVERRIDE.with(|o| *o.borrow_mut() = home);
-    let out = f();
-    HOME_OVERRIDE.with(|o| *o.borrow_mut() = None);
-    out
+    struct Restore(Option<PathBuf>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            HOME_OVERRIDE.with(|o| *o.borrow_mut() = self.0.take());
+        }
+    }
+    let previous = HOME_OVERRIDE.with(|o| o.replace(home));
+    let _restore = Restore(previous);
+    f()
 }
 
 #[cfg(test)]
@@ -878,5 +886,73 @@ mod tests {
         assert_eq!(report.skills.len(), 1);
         assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
         assert_eq!(report.skills[0].name, "one");
+    }
+
+    fn env_home() -> Option<PathBuf> {
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(PathBuf::from)
+    }
+
+    #[test]
+    fn home_override_clears_after_panic() {
+        let home = tempfile::tempdir().expect("home");
+        let leaked = home.path().to_path_buf();
+        write_skill(
+            &leaked.join(".agents").join("skills").join("leaked"),
+            "leaked",
+            "x",
+        );
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_home_override(Some(leaked.clone()), || {
+                panic!("boom");
+            });
+        }));
+        assert!(panicked.is_err());
+        assert_eq!(
+            super::home_dir(),
+            env_home(),
+            "HOME override must not leak after panic"
+        );
+        let cwd = tempfile::tempdir().expect("cwd");
+        let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("discover");
+        assert!(
+            report.skills.iter().all(|s| s.name != "leaked"),
+            "leaked home skill visible after panic: {:?}",
+            report.skills
+        );
+    }
+
+    #[test]
+    fn home_override_restores_outer_after_nested() {
+        let outer = tempfile::tempdir().expect("outer");
+        let inner = tempfile::tempdir().expect("inner");
+        write_skill(
+            &outer.path().join(".agents").join("skills").join("outer"),
+            "outer",
+            "x",
+        );
+        write_skill(
+            &inner.path().join(".agents").join("skills").join("inner"),
+            "inner",
+            "x",
+        );
+        let cwd = tempfile::tempdir().expect("cwd");
+        with_home_override(Some(outer.path().to_path_buf()), || {
+            with_home_override(Some(inner.path().to_path_buf()), || {
+                let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("inner");
+                assert_eq!(report.skills.len(), 1);
+                assert_eq!(report.skills[0].name, "inner");
+            });
+            assert_eq!(
+                super::home_dir().as_deref(),
+                Some(outer.path()),
+                "nested override must restore outer home"
+            );
+            let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("outer");
+            assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+            assert_eq!(report.skills[0].name, "outer");
+        });
+        assert_eq!(super::home_dir(), env_home());
     }
 }
