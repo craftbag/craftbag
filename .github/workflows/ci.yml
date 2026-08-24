@@ -48,6 +48,7 @@ jobs:
               - 'rustfmt.toml'
               - 'deny.toml'
               - '.github/workflows/ci.yml'
+              - 'factory/scripts/deny-check.sh'
               - 'fuzz/**'
 
   lint:
@@ -75,7 +76,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo deny check
+      - run: bash factory/scripts/deny-check.sh
 
   test:
     name: Test
