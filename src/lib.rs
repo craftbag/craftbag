@@ -23,7 +23,7 @@ pub use error::{Error, ParseError};
 pub use parse::{parse_skill, skill_name_matches_directory, validate_skill_name};
 pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
-    SKILL_NAME_MAX_CHARS, Skill,
+    SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
 };
 pub use skip::{DiscoveryReport, SkillSkip, SkipKind};
 pub use source::SkillSource;

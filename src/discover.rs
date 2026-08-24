@@ -1,13 +1,14 @@
 //! Multi-root SKILL.md discovery. First name wins.
 
 use std::cell::RefCell;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::parse::{parse_skill, peek_frontmatter_name, skill_name_matches_directory};
-use crate::skill::Skill;
+use crate::skill::{SKILL_MD_MAX_BYTES, Skill};
 use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
 use crate::source::SkillSource;
 
@@ -90,7 +91,7 @@ pub struct ValidationReport {
 /// Validate a SKILL.md path: readable, parse, and name/dir match.
 pub fn validate_path(path: &Path) -> ValidationReport {
     let path_buf = path.to_path_buf();
-    let content = match std::fs::read_to_string(path) {
+    let content = match read_skill_md(path) {
         Ok(c) => c,
         Err(e) => {
             return ValidationReport {
@@ -158,33 +159,35 @@ pub fn validate_path(path: &Path) -> ValidationReport {
 }
 
 fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
-    let ignore = expand_ignore_list(cwd, &opts.ignore);
-    let disabled = opts.disabled.clone();
+    let cwd = cwd
+        .canonicalize()
+        .unwrap_or_else(|_| lexical_normalize(cwd));
+    let ignore = expand_ignore_list(&cwd, &opts.ignore);
     let mut skills = Vec::new();
     let mut skips = Vec::new();
 
-    for dir in walk_cwd_to_git_root(cwd) {
+    for dir in walk_cwd_to_git_root(&cwd) {
         let agents = dir.join(".agents").join("skills");
         if !skip_if_dir_escapes(&agents, &dir, &mut skips) {
             load_skills_from_dir(
                 &agents,
-                SkillSource::Agents,
+                &SkillSource::Agents,
                 &ignore,
-                &disabled,
+                &opts.disabled,
                 &[],
                 &mut skills,
                 &mut skips,
             );
         }
-        load_vendor_tree(&dir, opts, &ignore, &disabled, &mut skills, &mut skips);
+        load_vendor_tree(&dir, opts, &ignore, &opts.disabled, &mut skills, &mut skips);
     }
 
     if let Some(user_dir) = &opts.user_skills_dir {
         load_skills_from_dir(
             user_dir,
-            SkillSource::User,
+            &SkillSource::User,
             &ignore,
-            &disabled,
+            &opts.disabled,
             &[],
             &mut skills,
             &mut skips,
@@ -196,19 +199,26 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         if !skip_if_dir_escapes(&agents, &home, &mut skips) {
             load_skills_from_dir(
                 &agents,
-                SkillSource::Agents,
+                &SkillSource::Agents,
                 &ignore,
-                &disabled,
+                &opts.disabled,
                 &[],
                 &mut skills,
                 &mut skips,
             );
         }
-        load_vendor_tree(&home, opts, &ignore, &disabled, &mut skills, &mut skips);
+        load_vendor_tree(
+            &home,
+            opts,
+            &ignore,
+            &opts.disabled,
+            &mut skills,
+            &mut skips,
+        );
     }
 
     for raw in &opts.paths {
-        load_extra_path(raw, &ignore, &disabled, &mut skills, &mut skips);
+        load_extra_path(raw, &ignore, &opts.disabled, &mut skills, &mut skips);
     }
 
     DiscoveryReport { skills, skips }
@@ -217,7 +227,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
 fn load_vendor_tree(
     root: &Path,
     opts: &DiscoveryOptions,
-    ignore: &[PathBuf],
+    ignore: &[IgnorePrefix],
     disabled: &[String],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
@@ -235,17 +245,10 @@ fn load_vendor_tree(
         } else {
             &[]
         };
-        load_skills_from_dir(
-            &dir,
-            SkillSource::Vendor {
-                name: name.to_owned(),
-            },
-            ignore,
-            disabled,
-            denylist,
-            skills,
-            skips,
-        );
+        let source = SkillSource::Vendor {
+            name: name.to_owned(),
+        };
+        load_skills_from_dir(&dir, &source, ignore, disabled, denylist, skills, skips);
     }
 }
 
@@ -255,7 +258,7 @@ fn vendor_enabled(opts: &DiscoveryOptions, name: &str) -> bool {
 
 fn load_extra_path(
     raw: &str,
-    ignore: &[PathBuf],
+    ignore: &[IgnorePrefix],
     disabled: &[String],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
@@ -268,7 +271,7 @@ fn load_extra_path(
     {
         try_load_skill_file(
             &expanded,
-            SkillSource::ExtraPath,
+            &SkillSource::ExtraPath,
             ignore,
             disabled,
             &[],
@@ -287,7 +290,7 @@ fn load_extra_path(
     if let Some(skill_file) = package_md {
         try_load_skill_file(
             &skill_file,
-            SkillSource::ExtraPath,
+            &SkillSource::ExtraPath,
             ignore,
             disabled,
             &[],
@@ -307,7 +310,7 @@ fn load_extra_path(
     };
     load_skills_from_dir(
         &scan,
-        SkillSource::ExtraPath,
+        &SkillSource::ExtraPath,
         ignore,
         disabled,
         &[],
@@ -317,33 +320,23 @@ fn load_extra_path(
 }
 
 fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
-    let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
-    let root = find_git_root(&cwd);
     let mut out = Vec::new();
-    let mut current = Some(cwd);
+    let mut current = Some(cwd.to_path_buf());
+    let mut found_git = false;
     while let Some(dir) = current {
         out.push(dir.clone());
-        if let Some(ref r) = root {
-            if &dir == r {
-                break;
-            }
-        } else {
+        if dir.join(".git").exists() {
+            found_git = true;
             break;
         }
         current = dir.parent().map(Path::to_path_buf);
     }
-    out
-}
-
-fn find_git_root(start: &Path) -> Option<PathBuf> {
-    let mut current = Some(start.to_path_buf());
-    while let Some(dir) = current {
-        if dir.join(".git").exists() {
-            return Some(dir);
-        }
-        current = dir.parent().map(Path::to_path_buf);
+    if found_git {
+        out
+    } else {
+        out.truncate(1);
+        out
     }
-    None
 }
 
 fn home_dir() -> Option<PathBuf> {
@@ -368,10 +361,12 @@ fn expand_tilde(raw: &str) -> PathBuf {
     PathBuf::from(raw)
 }
 
-fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<PathBuf> {
-    let cwd_abs = cwd
-        .canonicalize()
-        .unwrap_or_else(|_| lexical_normalize(cwd));
+struct IgnorePrefix {
+    lexical: PathBuf,
+    canonical: Option<PathBuf>,
+}
+
+fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
     paths
         .iter()
         .map(|p| {
@@ -379,9 +374,14 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<PathBuf> {
             let joined = if expanded.is_absolute() {
                 expanded
             } else {
-                cwd_abs.join(expanded)
+                cwd.join(expanded)
             };
-            lexical_normalize(&joined)
+            let lexical = lexical_normalize(&joined);
+            let canonical = joined
+                .canonicalize()
+                .ok()
+                .or_else(|| lexical.canonicalize().ok());
+            IgnorePrefix { lexical, canonical }
         })
         .collect()
 }
@@ -400,7 +400,7 @@ fn lexical_normalize(path: &Path) -> PathBuf {
     out
 }
 
-fn path_is_ignored(path: &Path, ignore: &[PathBuf]) -> bool {
+fn path_is_ignored(path: &Path, ignore: &[IgnorePrefix]) -> bool {
     if ignore.is_empty() {
         return false;
     }
@@ -409,21 +409,19 @@ fn path_is_ignored(path: &Path, ignore: &[PathBuf]) -> bool {
         .any(|prefix| path_has_ignore_prefix(path, prefix))
 }
 
-fn path_has_ignore_prefix(path: &Path, prefix: &Path) -> bool {
+fn path_has_ignore_prefix(path: &Path, prefix: &IgnorePrefix) -> bool {
     let path_lex = lexical_normalize(path);
-    let prefix_lex = lexical_normalize(prefix);
-    if path_lex.starts_with(&prefix_lex) || path.starts_with(prefix) {
+    if path_lex.starts_with(&prefix.lexical) || path.starts_with(&prefix.lexical) {
         return true;
     }
-    let prefix_canon = match prefix.canonicalize().or_else(|_| prefix_lex.canonicalize()) {
-        Ok(p) => p,
-        Err(_) => return false,
+    let Some(prefix_canon) = prefix.canonical.as_deref() else {
+        return false;
     };
-    if path.starts_with(&prefix_canon) || path_lex.starts_with(&prefix_canon) {
+    if path.starts_with(prefix_canon) || path_lex.starts_with(prefix_canon) {
         return true;
     }
     match path.canonicalize() {
-        Ok(path_canon) => path_canon.starts_with(&prefix_canon),
+        Ok(path_canon) => path_canon.starts_with(prefix_canon),
         Err(_) => false,
     }
 }
@@ -454,8 +452,8 @@ fn skip_if_dir_escapes(dir: &Path, confine: &Path, skips: &mut Vec<SkillSkip>) -
 
 fn load_skills_from_dir(
     dir: &Path,
-    source: SkillSource,
-    ignore: &[PathBuf],
+    source: &SkillSource,
+    ignore: &[IgnorePrefix],
     disabled: &[String],
     denylist: &[&str],
     skills: &mut Vec<Skill>,
@@ -515,7 +513,7 @@ fn load_skills_from_dir(
         }
         try_load_skill_file(
             &skill_file,
-            source.clone(),
+            source,
             ignore,
             disabled,
             denylist,
@@ -527,8 +525,8 @@ fn load_skills_from_dir(
 
 fn try_load_skill_file(
     skill_file: &Path,
-    source: SkillSource,
-    ignore: &[PathBuf],
+    source: &SkillSource,
+    ignore: &[IgnorePrefix],
     disabled: &[String],
     denylist: &[&str],
     skills: &mut Vec<Skill>,
@@ -549,14 +547,14 @@ fn try_load_skill_file(
         return;
     }
 
-    let content = match std::fs::read_to_string(skill_file) {
+    let content = match read_skill_md(skill_file) {
         Ok(c) => c,
         Err(e) => {
             skips.push(SkillSkip {
                 path: skill_file.to_path_buf(),
                 name: None,
                 kind: SkipKind::Unreadable,
-                detail: e.to_string(),
+                detail: e,
                 winner_path: None,
             });
             return;
@@ -598,7 +596,7 @@ fn try_load_skill_file(
                 });
                 return;
             }
-            skill.source = source;
+            skill.source = source.clone();
             skill.source_path = Some(skill_file.to_path_buf());
             skills.push(skill);
         }
@@ -612,6 +610,24 @@ fn try_load_skill_file(
             });
         }
     }
+}
+
+fn read_skill_md(path: &Path) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    if let Ok(meta) = file.metadata() {
+        if meta.len() > SKILL_MD_MAX_BYTES {
+            return Err(format!("SKILL.md exceeds {SKILL_MD_MAX_BYTES} bytes"));
+        }
+    }
+    let mut buf = String::new();
+    let n = file
+        .take(SKILL_MD_MAX_BYTES.saturating_add(1))
+        .read_to_string(&mut buf)
+        .map_err(|e| e.to_string())?;
+    if n as u64 > SKILL_MD_MAX_BYTES {
+        return Err(format!("SKILL.md exceeds {SKILL_MD_MAX_BYTES} bytes"));
+    }
+    Ok(buf)
 }
 
 fn skill_md_stays_in_package(skill_file: &Path) -> bool {
@@ -648,8 +664,9 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name,
-        unknown_or_skipped_skill_message, with_home_override,
+        unknown_or_skipped_skill_message, validate_path, with_home_override,
     };
+    use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
     use crate::source::SkillSource;
     use std::fs;
@@ -1414,6 +1431,97 @@ mod tests {
             },
         );
         assert_secret_ignored(&report);
+    }
+
+    fn write_sized_skill(dir: &std::path::Path, name: &str, total_bytes: usize) {
+        fs::create_dir_all(dir).expect("mkdir");
+        let header = format!("---\nname: {name}\ndescription: {name} skill\n---\n");
+        assert!(
+            total_bytes >= header.len(),
+            "total_bytes={} smaller than header {}",
+            total_bytes,
+            header.len()
+        );
+        let mut body = header;
+        body.extend(std::iter::repeat_n('x', total_bytes - body.len()));
+        fs::write(dir.join("SKILL.md"), body).expect("write");
+    }
+
+    #[test]
+    fn oversized_skill_md_is_unreadable_skip() {
+        let root = tempfile::tempdir().expect("tmp");
+        write_sized_skill(
+            &root.path().join(".agents").join("skills").join("huge"),
+            "huge",
+            SKILL_MD_MAX_BYTES as usize + 1,
+        );
+        write_skill(
+            &root.path().join(".agents").join("skills").join("ok-one"),
+            "ok-one",
+            "keep",
+        );
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(
+            report.skills.iter().all(|s| s.name != "huge"),
+            "oversized SKILL.md must not load: {:?}",
+            report.skills
+        );
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "ok-one");
+        let skip = report
+            .skips
+            .iter()
+            .find(|s| s.kind == SkipKind::Unreadable)
+            .expect("unreadable skip");
+        assert!(
+            skip.detail.contains(&SKILL_MD_MAX_BYTES.to_string()),
+            "skip detail must name the byte cap: {}",
+            skip.detail
+        );
+        let msg = unknown_or_skipped_skill_message("huge", &report.skips);
+        assert!(
+            msg.contains("skipped skill: huge"),
+            "oversized package must be named, not unknown: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("huge"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn skill_md_at_byte_cap_still_loads() {
+        let root = tempfile::tempdir().expect("tmp");
+        write_sized_skill(
+            &root.path().join(".agents").join("skills").join("padded"),
+            "padded",
+            SKILL_MD_MAX_BYTES as usize,
+        );
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "padded");
+        assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[test]
+    fn validate_path_rejects_oversized_skill_md() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("huge");
+        write_sized_skill(&pkg, "huge", SKILL_MD_MAX_BYTES as usize + 1);
+        let report = validate_path(&pkg.join("SKILL.md"));
+        assert!(!report.ok);
+        assert!(report.name.is_none());
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains(&SKILL_MD_MAX_BYTES.to_string())),
+            "errors={:?}",
+            report.errors
+        );
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable);
+        assert!(skip.detail.contains(&SKILL_MD_MAX_BYTES.to_string()));
     }
 
     #[test]
