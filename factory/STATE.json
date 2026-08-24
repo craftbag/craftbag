@@ -5,8 +5,12 @@
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
-  "human_gate": null,
-  "ledger_sha": "f285d5d570b371cd5e90128ccb46e88828006bf2",
+  "human_gate": {
+    "kind": "dco-app",
+    "message": "Install the GitHub DCO App on craftbag/craftbag (browser). Factory DCO workflow already exists; the App is the remaining check.",
+    "since": "2026-08-24T00:46:17Z"
+  },
+  "ledger_sha": "60e7948866f9da3f99d0aaab7508b8a91ba8fc28",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": null,
   "expand_cursor": 0,
