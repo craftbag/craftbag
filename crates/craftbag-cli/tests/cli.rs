@@ -286,6 +286,90 @@ fn why_named_root_file_skip_is_not_unknown() {
 }
 
 #[test]
+fn load_extra_path_root_file_does_not_hide_package() {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::write(
+        extra.path().join("SKILL.md"),
+        "---\nname: demo\ndescription: loose\n---\nloose\n",
+    )
+    .expect("write");
+    let pkg = extra.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: package\n---\npackage body\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("demo")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: demo]"),
+        "package must load: {stdout}"
+    );
+    assert!(
+        stdout.contains("package body"),
+        "must load the named package, not the loose file: {stdout}"
+    );
+}
+
+#[test]
+fn why_extra_path_root_file_and_package_agree_with_load() {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::write(
+        extra.path().join("SKILL.md"),
+        "---\nname: demo\ndescription: loose\n---\nloose\n",
+    )
+    .expect("write");
+    let pkg = extra.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: package\n---\npackage body\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let why_v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    assert_eq!(
+        why_v["loaded"][0]["name"], "demo",
+        "why must list the loaded package: {stdout}"
+    );
+    assert_eq!(
+        why_v["skips"][0]["kind"], "root_file",
+        "why must keep the loose-file skip: {stdout}"
+    );
+    assert_eq!(why_v["skips"][0]["name"], "demo", "{stdout}");
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
+}
+
+#[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

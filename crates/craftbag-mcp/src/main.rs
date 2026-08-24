@@ -510,6 +510,70 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_extra_path_root_file_does_not_hide_package() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            std::fs::write(
+                tmp.path().join("SKILL.md"),
+                "---\nname: demo\ndescription: loose\n---\nloose\n",
+            )
+            .expect("write");
+            let pkg = tmp.path().join("demo");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: demo\ndescription: package\n---\npackage body\n",
+            )
+            .expect("write");
+            let resp = call(
+                19,
+                "skills_load",
+                json!({"name": "demo", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: demo]"),
+                "package must load: {text}"
+            );
+            assert!(
+                text.contains("package body"),
+                "must load the named package, not the loose file: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_extra_path_root_file_and_package_agree_with_load() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            std::fs::write(
+                tmp.path().join("SKILL.md"),
+                "---\nname: demo\ndescription: loose\n---\nloose\n",
+            )
+            .expect("write");
+            let pkg = tmp.path().join("demo");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: demo\ndescription: package\n---\npackage body\n",
+            )
+            .expect("write");
+            let why = call(
+                20,
+                "skills_why",
+                json!({"name": "demo", "paths": [tmp.path()]}),
+            );
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            let why_text = call_text(&why);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert_eq!(why_v["loaded"][0]["name"], "demo", "{why_text}");
+            assert_eq!(why_v["skips"][0]["name"], "demo", "{why_text}");
+            assert_eq!(why_v["skips"][0]["kind"], "root_file", "{why_text}");
+        });
+    }
+
+    #[test]
     fn skills_why_unknown_is_error() {
         empty_home(|| {
             let resp = call(10, "skills_why", json!({"name": "no-such-skill"}));
