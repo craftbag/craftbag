@@ -23,7 +23,7 @@ thread_local! {
 /// Options for multi-root skill discovery.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiscoveryOptions {
-    /// Extra paths (`~` expanded).
+    /// Extra paths (`~` expanded). Relative paths join the discover `cwd`.
     pub paths: Vec<String>,
     /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
     pub ignore: Vec<String>,
@@ -218,7 +218,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     }
 
     for raw in &opts.paths {
-        load_extra_path(raw, &ignore, &opts.disabled, &mut skills, &mut skips);
+        load_extra_path(raw, &cwd, &ignore, &opts.disabled, &mut skills, &mut skips);
     }
 
     DiscoveryReport { skills, skips }
@@ -258,12 +258,20 @@ fn vendor_enabled(opts: &DiscoveryOptions, name: &str) -> bool {
 
 fn load_extra_path(
     raw: &str,
+    cwd: &Path,
     ignore: &[IgnorePrefix],
     disabled: &[String],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
     let expanded = expand_tilde(raw);
+    // Relative extra paths join `cwd`, same as ignore prefixes. `.` / `..`
+    // then keep a real package dir name after lexical collapse.
+    let expanded = if expanded.is_absolute() {
+        expanded
+    } else {
+        cwd.join(expanded)
+    };
     if expanded.is_file()
         && expanded
             .file_name()
@@ -1326,6 +1334,100 @@ mod tests {
                 .iter()
                 .all(|s| s.kind != SkipKind::RootFile && s.kind != SkipKind::NameDirectoryMismatch),
             "wanted/evil/.. must not become root_file or name_directory_mismatch: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_dot_cwd_is_same_named_package() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            &pkg,
+            &DiscoveryOptions {
+                paths: vec![".".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "extra-path `.` with cwd in the package must be that package: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].content.trim(), "PACKAGE_BODY");
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load from extra-path `.`: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.kind != SkipKind::RootFile && s.kind != SkipKind::NameDirectoryMismatch),
+            "extra-path `.` must not become root_file or name_directory_mismatch: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "wanted").is_some());
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_dotdot_cwd_is_same_named_package() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            &pkg.join("evil"),
+            &DiscoveryOptions {
+                paths: vec!["..".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "extra-path `..` from a child of the package must be that package: {:?}",
+            report
+        );
+        assert_eq!(report.skills[0].content.trim(), "PACKAGE_BODY");
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load from extra-path `..`: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.kind != SkipKind::RootFile && s.kind != SkipKind::NameDirectoryMismatch),
+            "extra-path `..` must not become root_file or name_directory_mismatch: {:?}",
             report.skips
         );
         assert!(find_skill_by_name(&report.skills, "wanted").is_some());
