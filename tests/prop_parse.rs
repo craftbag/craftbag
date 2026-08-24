@@ -46,6 +46,29 @@ proptest! {
     }
 
     #[test]
+    fn consecutive_hyphens_are_rejected(left in "[a-z0-9]{1,6}", right in "[a-z0-9]{1,6}") {
+        let name = format!("{left}--{right}");
+        prop_assert!(validate_skill_name(&name).is_err());
+        let md = format!("---\nname: {name}\ndescription: d\n---\n");
+        prop_assert!(parse_skill(&md).is_err());
+    }
+
+    #[test]
+    fn leading_or_trailing_hyphen_is_rejected(
+        core in "[a-z0-9]{1,8}",
+        lead in any::<bool>(),
+    ) {
+        let name = if lead {
+            format!("-{core}")
+        } else {
+            format!("{core}-")
+        };
+        prop_assert!(validate_skill_name(&name).is_err());
+        let md = format!("---\nname: {name}\ndescription: d\n---\n");
+        prop_assert!(parse_skill(&md).is_err());
+    }
+
+    #[test]
     fn parse_skill_does_not_panic(s in ".{0,200}") {
         let _ = parse_skill(&s);
     }
