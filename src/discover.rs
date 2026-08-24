@@ -57,23 +57,32 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 /// A matching skip row (parse error, name/dir mismatch, unreadable
 /// package) is not "unknown". Blank peeked names and the `SKILL.md`
 /// parent directory (except root-file skips) are identities too.
+/// Peeked `.` / `..` are path components, not skill names. The
+/// message includes skip kind, package identity, and the SKILL.md
+/// path so extra-path `.` / `..` (joined to discover cwd) stay
+/// locatable.
 pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
     let want = name.trim();
     let skip = skips.iter().find(|s| s.matches_requested_name(want));
     match skip {
         Some(skip) => format!(
-            "skipped skill: {} ({}): {}",
-            skip.name
-                .as_deref()
-                .map(str::trim)
-                .filter(|n| !n.is_empty())
-                .or_else(|| crate::skip::skill_md_package_name(&skip.path))
-                .unwrap_or(want),
+            "skipped skill: {} ({}) at {}: {}",
+            skip_display_name(skip, want),
             skip.kind.as_str(),
+            skip.path.display(),
             skip.detail
         ),
         None => format!("unknown skill: {name}"),
     }
+}
+
+fn skip_display_name<'a>(skip: &'a SkillSkip, want: &'a str) -> &'a str {
+    skip.name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty() && *n != "." && *n != "..")
+        .or_else(|| crate::skip::skill_md_package_name(&skip.path))
+        .unwrap_or(want)
 }
 
 /// Result of validating one SKILL.md path.
@@ -764,6 +773,10 @@ mod tests {
         let msg = unknown_or_skipped_skill_message("bad_name", &[skip]);
         assert!(msg.contains("skipped skill: Bad_Name"), "msg={msg}");
         assert!(msg.contains("parse_error"), "msg={msg}");
+        assert!(
+            msg.contains("/tmp/Bad_Name/SKILL.md"),
+            "load must name the skip path: {msg}"
+        );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
         assert_eq!(
             unknown_or_skipped_skill_message("no-such", &[]),
@@ -2396,8 +2409,18 @@ mod tests {
             assert!(find_skill_by_name(&report.skills, "evil").is_none());
             let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
             assert!(
-                msg.contains("skipped skill"),
-                "package wanted with peeked name `{peeked}` must not look missing: {msg}"
+                msg.contains("skipped skill: wanted"),
+                "peeked `{peeked}` is a path component, not the package name: {msg}"
+            );
+            assert!(
+                !msg.contains(&format!("skipped skill: {peeked}")),
+                "load must not present peeked `{peeked}` as the skill name: {msg}"
+            );
+            assert!(msg.contains("parse_error"), "msg={msg}");
+            let skip_path = report.skips[0].path.display().to_string();
+            assert!(
+                msg.contains(&skip_path),
+                "load must name the SKILL.md path: msg={msg} path={skip_path}"
             );
             assert!(!msg.contains("unknown skill"), "msg={msg}");
             let why = crate::why(&report, Some("wanted"), None, None);
@@ -2408,5 +2431,84 @@ mod tests {
                 why.unknown_skill_message()
             );
         }
+    }
+
+    #[test]
+    fn load_extra_path_dot_parse_skip_includes_joined_path() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\ndescription: no name\n---\nPACKAGE_BODY\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(
+            &pkg,
+            &DiscoveryOptions {
+                paths: vec![".".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::ParseError);
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "extra-path `.` package must stay wanted: {msg}"
+        );
+        assert!(msg.contains("parse_error"), "msg={msg}");
+        let skip_path = report.skips[0].path.display().to_string();
+        assert!(
+            skip_path.contains("wanted"),
+            "skip path must be the joined discover cwd, not raw `.`: {skip_path}"
+        );
+        assert!(
+            msg.contains(&skip_path),
+            "load/MCP must name the joined SKILL.md after extra-path `.`: msg={msg} path={skip_path}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn load_extra_path_dotdot_parse_skip_includes_joined_path() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\ndescription: no name\n---\nPACKAGE_BODY\n",
+        )
+        .expect("write");
+        let child = pkg.join("evil");
+        fs::create_dir_all(&child).expect("mkdir");
+        let report = empty_home_discover(
+            &child,
+            &DiscoveryOptions {
+                paths: vec!["..".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        assert_eq!(report.skips[0].kind, SkipKind::ParseError);
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "extra-path `..` package must stay wanted: {msg}"
+        );
+        assert!(msg.contains("parse_error"), "msg={msg}");
+        let skip_path = report.skips[0].path.display().to_string();
+        assert!(
+            skip_path.contains("wanted"),
+            "skip path must be the joined discover cwd, not raw `..`: {skip_path}"
+        );
+        assert!(
+            msg.contains(&skip_path),
+            "load/MCP must name the joined SKILL.md after extra-path `..`: msg={msg} path={skip_path}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
     }
 }
