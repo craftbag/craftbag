@@ -183,15 +183,18 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     let mut skips = Vec::new();
 
     for dir in walk_cwd_to_git_root(cwd) {
-        load_skills_from_dir(
-            &dir.join(".agents").join("skills"),
-            SkillSource::Agents,
-            &ignore,
-            &disabled,
-            &[],
-            &mut skills,
-            &mut skips,
-        );
+        let agents = dir.join(".agents").join("skills");
+        if !skip_if_dir_escapes(&agents, &dir, &mut skips) {
+            load_skills_from_dir(
+                &agents,
+                SkillSource::Agents,
+                &ignore,
+                &disabled,
+                &[],
+                &mut skills,
+                &mut skips,
+            );
+        }
         load_vendor_tree(&dir, opts, &ignore, &disabled, &mut skills, &mut skips);
     }
 
@@ -208,15 +211,18 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     }
 
     if let Some(home) = home_dir() {
-        load_skills_from_dir(
-            &home.join(".agents").join("skills"),
-            SkillSource::Agents,
-            &ignore,
-            &disabled,
-            &[],
-            &mut skills,
-            &mut skips,
-        );
+        let agents = home.join(".agents").join("skills");
+        if !skip_if_dir_escapes(&agents, &home, &mut skips) {
+            load_skills_from_dir(
+                &agents,
+                SkillSource::Agents,
+                &ignore,
+                &disabled,
+                &[],
+                &mut skills,
+                &mut skips,
+            );
+        }
         load_vendor_tree(&home, opts, &ignore, &disabled, &mut skills, &mut skips);
     }
 
@@ -240,6 +246,9 @@ fn load_vendor_tree(
             continue;
         }
         let dir = root.join(format!(".{name}")).join("skills");
+        if skip_if_dir_escapes(&dir, root, skips) {
+            continue;
+        }
         let denylist: &[&str] = if name == "cursor" {
             CURSOR_VENDOR_DENYLIST
         } else {
@@ -435,6 +444,30 @@ fn path_has_ignore_prefix(path: &Path, prefix: &Path) -> bool {
     }
 }
 
+fn stays_under(path: &Path, ancestor: &Path) -> bool {
+    let Ok(anc) = ancestor.canonicalize() else {
+        return false;
+    };
+    let Ok(p) = path.canonicalize() else {
+        return false;
+    };
+    p.starts_with(anc)
+}
+
+fn skip_if_dir_escapes(dir: &Path, confine: &Path, skips: &mut Vec<SkillSkip>) -> bool {
+    if dir.exists() && !stays_under(dir, confine) {
+        skips.push(SkillSkip {
+            path: dir.to_path_buf(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "skills directory symlink escapes walk root".to_owned(),
+            winner_path: None,
+        });
+        return true;
+    }
+    false
+}
+
 fn load_skills_from_dir(
     dir: &Path,
     source: SkillSource,
@@ -486,6 +519,16 @@ fn load_skills_from_dir(
         let Some(skill_file) = skill_file else {
             continue;
         };
+        if !stays_under(&path, dir) {
+            skips.push(SkillSkip {
+                path: skill_file,
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail: "skill package symlink escapes walk root".to_owned(),
+                winner_path: None,
+            });
+            continue;
+        }
         try_load_skill_file(
             &skill_file,
             source.clone(),
@@ -1284,5 +1327,125 @@ mod tests {
             },
         );
         assert_secret_ignored(&report);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn package_dir_symlink_escape_is_unreadable() {
+        let root = tempfile::tempdir().expect("tmp");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        std::os::unix::fs::symlink(outside.path().join("stolen"), skills.join("stolen"))
+            .expect("symlink package dir");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "package dir symlink must not load the escaped skill: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped skill body must not be loaded: {:?}",
+            report.skills
+        );
+        let skip = report
+            .skips
+            .iter()
+            .find(|s| s.kind == SkipKind::Unreadable)
+            .expect("unreadable skip");
+        assert!(
+            skip.detail.contains("escapes"),
+            "skip detail must name the escape: {}",
+            skip.detail
+        );
+        let msg = unknown_or_skipped_skill_message("stolen", &report.skips);
+        assert!(
+            msg.contains("skipped skill: stolen"),
+            "escaped package must be named, not unknown: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_root_symlink_escape_is_unreadable() {
+        let root = tempfile::tempdir().expect("tmp");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let agents = root.path().join(".agents");
+        fs::create_dir_all(&agents).expect("mkdir");
+        std::os::unix::fs::symlink(outside.path(), agents.join("skills")).expect("symlink root");
+        let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "skills-root symlink must not load the escaped tree: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("escapes") }),
+            "skills-root escape must be an unreadable skip: {:?}",
+            report.skips
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_scan_does_not_follow_package_symlink() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let scan = tempfile::tempdir().expect("scan");
+        std::os::unix::fs::symlink(outside.path().join("stolen"), scan.path().join("stolen"))
+            .expect("symlink");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![scan.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "extra-path scan must not follow package dir symlink: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("escapes") }),
+            "skips={:?}",
+            report.skips
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_explicit_package_symlink_still_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("wanted"), "wanted", "host asked");
+        let link = tempfile::tempdir().expect("link");
+        let pkg = link.path().join("wanted");
+        std::os::unix::fs::symlink(outside.path().join("wanted"), &pkg).expect("symlink");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
+        assert_eq!(report.skills[0].name, "wanted");
+        assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
+        assert!(report.skips.is_empty(), "skips={:?}", report.skips);
     }
 }
