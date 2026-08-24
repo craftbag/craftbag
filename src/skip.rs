@@ -105,9 +105,7 @@ pub(crate) fn skill_md_package_name(path: &Path) -> Option<&str> {
     if !file.eq_ignore_ascii_case("SKILL.md") {
         return None;
     }
-    path.parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
+    crate::parse::skill_md_package_dir_name(path)
 }
 
 /// Result of multi-root skill discovery, including skips for `why`.
@@ -289,6 +287,22 @@ mod tests {
             "named skip still matches its package dir so why/load do not call it unknown"
         );
         assert!(!nameless.matches_requested_name("other"));
+    }
+
+    #[test]
+    fn matches_requested_name_parentdir_skill_md_uses_package_dir() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/wanted/other/../SKILL.md"),
+            name: None,
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            skip.matches_requested_name("wanted"),
+            "wanted/other/../SKILL.md must be the wanted package, not other"
+        );
+        assert!(!skip.matches_requested_name("other"));
     }
 
     #[test]
