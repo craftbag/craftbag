@@ -307,6 +307,34 @@ mod tests {
     }
 
     #[test]
+    fn why_named_root_file_skip_is_not_unknown() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
+            name: Some("loose".to_owned()),
+            kind: SkipKind::RootFile,
+            detail: "put the file in a named subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let why = why(&report, Some("loose"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::RootFile);
+        assert!(
+            why.unknown_skill_message().is_none(),
+            "root_file skip with a frontmatter name is not unknown"
+        );
+        let by_dir = super::why(&report, Some("skills"), None, None);
+        assert!(by_dir.skips.is_empty());
+        assert_eq!(
+            by_dir.unknown_skill_message().as_deref(),
+            Some("unknown skill: skills")
+        );
+    }
+
+    #[test]
     fn why_unknown_name_is_unknown() {
         let report = DiscoveryReport::default();
         let why = why(&report, Some("no-such"), None, None);
