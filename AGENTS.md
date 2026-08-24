@@ -7,7 +7,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo nextest run --workspace
 cargo test --workspace --doc
-cargo deny check
+bash factory/scripts/deny-check.sh
 bash factory/scripts/assert-stealth.sh craftbag/craftbag
 bash factory/scripts/write-ledger.sh --self-test
 ```
