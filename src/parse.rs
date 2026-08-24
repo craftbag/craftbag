@@ -135,6 +135,16 @@ pub fn skill_names_equal(a: &str, b: &str) -> bool {
     a.to_lowercase() == b.to_lowercase()
 }
 
+/// True when `name` is empty or `.` / `..` after NFKC and trim.
+///
+/// Extra-path treats those as path components, not skill names. Compatibility
+/// forms (fullwidth `.`, two-dot leader) must not unlock a nested scan.
+pub(crate) fn is_path_component_skill_name(name: &str) -> bool {
+    let n = normalize_skill_name(name);
+    let n = n.trim();
+    n.is_empty() || n == "." || n == ".."
+}
+
 fn is_skill_name_char(c: char) -> bool {
     if c == '-' {
         return true;
@@ -762,6 +772,29 @@ Use pdftotext.
         assert!(super::skill_names_equal("é", "e\u{0301}"));
         assert!(!super::skill_names_equal("перевод", "other"));
         assert!(!super::skill_names_equal(".", "wanted"));
+        assert!(super::skill_names_equal("demo\u{00A0}", "demo"));
+        assert!(super::skill_names_equal("demo\u{3000}", "demo"));
+        assert!(
+            super::skill_names_equal("．", "."),
+            "fullwidth full stop NFKC-equals `.`"
+        );
+        assert!(
+            super::skill_names_equal("‥", ".."),
+            "two-dot leader NFKC-equals `..`"
+        );
+        assert!(super::is_path_component_skill_name("."));
+        assert!(super::is_path_component_skill_name(".."));
+        assert!(
+            super::is_path_component_skill_name("．"),
+            "fullwidth full stop is a path component after NFKC"
+        );
+        assert!(
+            super::is_path_component_skill_name("‥"),
+            "two-dot leader is a path component after NFKC"
+        );
+        assert!(super::is_path_component_skill_name("\u{00A0}"));
+        assert!(!super::is_path_component_skill_name("wanted"));
+        assert!(!super::is_path_component_skill_name("evil"));
     }
 
     #[test]
