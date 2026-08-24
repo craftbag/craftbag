@@ -618,6 +618,7 @@ mod tests {
             let why_text = call_text(&why);
             let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
             assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
+            assert_eq!(why_v["skips"][0]["code"], "parse_error", "{why_text}");
             assert!(
                 why_text.contains("demo"),
                 "why JSON must keep the package path: {why_text}"

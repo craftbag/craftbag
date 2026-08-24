@@ -8,6 +8,67 @@ use crate::skill::{
     SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS, Skill,
 };
 
+/// Official agentskills fields plus host extensions this crate parses.
+pub(crate) fn is_known_frontmatter_key(key: &str) -> bool {
+    matches!(
+        key,
+        "name"
+            | "description"
+            | "license"
+            | "compatibility"
+            | "metadata"
+            | "allowed-tools"
+            | "allowed_tools"
+            | "triggers"
+            | "user-invocable"
+            | "user_invocable"
+            | "disable-model-invocation"
+            | "disable_model_invocation"
+            | "argument-hint"
+            | "argument_hint"
+            | "when-to-use"
+            | "when_to_use"
+    )
+}
+
+/// Top-level frontmatter keys that parse ignores (not known or host extensions).
+pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
+    let Some(yaml) = frontmatter_yaml(content) else {
+        return Vec::new();
+    };
+    let mut unknown = Vec::new();
+    for line in yaml.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let Some((key, _)) = trimmed.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() || is_known_frontmatter_key(key) {
+            continue;
+        }
+        if !unknown.iter().any(|k| k == key) {
+            unknown.push(key.to_owned());
+        }
+    }
+    unknown
+}
+
+fn frontmatter_yaml(content: &str) -> Option<&str> {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return None;
+    }
+    let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
+    let close_pos = after_open.find("\n---")?;
+    Some(&after_open[..close_pos])
+}
+
 /// Parse a SKILL.md file's content into a [`Skill`].
 ///
 /// Required fields and name rules follow
@@ -417,7 +478,10 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_frontmatter, parse_skill, peek_frontmatter_name, validate_skill_name};
+    use super::{
+        is_known_frontmatter_key, parse_frontmatter, parse_skill, peek_frontmatter_name,
+        unknown_frontmatter_keys, validate_skill_name,
+    };
     use crate::error::ParseError;
     use crate::skill::SKILL_DESCRIPTION_MAX_CHARS;
     use crate::source::SkillSource;
@@ -662,6 +726,38 @@ Use pdftotext.
         assert!(
             matches!(err, ParseError::InvalidYaml(ref m) if m.contains("description")),
             "{err}"
+        );
+    }
+
+    #[test]
+    fn unknown_frontmatter_keys_finds_made_up_field() {
+        let input = "---\nname: demo\ndescription: d\nmade_up_field: x\n---\nbody\n";
+        assert_eq!(unknown_frontmatter_keys(input), ["made_up_field"]);
+        assert!(is_known_frontmatter_key("triggers"));
+        assert!(is_known_frontmatter_key("disable_model_invocation"));
+        assert!(!is_known_frontmatter_key("made_up_field"));
+        let known = "\
+---
+name: hosty
+description: d
+license:
+compatibility: rust
+allowed-tools: Read
+triggers:
+  - hosty
+user_invocable: true
+disable_model_invocation: false
+argument-hint: name
+when-to-use: when testing
+metadata:
+  author: craftbag
+---
+body
+";
+        assert!(
+            unknown_frontmatter_keys(known).is_empty(),
+            "keys={:?}",
+            unknown_frontmatter_keys(known)
         );
     }
 

@@ -34,12 +34,39 @@ impl ActivationReason {
 }
 
 /// One activation decision for `why`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivationDecision {
     pub name: String,
     pub reason: ActivationReason,
     pub detail: String,
+}
+
+impl Serialize for ActivationDecision {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Wire<'a> {
+            name: &'a str,
+            reason: ActivationReason,
+            code: &'a str,
+            detail: &'a str,
+        }
+        Wire {
+            name: &self.name,
+            reason: self.reason,
+            code: self.reason.as_str(),
+            detail: &self.detail,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl ActivationDecision {
+    /// Stable machine code (`reason.as_str()`).
+    pub fn code(&self) -> &'static str {
+        self.reason.as_str()
+    }
 }
 
 /// Loaded skill row for `why`.
@@ -434,5 +461,32 @@ mod tests {
         assert!(reasons.contains(&("a-small", ActivationReason::Injected)));
         assert!(reasons.contains(&("b-huge", ActivationReason::BudgetOmitted)));
         assert!(reasons.contains(&("personal", ActivationReason::VendorEmptyTriggers)));
+    }
+
+    #[test]
+    fn why_json_includes_code_on_skip_and_activation() {
+        let skill = Skill::new("foo", "d", "x".repeat(80));
+        let skip = SkillSkip {
+            path: PathBuf::from("/b/foo/SKILL.md"),
+            name: Some("foo".to_owned()),
+            kind: SkipKind::NameCollision,
+            detail: "lost".to_owned(),
+            winner_path: Some(PathBuf::from("/a/foo/SKILL.md")),
+        };
+        let report = DiscoveryReport {
+            skills: vec![skill],
+            skips: vec![skip],
+        };
+        let why = why(&report, None, Some("hello"), None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["skips"][0]["kind"], "name_collision", "{json}");
+        assert_eq!(v["skips"][0]["code"], "name_collision", "{json}");
+        assert_eq!(why.skips[0].code(), "name_collision");
+        let reason = v["activation"][0]["reason"]
+            .as_str()
+            .expect("activation reason");
+        assert_eq!(v["activation"][0]["code"].as_str(), Some(reason), "{json}");
+        assert_eq!(why.activation[0].code(), why.activation[0].reason.as_str());
     }
 }

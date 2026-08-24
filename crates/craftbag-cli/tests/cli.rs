@@ -32,6 +32,50 @@ fn validate_invalid_name_fails() {
 }
 
 #[test]
+fn validate_unknown_key_passes_default_and_fails_strict() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\nmade_up_field: x\n---\nbody\n",
+    )
+    .expect("write");
+    let skill = pkg.join("SKILL.md");
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg(&skill)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--strict")
+        .arg(&skill)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "strict must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("made_up_field"),
+        "strict must name the unknown key: {stderr}"
+    );
+}
+
+#[test]
+fn validate_strict_corpus_ok() {
+    let path = corpus().join("agentskills/minimal-valid/SKILL.md");
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg("--strict")
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok"));
+}
+
+#[test]
 fn list_extra_path_json() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
@@ -163,6 +207,10 @@ fn why_parse_skip_without_frontmatter_name_is_not_unknown() {
     assert!(
         stdout.contains("\"kind\": \"parse_error\""),
         "why JSON must keep parse_error: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"code\": \"parse_error\""),
+        "why JSON must include machine code: {stdout}"
     );
     assert!(
         stdout.contains("demo"),

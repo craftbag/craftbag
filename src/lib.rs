@@ -17,7 +17,8 @@ pub use activate::{
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
-    unknown_or_skipped_skill_message, validate_path, with_home_override,
+    unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+    with_home_override,
 };
 pub use error::{Error, ParseError};
 pub use parse::{parse_skill, skill_name_matches_directory, validate_skill_name};
