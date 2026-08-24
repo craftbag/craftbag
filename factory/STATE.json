@@ -6,37 +6,37 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "db25a5a1180b23dc883148a6e6ffc73d6e8d2757",
+  "ledger_sha": "31f60becfda32a88df79efcd78db1cbe3693f3dc",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "5026422322952f34bd6e4754ad13af7b83174bb9",
   "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-qa-1",
+    "id": "improve-developer-3",
     "work_source": "improve",
-    "started_at": "2026-08-24T02:33:41Z",
-    "finished_at": "2026-08-24T02:33:41Z",
+    "started_at": "2026-08-24T02:36:35Z",
+    "finished_at": "2026-08-24T02:36:35Z",
     "result": "noop",
     "head": "5026422322952f34bd6e4754ad13af7b83174bb9",
     "pr": null,
     "files": [],
-    "tests": "QA perspective: SkipKind, let-chains, MCP why, envelope",
+    "tests": "Developer perspective: discover/MCP/why/parse",
     "review": "0"
   },
   "last_sha": "5026422322952f34bd6e4754ad13af7b83174bb9",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T02:33:41Z",
+    "checked_at": "2026-08-24T02:36:35Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 1,
-    "next_perspective": 3,
-    "clean_cycles": 1
+    "cycle": 2,
+    "next_perspective": 4,
+    "clean_cycles": 2
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
