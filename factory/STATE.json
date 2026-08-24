@@ -6,39 +6,37 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "d4bbe778a7c689e2df028ad41ea472bdf56f8252",
+  "ledger_sha": "9612b62b45db71234bea1bd1a44db69a2a1423dd",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "0a6ad0abc9df7fbd398d045999404be0961724e8",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-compat-1",
-    "work_source": "expand",
-    "started_at": "2026-08-24T03:58:37Z",
-    "finished_at": "2026-08-24T03:58:37Z",
-    "result": "landed",
+    "id": "improve-spec-9b",
+    "work_source": "improve",
+    "started_at": "2026-08-24T04:06:36Z",
+    "finished_at": "2026-08-24T04:06:36Z",
+    "result": "noop",
     "head": "0a6ad0abc9df7fbd398d045999404be0961724e8",
-    "pr": 15,
-    "files": [
-      "tests/prop_parse.rs"
-    ],
-    "tests": "compatibility_over_max; main CI green",
+    "pr": null,
+    "files": [],
+    "tests": "Spec: 5 skip kinds, no Project, compat test on main",
     "review": "0"
   },
   "last_sha": "0a6ad0abc9df7fbd398d045999404be0961724e8",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:58:37Z",
+    "checked_at": "2026-08-24T04:06:36Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 20,
-    "next_perspective": 9,
-    "clean_cycles": 20
+    "cycle": 21,
+    "next_perspective": 10,
+    "clean_cycles": 21
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
