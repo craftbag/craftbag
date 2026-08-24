@@ -1,35 +1,35 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "605672b083ea89f5dbae78b35fb16c13972a4812",
+  "ledger_sha": "2d6ec5c34f7f66a4fa70185589a06bd38cd29bda",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "0d25cb27d06afc05f602112f41b55c4f6f060039",
-  "expand_cursor": 4,
+  "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-perf-10",
-    "work_source": "improve",
-    "started_at": "2026-08-24T03:23:14Z",
-    "finished_at": "2026-08-24T03:23:14Z",
-    "result": "noop",
+    "id": "expand-prove-tree-4",
+    "work_source": "expand",
+    "started_at": "2026-08-24T03:23:44Z",
+    "finished_at": "2026-08-24T03:23:44Z",
+    "result": "landed",
     "head": "0d25cb27d06afc05f602112f41b55c4f6f060039",
     "pr": null,
     "files": [],
-    "tests": "Performance: HOME_OVERRIDE, walk, no CI hang",
+    "tests": "craftbag why --path package-full -> 1 loaded",
     "review": "0"
   },
   "last_sha": "0d25cb27d06afc05f602112f41b55c4f6f060039",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-24T03:23:14Z",
+    "checked_at": "2026-08-24T03:23:44Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -46,9 +46,10 @@
       "tests/corpus",
       "~/.grok/skills",
       "tests/corpus/incumbent/claude-project (cwd + --vendor claude)",
-      "tests/corpus/incumbent/vercel-npx (--path)"
+      "tests/corpus/incumbent/vercel-npx (--path)",
+      "tests/corpus/agentskills/package-full"
     ],
-    "last_why_summary": "incumbent claude cwd: pdf-helper vendor. incumbent vercel extra: deploy-hint ExtraPath. --path on claude-project dir is empty (vendor is cwd, not extra-path)."
+    "last_why_summary": "package-full extraPath loaded, 0 skips. No ~/.agents/skills or ~/.claude/skills on this machine."
   },
   "budgets": {
     "max_cycles": null,
