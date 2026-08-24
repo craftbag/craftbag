@@ -15,6 +15,8 @@ pub const SKILL_DESCRIPTION_MAX_CHARS: usize = 1024;
 pub const SKILL_COMPATIBILITY_MAX_CHARS: usize = 500;
 /// Soft warn threshold: agentskills recommends keeping SKILL.md under ~500 lines.
 pub const SKILL_BODY_LINE_SOFT_WARN: usize = 500;
+/// Hard cap on SKILL.md bytes for discover and validate. Prevents unbounded reads.
+pub const SKILL_MD_MAX_BYTES: u64 = 1_048_576;
 
 /// A parsed skill loaded from a SKILL.md file.
 ///
@@ -111,7 +113,7 @@ mod tests {
 
     use super::{
         SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
-        SKILL_NAME_MAX_CHARS, Skill,
+        SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
     };
     use crate::source::SkillSource;
 
@@ -121,6 +123,7 @@ mod tests {
         assert_eq!(SKILL_DESCRIPTION_MAX_CHARS, 1024);
         assert_eq!(SKILL_COMPATIBILITY_MAX_CHARS, 500);
         assert_eq!(SKILL_BODY_LINE_SOFT_WARN, 500);
+        assert_eq!(SKILL_MD_MAX_BYTES, 1_048_576);
     }
 
     #[test]
