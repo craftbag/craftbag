@@ -414,6 +414,33 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_parse_skip_without_frontmatter_name_is_not_unknown() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let pkg = tmp.path().join("demo");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\ndescription: no name\n---\nbody\n",
+            )
+            .expect("write");
+            let parent = tmp.path().to_string_lossy().into_owned();
+            let resp = call(9, "skills_load", json!({"name": "demo", "paths": [parent]}));
+            assert_eq!(resp["result"]["isError"], true);
+            let text = call_text(&resp);
+            assert!(
+                text.contains("skipped skill: demo"),
+                "load must use the package dir when peek name is missing: {text}"
+            );
+            assert!(text.contains("parse_error"), "{text}");
+            assert!(
+                !text.contains("unknown skill"),
+                "nameless parse skip must not look missing: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_why_parse_error_keeps_name() {
         empty_home(|| {
             let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
