@@ -46,7 +46,9 @@ and `WhyReport` if wire names stay aligned (`camelCase` structs,
 and `SkillSource::from_host_token` to accept Bline list / TUI tokens
 (`user`, `agents`, `extra` / `extraPath` / `config`, plus vendor names
 `bline` / `claude` / `cursor` / `grok`, or the on-disk form `.claude`).
-`project` and `community` have no v1 variant. The host keeps those.
+Vendor spellings match `parse_vendor_roots` (`.Claude` / `Claude` are
+`claude`). `project` and `community` have no v1 variant. The host keeps
+those.
 
 CLI `--vendor` and MCP `vendor` reject unknown tokens
 (`SkillSource::parse_vendor_roots`). A typo is an error, not an empty
