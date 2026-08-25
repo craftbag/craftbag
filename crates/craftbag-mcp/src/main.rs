@@ -1220,4 +1220,39 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn skills_load_nameless_leftover_and_skills_file_does_not_hide_sibling() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            std::fs::write(
+                tmp.path().join("SKILL.md"),
+                "---\ndescription: leftover without name\n---\nloose\n",
+            )
+            .expect("write");
+            std::fs::write(tmp.path().join("skills"), "not-a-dir").expect("skills file");
+            let pkg = tmp.path().join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+            )
+            .expect("write");
+            let resp = call(
+                34,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find sibling public when leftover extra/SKILL.md has no name and extra/skills is a file: {text}"
+            );
+            assert!(
+                text.contains("from-sibling"),
+                "must load the sibling package, not the nameless leftover: {text}"
+            );
+        });
+    }
 }
