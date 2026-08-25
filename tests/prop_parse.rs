@@ -2,7 +2,7 @@
 
 use craftbag::{
     ParseError, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS,
-    parse_skill, validate_skill_name,
+    normalize_skill_name, parse_skill, validate_skill_name,
 };
 use proptest::prelude::*;
 
@@ -91,4 +91,36 @@ proptest! {
     fn parse_skill_does_not_panic(s in ".{0,200}") {
         let _ = parse_skill(&s);
     }
+
+    #[test]
+    fn unicode_lowercase_names_parse(
+        chunks in prop::collection::vec(unicode_name_chunk(), 1usize..4)
+    ) {
+        let name = chunks.join("-");
+        prop_assume!(validate_skill_name(&name).is_ok());
+        let md = format!("---\nname: {name}\ndescription: d\n---\nbody\n");
+        let skill = parse_skill(&md).expect("valid unicode name");
+        prop_assert_eq!(skill.name, normalize_skill_name(&name));
+        prop_assert_eq!(skill.description, "d");
+    }
+
+    #[test]
+    fn cyrillic_uppercase_name_is_rejected(tail in unicode_name_chunk()) {
+        let name = format!("Я{tail}");
+        prop_assert!(validate_skill_name(&name).is_err());
+        let md = format!("---\nname: {name}\ndescription: d\n---\n");
+        prop_assert!(parse_skill(&md).is_err());
+    }
+}
+
+fn unicode_name_chunk() -> impl Strategy<Value = String> {
+    prop::collection::vec(
+        prop_oneof![
+            prop::char::range('a', 'z'),
+            prop::char::range('а', 'я'),
+            prop::sample::select(vec!['ё', 'ü', 'ö', 'é', 'ñ', '中', '文']),
+        ],
+        1usize..6,
+    )
+    .prop_map(|cs| cs.into_iter().collect())
 }
