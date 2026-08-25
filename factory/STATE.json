@@ -1,35 +1,40 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "adversary",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "2b62a4a03d9793a414d88ead3d42a3448a61db9a",
+  "ledger_sha": "da371ef5627238902c86105bb22a1c4299c9dc3b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "25fc283fe42537e04f71e6bb2f3b443b22286aad",
-  "expand_cursor": 3,
+  "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi-13-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-25T19:00:12Z",
-    "finished_at": "2026-08-25T19:00:12Z",
-    "result": "noop",
-    "head": "25fc283fe42537e04f71e6bb2f3b443b22286aad",
-    "pr": null,
-    "files": [],
-    "tests": "MPI 13 Architecture CLI/MCP list JSON already share snake_case flags; no landable layering bug",
+    "id": "expand-incumbent-claude-user-94",
+    "work_source": "expand",
+    "started_at": "2026-08-25T19:06:50Z",
+    "finished_at": "2026-08-25T19:06:50Z",
+    "result": "landed",
+    "head": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
+    "pr": 94,
+    "files": [
+      "src/discover.rs",
+      "crates/craftbag-cli/tests/cli.rs",
+      "factory/BLINE_CONSUMER.md",
+      "tests/corpus/incumbent/claude-user/.claude/skills/home-note/SKILL.md"
+    ],
+    "tests": "incumbent claude-user HOME vendor; vercel skills/ extra-path; reviewer 0; main CI dispatched",
     "review": "0"
   },
-  "last_sha": "25fc283fe42537e04f71e6bb2f3b443b22286aad",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "last_sha": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
+  "next_work_source": "adversary",
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "green",
+    "main": "unknown",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-25T19:00:12Z",
+    "checked_at": "2026-08-25T19:06:50Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -49,9 +54,10 @@
       "tests/corpus/incumbent/vercel-npx (--path)",
       "tests/corpus/agentskills/package-full",
       "tests/corpus/lowercase-skill-md (cwd)",
-      "tests/corpus/lowercase-skill-md/.agents/skills/lc-pack (--path)"
+      "tests/corpus/lowercase-skill-md/.agents/skills/lc-pack (--path)",
+      "tests/corpus/incumbent/claude-user (HOME + --vendor claude)"
     ],
-    "last_why_summary": "lowercase lc-pack loads as ExtraPath via --path and as Agents via cwd. fuzz-smoke and incumbent corpus still on main."
+    "last_why_summary": "incumbent claude-user home-note loads as Vendor claude via HOME. vercel skills/ collection extra-path still on main."
   },
   "budgets": {
     "max_cycles": null,
