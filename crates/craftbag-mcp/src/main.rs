@@ -191,7 +191,11 @@ fn why_json(args: WhyArgs) -> Result<String, String> {
 fn discover_properties() -> Value {
     json!({
         "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Example: [\"./my-skill\"]."},
-        "vendor": {"type": "array", "items": {"type": "string"}, "description": "Opt-in vendor trees: bline, claude, cursor, grok. Example: [\"claude\"] or [\".claude\"]."},
+        "vendor": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["bline", "claude", "cursor", "grok"]},
+            "description": "Opt-in vendor trees: bline, claude, cursor, grok. Example: [\"claude\"] or [\".claude\"]."
+        },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."}
     })
@@ -1954,6 +1958,33 @@ mod tests {
             ["json", "xml", "catalog", "watch"],
             "skills_list format enum must match CLI --format tokens: {format}"
         );
+    }
+
+    #[test]
+    fn tools_list_advertises_vendor_enum() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(51)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let vendor = &tool["inputSchema"]["properties"]["vendor"];
+            let tokens: Vec<&str> = vendor["items"]["enum"]
+                .as_array()
+                .expect("enum")
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert_eq!(
+                tokens,
+                ["bline", "claude", "cursor", "grok"],
+                "{} vendor enum must match CLI --vendor tokens: {vendor}",
+                tool["name"]
+            );
+        }
     }
 
     #[test]
