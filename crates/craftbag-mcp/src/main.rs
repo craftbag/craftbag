@@ -656,6 +656,25 @@ mod tests {
     }
 
     #[test]
+    fn list_empty_format_names_valid_tokens() {
+        empty_home(|| {
+            let err = list_json(DiscoverArgs {
+                format: Some("   ".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect_err("format");
+            assert!(err.contains("unknown format: empty"), "{err}");
+            assert!(
+                err.contains("json")
+                    && err.contains("xml")
+                    && err.contains("catalog")
+                    && err.contains("watch"),
+                "must name valid formats: {err}"
+            );
+        });
+    }
+
+    #[test]
     fn list_unknown_format_names_json_and_xml() {
         empty_home(|| {
             let err = list_json(DiscoverArgs {

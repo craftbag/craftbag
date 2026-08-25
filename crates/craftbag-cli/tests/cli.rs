@@ -521,6 +521,30 @@ fn list_format_uppercase_suggests_lowercase() {
 }
 
 #[test]
+fn list_format_empty_names_valid_tokens() {
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("   ")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "empty format must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown format: empty"),
+        "must name the empty token: {stderr}"
+    );
+    assert!(
+        stderr.contains("json")
+            && stderr.contains("xml")
+            && stderr.contains("catalog")
+            && stderr.contains("watch"),
+        "must name MCP-matching tokens: {stderr}"
+    );
+}
+
+#[test]
 fn list_format_unknown_names_valid_tokens() {
     let (_home, mut cmd) = bin();
     let out = cmd

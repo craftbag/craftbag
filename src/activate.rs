@@ -339,6 +339,9 @@ pub fn parse_list_format(format: &str) -> Result<ListFormat, String> {
 /// Tokens are lowercase. A case-only miss names the matching token.
 pub fn unknown_list_format(format: &str) -> String {
     let trimmed = format.trim();
+    if trimmed.is_empty() {
+        return "unknown format: empty (use json, xml, catalog, or watch)".to_owned();
+    }
     let lower = trimmed.to_ascii_lowercase();
     match lower.as_str() {
         "json" | "xml" | "catalog" | "watch" => {
@@ -714,6 +717,10 @@ mod tests {
         assert_eq!(
             unknown_list_format("yaml"),
             "unknown format: yaml (use json, xml, catalog, or watch)"
+        );
+        assert_eq!(
+            unknown_list_format("   "),
+            "unknown format: empty (use json, xml, catalog, or watch)"
         );
     }
 
