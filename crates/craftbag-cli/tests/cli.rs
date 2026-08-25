@@ -813,6 +813,19 @@ fn why_unknown_exits_1() {
         .output()
         .expect("run");
     assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill: no-such-skill"),
+        "why must name the miss like load: {stderr}"
+    );
+    assert_eq!(
+        stderr
+            .lines()
+            .filter(|l| l.contains("unknown skill"))
+            .count(),
+        1,
+        "why unknown must stay one stderr line: {stderr:?}"
+    );
 }
 
 #[test]

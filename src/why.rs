@@ -111,11 +111,15 @@ impl WhyReport {
     /// Message when a name query matched neither a loaded skill nor a skip.
     ///
     /// Omitted name is not a query. Whitespace-only name is a query and
-    /// is unknown.
+    /// is unknown. The echoed name uses [`crate::sanitize_error_token`]
+    /// so CLI/MCP stderr stays one line, same as load.
     pub fn unknown_skill_message(&self) -> Option<String> {
         let want = self.query.as_deref()?;
         if self.loaded.is_empty() && self.skips.is_empty() {
-            Some(format!("unknown skill: {want}"))
+            Some(format!(
+                "unknown skill: {}",
+                crate::sanitize_error_token(want)
+            ))
         } else {
             None
         }
@@ -394,6 +398,25 @@ mod tests {
             why.unknown_skill_message().as_deref(),
             Some("unknown skill: no-such")
         );
+    }
+
+    #[test]
+    fn why_unknown_skill_message_stays_one_line() {
+        let report = DiscoveryReport::default();
+        let why = why(&report, Some("no\nsuch"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(
+            msg, "unknown skill: no?such",
+            "why must sanitize like load so CLI/MCP stderr stays one line"
+        );
+        assert_eq!(msg.lines().count(), 1, "msg={msg:?}");
+        let why = super::why(&report, Some("no\u{2028}such"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(msg, "unknown skill: no?such", "msg={msg:?}");
+        assert!(!msg.contains('\u{2028}'), "msg={msg:?}");
+        let why = super::why(&report, Some("no\u{2029}such"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(msg, "unknown skill: no?such", "msg={msg:?}");
     }
 
     #[test]
