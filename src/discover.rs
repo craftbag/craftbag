@@ -449,20 +449,11 @@ fn load_extra_path(
         // is a loose collection root (a real name that is not this
         // directory, plus sibling packages or a skills/ tree). `.` / `..`
         // are path components, not names. Nested SKILL.md stays inside
-        // the package tree.
-        if !extra_path_is_loose_collection(&expanded, skill_file, opts.ascii_names) {
-            if skip_if_skill_md_escapes_package(skill_file, skips) {
-                return;
-            }
-            try_load_skill_file(
-                skill_file,
-                &SkillSource::ExtraPath,
-                ignore,
-                opts,
-                &[],
-                skills,
-                skips,
-            );
+        // the package tree. Classify once so a named package does not
+        // open SKILL.md again in try_load_skill_file.
+        let classified = classify_extra_path_md(&expanded, skill_file, opts.ascii_names);
+        if !matches!(classified, ExtraPathMd::Collection) {
+            load_classified_extra_path_package(skill_file, classified, ignore, opts, skills, skips);
             return;
         }
     }
@@ -608,7 +599,32 @@ fn extra_skills_subdir_is_collection(
     }
 }
 
+/// One read of extra-path SKILL.md. Named packages reuse the body;
+/// leftover collection roots do not load it as a package.
+#[derive(Debug)]
+enum ExtraPathMd {
+    /// Leftover collection root. Scan siblings / extra/skills.
+    Collection,
+    /// Stay this extra-path package. Prefetched SKILL.md body.
+    Package(String),
+    /// Stay this extra-path package. SKILL.md could not be read
+    /// (FIFO, chmod, directory leftover without siblings).
+    Unreadable(String),
+}
+
 /// True when this extra-path SKILL.md is a leftover collection root.
+///
+/// Watch and user_dir helpers only need the bool. Named extra-path
+/// load uses [`classify_extra_path_md`] so [`try_load_skill_file`]
+/// does not open the same SKILL.md again.
+fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bool) -> bool {
+    matches!(
+        classify_extra_path_md(dir, skill_file, ascii_names),
+        ExtraPathMd::Collection
+    )
+}
+
+/// Classify extra-path SKILL.md after one [`read_skill_md`].
 ///
 /// A `skills/` subdirectory is the extra-path collection layout, same as
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
@@ -626,38 +642,47 @@ fn extra_skills_subdir_is_collection(
 /// sibling packages when `extra/skills` is absent. FIFO, socket, and
 /// regular-file leftovers plus sibling package dirs still match a
 /// named package with nested SKILL.md, so those stay a package.
-fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bool) -> bool {
+fn classify_extra_path_md(dir: &Path, skill_file: &Path, ascii_names: bool) -> ExtraPathMd {
     if !skill_md_stays_in_package(skill_file) {
-        return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
-    }
-    let Ok(content) = read_skill_md(skill_file) else {
-        if extra_path_has_skills_entry(dir) {
-            return true;
+        if extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir) {
+            return ExtraPathMd::Collection;
         }
-        // A leftover SKILL.md directory cannot be this extra-path
-        // package. Scan sibling packages. FIFO, socket, and unreadable
-        // regular-file leftovers still stay a package so nested
-        // SKILL.md is not scanned (PR 35, PR 59).
-        return skill_md_is_dir(skill_file) && dir_has_child_skill_packages(dir);
+        return ExtraPathMd::Unreadable("SKILL.md symlink escapes package root".to_owned());
+    }
+    let content = match read_skill_md(skill_file) {
+        Ok(c) => c,
+        Err(e) => {
+            if extra_path_has_skills_entry(dir) {
+                return ExtraPathMd::Collection;
+            }
+            // A leftover SKILL.md directory cannot be this extra-path
+            // package. Scan sibling packages. FIFO, socket, and unreadable
+            // regular-file leftovers still stay a package so nested
+            // SKILL.md is not scanned (PR 35, PR 59).
+            if skill_md_is_dir(skill_file) && dir_has_child_skill_packages(dir) {
+                return ExtraPathMd::Collection;
+            }
+            return ExtraPathMd::Unreadable(e);
+        }
     };
     // Missing peek name is the same miss as a leftover that cannot be
     // read: extra/skills as any inode is the collection layout (PR 71).
     let Some(name) = peek_frontmatter_name(&content) else {
-        return extra_path_has_skills_entry(dir);
+        return extra_path_collection_signal_or_package(dir, content);
     };
     // parse_frontmatter accepts quoted whitespace (`name: "   "`), so
     // peek returns Some("   "). Load/why already treat that as nameless.
     // Same collection signal as a missing peek (PR 74).
     let normalized = crate::parse::normalize_skill_name(&name);
     if normalized.trim().is_empty() {
-        return extra_path_has_skills_entry(dir);
+        return extra_path_collection_signal_or_package(dir, content);
     }
     // `.` / `..` (including NFKC compatibility forms) never match a
     // package dir after lexical collapse, and they are not skill names.
     // Same extra/skills signal as a missing peek. Stay a package when
     // extra/skills is absent so nested SKILL.md is not scanned.
     if crate::parse::is_path_component_skill_name(&name) {
-        return extra_path_has_skills_entry(dir);
+        return extra_path_collection_signal_or_package(dir, content);
     }
     // parse_frontmatter also accepts invalid names (`DEMO`, `name: "demo "`).
     // skill_name_matches_directory case-folds and trims, so those look like
@@ -669,17 +694,73 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bo
     // load.
     if skill_name_matches_directory(skill_file, &name) {
         if crate::parse::validate_skill_name(&name).is_err() {
-            return extra_path_has_skills_entry(dir);
+            return extra_path_collection_signal_or_package(dir, content);
         }
         if ascii_names && !crate::parse::skill_name_is_ascii_policy(&name) {
-            return extra_path_has_skills_entry(dir);
+            return extra_path_collection_signal_or_package(dir, content);
         }
         if parse_skill(&content).is_err() {
-            return extra_path_has_skills_entry(dir);
+            return extra_path_collection_signal_or_package(dir, content);
         }
-        return false;
+        return ExtraPathMd::Package(content);
     }
-    dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir)
+    if dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir) {
+        ExtraPathMd::Collection
+    } else {
+        ExtraPathMd::Package(content)
+    }
+}
+
+fn extra_path_collection_signal_or_package(dir: &Path, content: String) -> ExtraPathMd {
+    if extra_path_has_skills_entry(dir) {
+        ExtraPathMd::Collection
+    } else {
+        ExtraPathMd::Package(content)
+    }
+}
+
+/// Load a classified named extra-path package without a second
+/// [`read_skill_md`]. Collection is handled by the caller.
+fn load_classified_extra_path_package(
+    skill_file: &Path,
+    classified: ExtraPathMd,
+    ignore: &[IgnorePrefix],
+    opts: &DiscoveryOptions,
+    skills: &mut Vec<Skill>,
+    skips: &mut Vec<SkillSkip>,
+) {
+    if skip_if_skill_md_escapes_package(skill_file, skips) {
+        return;
+    }
+    match classified {
+        ExtraPathMd::Package(content) => {
+            if path_is_ignored(skill_file, ignore) {
+                return;
+            }
+            finish_load_skill_file(
+                skill_file,
+                &content,
+                &SkillSource::ExtraPath,
+                opts,
+                &[],
+                skills,
+                skips,
+            );
+        }
+        ExtraPathMd::Unreadable(detail) => {
+            if path_is_ignored(skill_file, ignore) {
+                return;
+            }
+            skips.push(SkillSkip {
+                path: skill_file.to_path_buf(),
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail,
+                winner_path: None,
+            });
+        }
+        ExtraPathMd::Collection => {}
+    }
 }
 
 /// Record a leftover extra-path root SKILL.md when the scan target is
@@ -1064,8 +1145,19 @@ fn try_load_skill_file(
             return;
         }
     };
+    finish_load_skill_file(skill_file, &content, source, opts, denylist, skills, skips);
+}
 
-    match parse_skill(&content) {
+fn finish_load_skill_file(
+    skill_file: &Path,
+    content: &str,
+    source: &SkillSource,
+    opts: &DiscoveryOptions,
+    denylist: &[&str],
+    skills: &mut Vec<Skill>,
+    skips: &mut Vec<SkillSkip>,
+) {
+    match parse_skill(content) {
         Ok(mut skill) => {
             if opts.ascii_names && !crate::parse::skill_name_is_ascii_policy(&skill.name) {
                 skips.push(SkillSkip {
@@ -1130,7 +1222,7 @@ fn try_load_skill_file(
         Err(e) => {
             skips.push(SkillSkip {
                 path: skill_file.to_path_buf(),
-                name: peek_frontmatter_name(&content),
+                name: peek_frontmatter_name(content),
                 kind: SkipKind::ParseError,
                 detail: e.to_string(),
                 winner_path: None,
@@ -1212,9 +1304,10 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 #[cfg(test)]
 mod tests {
     use super::{
-        CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name,
-        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-        walk_cwd_to_git_root, watch_dirs, with_home_override,
+        CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
+        extra_path_is_loose_collection, find_skill_by_name, unknown_or_skipped_skill_message,
+        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
+        with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -2102,6 +2195,49 @@ mod tests {
         assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
         assert_eq!(report.skills[0].name, "demo");
         assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[test]
+    fn extra_path_classify_named_package_prefetches_body() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        write_skill(&pkg, "demo", "PREFETCH_BODY");
+        let skill_file = pkg.join("SKILL.md");
+        match classify_extra_path_md(&pkg, &skill_file, false) {
+            ExtraPathMd::Package(content) => {
+                assert!(
+                    content.contains("PREFETCH_BODY"),
+                    "named extra-path package must keep the SKILL.md body: {content}"
+                );
+                assert!(
+                    content.contains("name: demo"),
+                    "prefetched body must include frontmatter: {content}"
+                );
+            }
+            other => panic!("named extra-path package must be Package, got {other:?}"),
+        }
+        assert!(
+            !extra_path_is_loose_collection(&pkg, &skill_file, false),
+            "named extra-path package is not a leftover collection"
+        );
+    }
+
+    #[test]
+    fn extra_path_classify_leftover_skill_md_dir_with_siblings_is_collection() {
+        let extra = tempfile::tempdir().expect("extra");
+        let leftover = extra.path().join("SKILL.md");
+        fs::create_dir_all(&leftover).expect("mkdir leftover SKILL.md dir");
+        write_skill(&extra.path().join("public"), "public", "ok");
+        match classify_extra_path_md(extra.path(), &leftover, false) {
+            ExtraPathMd::Collection => {}
+            other => {
+                panic!("leftover extra/SKILL.md dir + sibling must be Collection, got {other:?}")
+            }
+        }
+        assert!(
+            extra_path_is_loose_collection(extra.path(), &leftover, false),
+            "leftover extra/SKILL.md directory with siblings is a collection"
+        );
     }
 
     #[test]
