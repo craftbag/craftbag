@@ -160,3 +160,4 @@
 {"ts":"2026-08-25T19:49:16Z","job_id":"improve-why-json-description-96","work_source":"improve","result":"landed","head":"1374a2086e6574d346f43d44627adeda38e0b7ff","pr":96,"tests":"why JSON description; CLI/MCP why tests; nextest 335","noop":false}
 {"ts":"2026-08-25T19:53:57Z","job_id":"improve-list-catalog-97","work_source":"improve","result":"landed","head":"90b0d86cadde2a50bc474acb414868b6874ede8a","pr":97,"tests":"list --catalog and MCP format=catalog; nextest 337","noop":false}
 {"ts":"2026-08-25T19:58:10Z","job_id":"expand-unicode-prop-98","work_source":"expand","result":"landed","head":"9b49d8ea02ad3178272397927ce3d8b3592052bc","pr":98,"tests":"unicode lowercase name props; nextest 339","noop":false}
+{"ts":"2026-08-25T20:04:00Z","job_id":"adversary-after-99-noop","work_source":"adversary","result":"noop","head":"2bdb83588d1135b059bb66ae2e441b34426e2d1a","pr":null,"tests":"adversary after 99 leftover analogs exhausted","noop":true}
