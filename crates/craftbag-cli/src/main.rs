@@ -266,5 +266,7 @@ fn skill_json(skill: &Skill) -> serde_json::Value {
         "description": skill.description,
         "source": skill.source,
         "path": skill.source_path,
+        "user_invocable": skill.user_invocable,
+        "disable_model_invocation": skill.disable_model_invocation,
     })
 }

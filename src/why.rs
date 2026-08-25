@@ -499,6 +499,20 @@ mod tests {
     }
 
     #[test]
+    fn why_user_invocable_false_is_still_injected() {
+        let mut skill = Skill::new("model-only", "d", "x".repeat(80));
+        skill.user_invocable = false;
+        let report = DiscoveryReport {
+            skills: vec![skill],
+            skips: vec![],
+        };
+        let why = why(&report, None, Some("hello"), None);
+        assert_eq!(why.activation.len(), 1);
+        assert_eq!(why.activation[0].reason, ActivationReason::Injected);
+        assert_eq!(why.activation[0].name, "model-only");
+    }
+
+    #[test]
     fn why_json_includes_code_on_skip_and_activation() {
         let skill = Skill::new("foo", "d", "x".repeat(80));
         let skip = SkillSkip {
