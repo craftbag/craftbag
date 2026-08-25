@@ -62,7 +62,9 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// [`walk_cwd_to_git_root`]. Extra-path `dir/skills` is listed only
 /// when [`discover`] would walk that collection (leftover or
 /// Vercel-style). A named extra-path package, or an escaped /
-/// unreadable `skills/` tree, is omitted.
+/// unreadable `skills/` tree, is omitted. Host `user_skills_dir` is
+/// a skills root: leftover `SKILL.md` / `skill.md` must not hide
+/// `user_dir/skills` (same collection walk as extra-path leftover).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
@@ -89,7 +91,13 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     }
 
     if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        push(user_dir);
+        push(user_dir.clone());
+        // user_dir is always a skills root. leftover SKILL.md is a
+        // root_file skip, not a named package. Watch user/skills when
+        // discover would walk that collection.
+        if user_dir_should_watch_skills_subdir(&user_dir) {
+            push(user_dir.join("skills"));
+        }
     }
 
     if let Some(home) = home_dir() {
@@ -320,6 +328,21 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
             &mut skills,
             &mut skips,
         );
+        // leftover user_dir/SKILL.md is a root_file skip. extra-path
+        // leftover + extra/skills is a collection; user_dir is never a
+        // named package, so leftover must not hide user/skills.
+        let skills_subdir = user_dir.join("skills");
+        if extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips) {
+            load_skills_from_dir(
+                &skills_subdir,
+                &SkillSource::User,
+                &ignore,
+                opts,
+                &[],
+                &mut skills,
+                &mut skips,
+            );
+        }
     }
 
     if let Some(home) = home_dir() {
@@ -504,6 +527,24 @@ fn extra_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
         Some(skill_file) => extra_path_is_loose_collection(dir, skill_file, ascii_names),
         None => true,
     }
+}
+
+/// True when [`watch_dirs`] should list `user_dir/skills` because
+/// [`discover`] walks that collection.
+///
+/// `user_skills_dir` is always a skills root. leftover `SKILL.md` /
+/// `skill.md` is a `root_file` skip, never a named package, so a
+/// matching peek must not hide `user_dir/skills` the way extra-path
+/// named packages keep nested `skills/` as assets.
+fn user_dir_should_watch_skills_subdir(dir: &Path) -> bool {
+    let skills_subdir = dir.join("skills");
+    if !skills_subdir.is_dir() {
+        return false;
+    }
+    if !stays_under(&skills_subdir, dir) {
+        return false;
+    }
+    std::fs::read_dir(&skills_subdir).is_ok()
 }
 
 /// True when `extra/skills` exists as any inode (dir, file, FIFO, socket,
@@ -5943,5 +5984,202 @@ mod tests {
             "package dir remains the identity: {msg}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn leftover_lowercase_skill_md_and_skills_dir_still_loads_collection() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("skill.md"),
+            "---\nname: loose\ndescription: leftover lowercase\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&extra.path().join("skills").join("public"), "public", "ok");
+        let opts = DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when leftover extra/skill.md exists: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "watch_dirs must list extra/skills when leftover is skill.md: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn leftover_lowercase_unparseable_matching_peek_still_loads_collection() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra_root = tempfile::tempdir().expect("extra-root");
+        let extra = extra_root.path().join("demo");
+        fs::create_dir_all(&extra).expect("mkdir extra");
+        fs::write(extra.join("skill.md"), "---\nname: demo\n---\nloose\n").expect("write");
+        write_skill(&extra.join("skills").join("public"), "public", "ok");
+        let opts = DiscoveryOptions {
+            paths: vec![extra.display().to_string()],
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when leftover extra/skill.md peeks demo matching extra dir but cannot parse: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+    }
+
+    #[test]
+    fn leftover_user_dir_skill_md_does_not_hide_skills_subdir() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let user = tempfile::tempdir().expect("user");
+        fs::write(
+            user.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover user root\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&user.path().join("skills").join("public"), "public", "ok");
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(user.path().to_path_buf()),
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "user/skills/public must still load when leftover user_dir/SKILL.md exists: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].source,
+            SkillSource::User,
+            "user/skills collection must stay User: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose") }),
+            "leftover user_dir/SKILL.md must stay a skip: {:?}",
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, user.path()),
+            "must watch user_dir when leftover exists: {dirs:?}"
+        );
+        assert!(
+            watch_paths_contain(&dirs, &user.path().join("skills")),
+            "watch_dirs must list user/skills when leftover user_dir/SKILL.md exists: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn leftover_user_dir_lowercase_skill_md_does_not_hide_skills_subdir() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let user = tempfile::tempdir().expect("user");
+        fs::write(
+            user.path().join("skill.md"),
+            "---\nname: loose\ndescription: leftover user lowercase\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&user.path().join("skills").join("public"), "public", "ok");
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(user.path().to_path_buf()),
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "user/skills/public must still load when leftover user_dir/skill.md exists: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+    }
+
+    #[test]
+    fn leftover_user_dir_matching_peek_does_not_hide_skills_subdir() {
+        // Bline user_dir is .../bline/skills. leftover name: skills
+        // matches that folder. extra-path would treat that as a named
+        // package and keep nested skills/ as assets. user_dir is a
+        // skills root: leftover is a root_file skip.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let root = tempfile::tempdir().expect("root");
+        let user = root.path().join("skills");
+        fs::create_dir_all(&user).expect("mkdir user");
+        fs::write(
+            user.join("SKILL.md"),
+            "---\nname: skills\ndescription: leftover matching user dir\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&user.join("skills").join("public"), "public", "ok");
+        write_skill(&user.join("sibling"), "sibling", "from-sibling");
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(user.clone()),
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        let names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            names.contains(&"public"),
+            "user/skills/public must still load when leftover peeks skills matching user dir: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            names.contains(&"sibling"),
+            "user/sibling must still load next to leftover user_dir/SKILL.md: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::RootFile && s.name.as_deref() == Some("skills") }),
+            "matching leftover user_dir/SKILL.md must stay a skip: {:?}",
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &user.join("skills")),
+            "watch_dirs must list user/skills when leftover peeks skills matching user dir: {dirs:?}"
+        );
     }
 }
