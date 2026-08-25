@@ -24,3 +24,10 @@ path = "fuzz_targets/parse_skill.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "xml_catalog"
+path = "fuzz_targets/xml_catalog.rs"
+test = false
+doc = false
+bench = false
