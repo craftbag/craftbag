@@ -634,17 +634,27 @@ fn load_skills_from_dir(
                     });
                     continue;
                 }
-                let name = match read_skill_md(&path) {
-                    Ok(content) => peek_frontmatter_name(&content),
-                    Err(_) => None,
-                };
-                skips.push(SkillSkip {
-                    path,
-                    name,
-                    kind: SkipKind::RootFile,
-                    detail: "put the file in a named subdirectory.".to_owned(),
-                    winner_path: None,
-                });
+                match read_skill_md(&path) {
+                    Ok(content) => {
+                        let name = peek_frontmatter_name(&content);
+                        skips.push(SkillSkip {
+                            path,
+                            name,
+                            kind: SkipKind::RootFile,
+                            detail: "put the file in a named subdirectory.".to_owned(),
+                            winner_path: None,
+                        });
+                    }
+                    Err(e) => {
+                        skips.push(SkillSkip {
+                            path,
+                            name: None,
+                            kind: SkipKind::Unreadable,
+                            detail: e,
+                            winner_path: None,
+                        });
+                    }
+                }
             }
             continue;
         }
@@ -777,12 +787,16 @@ fn try_load_skill_file(
 }
 
 fn read_skill_md(path: &Path) -> Result<String, String> {
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    if let Ok(meta) = file.metadata() {
-        if meta.len() > SKILL_MD_MAX_BYTES {
-            return Err(format!("SKILL.md exceeds {SKILL_MD_MAX_BYTES} bytes"));
-        }
+    // Stat before open. `File::open` on a FIFO waits for a writer, so a
+    // hostile tree can hang discover / validate.
+    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("SKILL.md is not a regular file".to_owned());
     }
+    if meta.len() > SKILL_MD_MAX_BYTES {
+        return Err(format!("SKILL.md exceeds {SKILL_MD_MAX_BYTES} bytes"));
+    }
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut buf = String::new();
     let n = file
         .take(SKILL_MD_MAX_BYTES.saturating_add(1))
@@ -2662,6 +2676,105 @@ mod tests {
         assert!(
             msg.contains("unknown skill: stolen"),
             "escaped root SKILL.md must not identify as stolen: {msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    fn mkfifo(path: &std::path::Path) {
+        let status = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .expect("run mkfifo");
+        assert!(status.success(), "mkfifo {path:?} failed: {status}");
+    }
+
+    #[cfg(unix)]
+    fn unblock_fifo(path: &std::path::Path) {
+        let _ = std::fs::OpenOptions::new().write(true).open(path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_root_fifo_skill_md_is_unreadable_not_hang() {
+        let root = tempfile::tempdir().expect("tmp");
+        let skills = root.path().join(".agents").join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        let fifo = skills.join("SKILL.md");
+        mkfifo(&fifo);
+        write_skill(&skills.join("public"), "public", "ok");
+
+        let home = tempfile::tempdir().expect("home");
+        let root_path = root.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(&root_path, &DiscoveryOptions::default()).expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => {
+                unblock_fifo(&fifo);
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(2));
+                panic!("discover must not block on a FIFO SKILL.md");
+            }
+        };
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling packages must still load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "FIFO skills-root SKILL.md must be unreadable without peek: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "FIFO SKILL.md must not become a root_file peek: {:?}",
+            report.skips
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_path_fifo_is_unreadable_not_hang() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let fifo = tmp.path().join("SKILL.md");
+        mkfifo(&fifo);
+        let path = fifo.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(validate_path(&path));
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => {
+                unblock_fifo(&fifo);
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(2));
+                panic!("validate must not block on a FIFO SKILL.md");
+            }
+        };
+        assert!(!report.ok, "FIFO must not validate: {:?}", report);
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        assert!(skip.name.is_none(), "must not peek a FIFO: {skip:?}");
+        assert!(
+            skip.detail.contains("regular file"),
+            "detail must name the file type: {}",
+            skip.detail
         );
     }
 
