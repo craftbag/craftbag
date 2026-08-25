@@ -53,19 +53,18 @@ impl SkillSource {
     /// Accepts `user`, `agents`, `extra` / `extraPath` / `config`,
     /// and vendor tokens `bline` / `claude` / `cursor` / `grok`
     /// (a leading dot is the on-disk tree: `.claude` is `claude`).
-    /// `project` and `community` have no v1 variant (the host keeps
-    /// those).
+    /// Vendor spellings match [`Self::parse_vendor_token`]: ASCII case
+    /// and surrounding whitespace are ignored. `extra` / `user` stay
+    /// non-vendor. `project` and `community` have no v1 variant (the
+    /// host keeps those).
     pub fn from_host_token(token: &str) -> Option<Self> {
-        match token {
+        if let Ok(Some(name)) = Self::parse_vendor_token(token) {
+            return Some(Self::Vendor { name });
+        }
+        match token.trim() {
             "user" => Some(Self::User),
             "agents" => Some(Self::Agents),
             "extra" | "extraPath" | "config" => Some(Self::ExtraPath),
-            "bline" | "claude" | "cursor" | "grok" => Some(Self::Vendor {
-                name: token.to_owned(),
-            }),
-            ".bline" | ".claude" | ".cursor" | ".grok" => Some(Self::Vendor {
-                name: token.trim_start_matches('.').to_owned(),
-            }),
             _ => None,
         }
     }
@@ -260,6 +259,20 @@ mod tests {
         );
         assert_eq!(SkillSource::from_host_token(".user"), None);
         assert_eq!(SkillSource::from_host_token(".extra"), None);
+        // parse_vendor_roots folds ASCII case and a leading dot. Hosts
+        // that pass the same token through from_host_token must land on
+        // the same Vendor name, not None.
+        for token in [".Claude", "Claude", " CLAUDE ", ".BLINE", "Cursor"] {
+            let parsed =
+                SkillSource::parse_vendor_roots([token]).unwrap_or_else(|e| panic!("{token}: {e}"));
+            assert_eq!(
+                SkillSource::from_host_token(token),
+                Some(SkillSource::Vendor {
+                    name: parsed[0].clone()
+                }),
+                "from_host_token({token:?}) must match parse_vendor_roots"
+            );
+        }
     }
 
     #[test]
