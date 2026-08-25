@@ -446,10 +446,10 @@ fn extra_path_has_skills_subdir(dir: &Path) -> bool {
 ///
 /// A `skills/` subdirectory is the extra-path collection layout, same as
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
-/// is enough to keep scanning that tree.
+/// or a sibling package dir is enough to keep scanning that tree.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     if !skill_md_stays_in_package(skill_file) {
-        return extra_path_has_skills_subdir(dir);
+        return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
     }
     let Ok(content) = read_skill_md(skill_file) else {
         return false;
@@ -1693,6 +1693,76 @@ mod tests {
         let why = crate::why(&report, Some("public"), None, None);
         assert_eq!(why.loaded.len(), 1);
         assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_escaped_root_skill_md_does_not_hide_sibling_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        fs::write(
+            outside.path().join("secret.md"),
+            "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        let extra = tempfile::tempdir().expect("extra");
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.md"),
+            extra.path().join("SKILL.md"),
+        )
+        .expect("symlink");
+        write_skill(&extra.path().join("public"), "public", "ok");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when extra-path SKILL.md escapes: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "must not load escaped extra-path SKILL.md: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped SKILL.md body must not be loaded: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.detail.contains("escapes")
+                    && s.name.is_none()
+                    && s.path.ends_with("SKILL.md")
+            }),
+            "escaped extra-path SKILL.md must be unreadable, not peeked: {:?}",
+            report.skips
+        );
+        let stolen = unknown_or_skipped_skill_message("stolen", &report.skips);
+        assert!(
+            stolen.contains("unknown skill: stolen"),
+            "must not peek stolen from an escaped extra-path SKILL.md: {stolen}"
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+        let loaded = find_skill_by_name(&report.skills, "public").expect("public");
+        assert_eq!(loaded.content.trim(), "ok");
     }
 
     #[test]
