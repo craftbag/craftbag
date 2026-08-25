@@ -204,3 +204,4 @@
 {"ts":"2026-08-25T23:07:30Z","job_id":"adversary-after-120-noop","work_source":"adversary","result":"noop","head":"07d1e8c0e489a88337bb3a78ad071a15a1bfb9a3","pr":null,"tests":"shared token table still green","noop":true}
 {"ts":"2026-08-25T23:12:22Z","job_id":"improve-list-help-watch-dirs-121","work_source":"improve","result":"landed","head":"c4c2951f60e3b671c8f81dadc5bf0dfee5bed415","pr":121,"tests":"list_help_names_vendor_path_examples","noop":false}
 {"ts":"2026-08-25T23:12:40Z","job_id":"adversary-after-121-noop","work_source":"adversary","result":"noop","head":"c4c2951f60e3b671c8f81dadc5bf0dfee5bed415","pr":null,"tests":"list help watch-dirs green","noop":true}
+{"ts":"2026-08-25T23:25:17Z","job_id":"improve-why-load-one-line-122","work_source":"improve","result":"landed","head":"a425baa911310e5b16c27d640bcd0cd84dea11c6","pr":122,"tests":"why load miss one line","noop":false}
