@@ -152,17 +152,18 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 /// Peeked `.` / `..` are path components, not skill names. The
 /// message includes skip kind, package identity, and the SKILL.md
 /// path so extra-path `.` / `..` (joined to discover cwd) stay
-/// locatable.
+/// locatable. Name, path, and detail go through
+/// [`crate::sanitize_error_token`] so the line cannot split.
 pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
     let want = name.trim();
     let skip = skips.iter().find(|s| s.matches_requested_name(want));
     match skip {
         Some(skip) => format!(
             "skipped skill: {} ({}) at {}: {}",
-            skip_display_name(skip, want),
+            crate::sanitize_error_token(skip_display_name(skip, want)),
             skip.kind.as_str(),
-            skip.path.display(),
-            skip.detail
+            crate::sanitize_error_token(&skip.path.display().to_string()),
+            crate::sanitize_error_token(&skip.detail)
         ),
         None => format!("unknown skill: {}", crate::sanitize_error_token(name)),
     }
@@ -1363,6 +1364,39 @@ mod tests {
         assert_eq!(
             unknown_or_skipped_skill_message("no\nsuch", &[]),
             "unknown skill: no?such"
+        );
+    }
+
+    #[test]
+    fn load_miss_skipped_tokens_stay_one_line() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/foo\nbar/SKILL.md"),
+            name: Some("foo\u{2028}bar".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML: expected `key: value`, got: x\u{2029}y".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("foo\u{2028}bar", &[skip]);
+        assert!(
+            msg.contains("skipped skill:"),
+            "peeked U+2028 name is still a skip, not unknown: {msg}"
+        );
+        assert!(
+            msg.contains("parse_error"),
+            "one-line skip must keep kind: {msg}"
+        );
+        assert!(
+            msg.contains("/tmp/foo?bar/SKILL.md"),
+            "one-line skip must keep the path: {msg}"
+        );
+        assert_eq!(
+            msg.lines().count(),
+            1,
+            "skipped-skill stderr must stay one line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\n') && !msg.contains('\u{2028}') && !msg.contains('\u{2029}'),
+            "skipped-skill must not echo line separators: {msg:?}"
         );
     }
 
