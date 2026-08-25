@@ -7,7 +7,10 @@ fuzz_target!(|data: &[u8]| {
     match craftbag::parse_list_format(&text) {
         Ok(_) => {
             assert!(
-                matches!(text.trim(), "json" | "xml" | "catalog" | "watch"),
+                matches!(
+                    text.trim(),
+                    "json" | "xml" | "catalog" | "watch" | "watch-dirs" | "watch_dirs"
+                ),
                 "only lowercase tokens parse: {text:?}"
             );
         }

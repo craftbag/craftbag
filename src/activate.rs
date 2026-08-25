@@ -324,12 +324,13 @@ pub enum ListFormat {
 /// Parse a format token. Surrounding whitespace is ignored.
 ///
 /// Tokens stay lowercase. A case-only miss is an error with a hint.
+/// `watch-dirs` and `watch_dirs` are the CLI `--watch-dirs` flag name.
 pub fn parse_list_format(format: &str) -> Result<ListFormat, String> {
     match format.trim() {
         "json" => Ok(ListFormat::Json),
         "xml" => Ok(ListFormat::Xml),
         "catalog" => Ok(ListFormat::Catalog),
-        "watch" => Ok(ListFormat::Watch),
+        "watch" | "watch-dirs" | "watch_dirs" => Ok(ListFormat::Watch),
         other => Err(unknown_list_format(other)),
     }
 }
@@ -345,7 +346,7 @@ pub fn unknown_list_format(format: &str) -> String {
     let shown = crate::sanitize_error_token(trimmed);
     let lower = trimmed.to_ascii_lowercase();
     match lower.as_str() {
-        "json" | "xml" | "catalog" | "watch" => {
+        "json" | "xml" | "catalog" | "watch" | "watch-dirs" | "watch_dirs" => {
             format!("unknown format: {shown} (did you mean {lower}?)")
         }
         _ => format!("unknown format: {shown} (use json, xml, catalog, or watch)"),
@@ -740,6 +741,17 @@ mod tests {
         assert_eq!(
             parse_list_format(" JSON ").unwrap_err(),
             "unknown format: JSON (did you mean json?)"
+        );
+    }
+
+    #[test]
+    fn parse_list_format_accepts_watch_dirs_flag_name() {
+        assert_eq!(parse_list_format("watch-dirs"), Ok(ListFormat::Watch));
+        assert_eq!(parse_list_format("watch_dirs"), Ok(ListFormat::Watch));
+        assert_eq!(parse_list_format(" watch-dirs "), Ok(ListFormat::Watch));
+        assert_eq!(
+            parse_list_format("WATCH-DIRS").unwrap_err(),
+            "unknown format: WATCH-DIRS (did you mean watch-dirs?)"
         );
     }
 
