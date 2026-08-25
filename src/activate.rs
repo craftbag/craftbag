@@ -312,6 +312,19 @@ pub fn format_catalog(
     out
 }
 
+/// Error text for CLI `--format` / MCP `skills_list` `format`.
+///
+/// Tokens are lowercase. A case-only miss names the matching token.
+pub fn unknown_list_format(format: &str) -> String {
+    let lower = format.to_ascii_lowercase();
+    match lower.as_str() {
+        "json" | "xml" | "catalog" | "watch" => {
+            format!("unknown format: {format} (did you mean {lower}?)")
+        }
+        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
+    }
+}
+
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
 /// Also emits `user_invocable` and `disable_model_invocation` so a host
@@ -515,7 +528,7 @@ mod tests {
     use super::{
         DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills,
         format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
-        progressive_budgets, trigger_matches, truncate_skill_body_for_budget,
+        progressive_budgets, trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -662,6 +675,18 @@ mod tests {
     #[test]
     fn trigger_matches_empty_is_false() {
         assert!(!trigger_matches("hello", "  "));
+    }
+
+    #[test]
+    fn unknown_list_format_suggests_case_only_miss() {
+        assert_eq!(
+            unknown_list_format("JSON"),
+            "unknown format: JSON (did you mean json?)"
+        );
+        assert_eq!(
+            unknown_list_format("yaml"),
+            "unknown format: yaml (use json, xml, catalog, or watch)"
+        );
     }
 
     #[test]
