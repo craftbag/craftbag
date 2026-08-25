@@ -1096,4 +1096,56 @@ mod tests {
             );
         });
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_load_unreadable_extra_path_skills_does_not_hide_sibling() {
+        use std::os::unix::fs::PermissionsExt;
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let skills = tmp.path().join("skills");
+            std::fs::create_dir_all(skills.join("hidden")).expect("mkdir");
+            std::fs::write(
+                skills.join("hidden").join("SKILL.md"),
+                "---\nname: hidden\ndescription: locked\n---\nlocked\n",
+            )
+            .expect("write");
+            let pkg = tmp.path().join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+            )
+            .expect("write");
+            let original = std::fs::metadata(&skills).expect("meta").permissions();
+            struct Restore<'a>(&'a std::path::Path, std::fs::Permissions);
+            impl Drop for Restore<'_> {
+                fn drop(&mut self) {
+                    let _ = std::fs::set_permissions(self.0, self.1.clone());
+                }
+            }
+            let _restore = Restore(&skills, original.clone());
+            let mut locked = original.clone();
+            locked.set_mode(0o000);
+            std::fs::set_permissions(&skills, locked).expect("chmod");
+            if std::fs::read_dir(&skills).is_ok() {
+                return;
+            }
+            let resp = call(
+                31,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find sibling public when extra/skills/ is unreadable: {text}"
+            );
+            assert!(
+                text.contains("from-sibling"),
+                "must load the sibling package, not the locked skills/ tree: {text}"
+            );
+        });
+    }
 }
