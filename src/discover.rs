@@ -59,7 +59,10 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// Missing roots are omitted (`notify` cannot watch them). Empty
 /// `user_skills_dir` is omitted. `project` / `community` are not
 /// listed (host-only). Nearest git root first via
-/// [`walk_cwd_to_git_root`].
+/// [`walk_cwd_to_git_root`]. Extra-path `dir/skills` is listed only
+/// when [`discover`] would walk that collection (leftover or
+/// Vercel-style). A named extra-path package, or an escaped /
+/// unreadable `skills/` tree, is omitted.
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
@@ -111,9 +114,8 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
             continue;
         }
         push(expanded.clone());
-        let skills_subdir = expanded.join("skills");
-        if extra_path_has_skills_subdir(&expanded) {
-            push(skills_subdir);
+        if extra_should_watch_skills_subdir(&expanded) {
+            push(expanded.join("skills"));
         }
     }
 
@@ -469,6 +471,33 @@ fn dir_has_child_skill_packages(dir: &Path) -> bool {
 
 fn extra_path_has_skills_subdir(dir: &Path) -> bool {
     dir.join("skills").is_dir()
+}
+
+/// True when [`watch_dirs`] should list `dir/skills` because
+/// [`discover`] would walk that collection.
+///
+/// Named extra-path packages keep nested `skills/` as package assets.
+/// Escaped or unreadable `skills/` is not a usable collection; discover
+/// falls back to `dir/` siblings and does not watch the escaped target.
+fn extra_should_watch_skills_subdir(dir: &Path) -> bool {
+    let skills_subdir = dir.join("skills");
+    if !skills_subdir.is_dir() {
+        return false;
+    }
+    if !stays_under(&skills_subdir, dir) {
+        return false;
+    }
+    if std::fs::read_dir(&skills_subdir).is_err() {
+        return false;
+    }
+    let package_md = ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|name| dir.join(name))
+        .find(|p| skill_md_inode_exists(p));
+    match package_md.as_ref() {
+        Some(skill_file) => extra_path_is_loose_collection(dir, skill_file),
+        None => true,
+    }
 }
 
 /// True when `extra/skills` exists as any inode (dir, file, FIFO, socket,
@@ -2552,6 +2581,155 @@ mod tests {
                 .iter()
                 .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("   ")),
             "empty user_dir omitted: {empty_user:?}"
+        );
+    }
+
+    fn watch_paths_contain(dirs: &[PathBuf], want: &std::path::Path) -> bool {
+        dirs.iter().any(|p| {
+            p == want
+                || p.canonicalize()
+                    .ok()
+                    .zip(want.canonicalize().ok())
+                    .is_some_and(|(a, b)| a == b)
+        })
+    }
+
+    #[test]
+    fn watch_dirs_omits_skills_subdir_on_named_extra_path_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("skills").join("evil"), "evil", "NESTED_SECRET");
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![pkg.display().to_string()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, &pkg),
+            "named extra-path package must be watched: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &pkg.join("skills")),
+            "named extra-path package must not watch nested skills/: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn watch_dirs_lists_skills_subdir_for_extra_path_collection() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&extra.path().join("skills").join("public"), "public", "ok");
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "collection extra-path root must be watched: {dirs:?}"
+        );
+        assert!(
+            watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "collection extra/skills must be watched: {dirs:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn watch_dirs_omits_escaped_extra_path_skills_subdir() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let outside = tempfile::tempdir().expect("out");
+        fs::create_dir_all(outside.path().join("stolen")).expect("mkdir");
+        fs::write(
+            outside.path().join("stolen").join("SKILL.md"),
+            "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+        write_skill(&extra.path().join("public"), "public", "ok");
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "escaped extra/skills must still watch extra/: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "escaped extra/skills must not be a watch root: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, outside.path()),
+            "watch_dirs must not list the escaped skills target: {dirs:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn watch_dirs_omits_unreadable_extra_path_skills_subdir() {
+        use std::os::unix::fs::PermissionsExt;
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let skills = extra.path().join("skills");
+        fs::create_dir_all(skills.join("hidden")).expect("mkdir");
+        write_skill(&skills.join("hidden"), "hidden", "locked");
+        write_skill(&extra.path().join("public"), "public", "ok");
+        let original = fs::metadata(&skills).expect("meta").permissions();
+        struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = fs::set_permissions(self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(&skills, original.clone());
+        let mut locked = original.clone();
+        locked.set_mode(0o000);
+        fs::set_permissions(&skills, locked).expect("chmod");
+        if fs::read_dir(&skills).is_ok() {
+            return;
+        }
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "unreadable extra/skills must still watch extra/: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &skills),
+            "unreadable extra/skills must not be a watch root: {dirs:?}"
         );
     }
 
