@@ -206,6 +206,42 @@ fn list_xml_available_skills() {
 }
 
 #[test]
+fn list_xml_includes_invocation_flags() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hidden = extra.path().join("hidden-slash");
+    fs::create_dir_all(&hidden).expect("mkdir");
+    fs::write(
+        hidden.join("SKILL.md"),
+        "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\ndisable_model_invocation: false\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--xml")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("<name>hidden-slash</name>"), "xml={stdout}");
+    assert!(
+        stdout.contains("<user_invocable>false</user_invocable>"),
+        "list XML must carry user_invocable for slash palettes: {stdout}"
+    );
+    assert!(
+        stdout.contains("<disable_model_invocation>false</disable_model_invocation>"),
+        "list XML must carry disable_model_invocation: {stdout}"
+    );
+}
+
+#[test]
 fn load_unknown_exits_2() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();

@@ -512,6 +512,44 @@ mod tests {
         });
         assert!(out.contains("<available_skills>"), "{out}");
         assert!(out.contains("<name>minimal-valid</name>"), "{out}");
+        assert!(
+            out.contains("<user_invocable>true</user_invocable>"),
+            "omitted user_invocable defaults true: {out}"
+        );
+        assert!(
+            out.contains("<disable_model_invocation>false</disable_model_invocation>"),
+            "omitted disable_model_invocation defaults false: {out}"
+        );
+    }
+
+    #[test]
+    fn list_xml_includes_invocation_flags() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hidden = extra.path().join("hidden-slash");
+        std::fs::create_dir_all(&hidden).expect("mkdir");
+        std::fs::write(
+            hidden.join("SKILL.md"),
+            "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                format: Some("xml".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(out.contains("<name>hidden-slash</name>"), "{out}");
+        assert!(
+            out.contains("<user_invocable>false</user_invocable>"),
+            "MCP list XML must carry user_invocable for slash palettes: {out}"
+        );
+        assert!(
+            out.contains("<disable_model_invocation>false</disable_model_invocation>"),
+            "MCP list XML must carry disable_model_invocation: {out}"
+        );
     }
 
     #[test]
