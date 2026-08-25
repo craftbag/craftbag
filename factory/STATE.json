@@ -6,7 +6,7 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f808c651ca1b0d6332e76e9bf79051ad8b94bc15",
+  "ledger_sha": "a9e09fdd386d5f4189431ac55f852b32640e6a10",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "bd1d21a38462a0f8a7dc0386db6cdff99a3a1432",
   "expand_cursor": 2,
