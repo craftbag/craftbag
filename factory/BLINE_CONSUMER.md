@@ -58,7 +58,8 @@ CLI `list --json` / `list --xml` / `list --catalog`, MCP `skills_list`
 (json, xml, or catalog), and `why` JSON `loaded` rows include
 `description` plus `user_invocable` and `disable_model_invocation` so
 a host can build a slash palette or prompt catalog without re-parsing
-SKILL.md. Keys stay snake_case on those wires (same as frontmatter),
+SKILL.md. List XML also emits `<source>` (`agents`, `user`, `extra`,
+or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serde. Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`
 false). `filter_skills` / `why.activation` still use only

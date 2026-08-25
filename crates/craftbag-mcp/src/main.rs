@@ -619,6 +619,10 @@ mod tests {
         assert!(out.contains("<available_skills>"), "{out}");
         assert!(out.contains("<name>minimal-valid</name>"), "{out}");
         assert!(
+            out.contains("<source>extra</source>"),
+            "list XML must carry source like list JSON: {out}"
+        );
+        assert!(
             out.contains("<user_invocable>true</user_invocable>"),
             "omitted user_invocable defaults true: {out}"
         );
