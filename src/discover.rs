@@ -2901,6 +2901,135 @@ mod tests {
             "FIFO package must not look unknown: {msg}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("demo"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+        assert_eq!(why.skips.len(), 1, "why skips={:?}", why.skips);
+        assert_eq!(why.skips[0].kind, SkipKind::Unreadable);
+        assert!(why.unknown_skill_message().is_none());
+        let validated = validate_path(&fifo);
+        assert!(!validated.ok, "validate must reject FIFO: {validated:?}");
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree: {}",
+            vskip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_named_fifo_file_load_why_validate_agree() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let fifo = pkg.join("SKILL.md");
+        mkfifo(&fifo);
+        let report = discover_extra_path_with_timeout(
+            fifo.clone(),
+            &fifo,
+            "discover must not block on extra-path FIFO SKILL.md file",
+        );
+        assert!(
+            report.skills.is_empty(),
+            "FIFO extra-path file must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("wanted/SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "named FIFO extra-path file must be unreadable: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "named FIFO extra-path file must not look unknown: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+        assert_eq!(why.skips.len(), 1, "why skips={:?}", why.skips);
+        assert_eq!(why.skips[0].kind, SkipKind::Unreadable);
+        assert!(why.unknown_skill_message().is_none());
+        let validated = validate_path(&fifo);
+        assert!(!validated.ok, "validate must reject FIFO: {validated:?}");
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree: {}",
+            vskip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_package_dir_fifo_does_not_scan_nested_skill() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let fifo = pkg.join("SKILL.md");
+        mkfifo(&fifo);
+        write_skill(&pkg.join("evil"), "evil", "NESTED_SECRET");
+        let report = discover_extra_path_with_timeout(
+            pkg,
+            &fifo,
+            "discover must not block on extra-path package-dir FIFO SKILL.md",
+        );
+        assert!(
+            report.skills.is_empty(),
+            "FIFO extra-path package dir must not load nested SKILL.md: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("wanted/SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "package-dir FIFO SKILL.md must be unreadable, not a silent miss: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "FIFO wanted/SKILL.md must not become a root_file skip: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let msg = unknown_or_skipped_skill_message("wanted", &report.skips);
+        assert!(
+            msg.contains("skipped skill: wanted"),
+            "FIFO extra-path package dir must not look missing: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert!(why.loaded.is_empty(), "why loaded={:?}", why.loaded);
+        assert_eq!(why.skips.len(), 1, "why skips={:?}", why.skips);
+        assert_eq!(why.skips[0].kind, SkipKind::Unreadable);
+        assert!(why.unknown_skill_message().is_none());
+        let validated = validate_path(&fifo);
+        assert!(!validated.ok, "validate must reject FIFO: {validated:?}");
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree: {}",
+            vskip.detail
+        );
     }
 
     #[cfg(unix)]
