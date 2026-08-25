@@ -201,6 +201,7 @@ fn tools() -> Value {
     let mut list_props = discover_properties();
     list_props["format"] = json!({
         "type": "string",
+        "enum": ["json", "xml", "catalog", "watch"],
         "description": "json (default), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md)."
     });
     let mut load_props = discover_properties();
@@ -1924,6 +1925,35 @@ mod tests {
                 "must not return default catalog for null ascii_names: {text}"
             );
         });
+    }
+
+    #[test]
+    fn tools_list_advertises_format_enum() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(50)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let format = &list["inputSchema"]["properties"]["format"];
+        assert_eq!(format["type"], "string", "{format}");
+        let tokens: Vec<&str> = format["enum"]
+            .as_array()
+            .expect("enum")
+            .iter()
+            .map(|v| v.as_str().expect("tok"))
+            .collect();
+        assert_eq!(
+            tokens,
+            ["json", "xml", "catalog", "watch"],
+            "skills_list format enum must match CLI --format tokens: {format}"
+        );
     }
 
     #[test]
