@@ -186,3 +186,4 @@
 {"ts":"2026-08-25T21:47:00Z","job_id":"improve-maintainer-noop","work_source":"improve","result":"noop","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":null,"tests":"outdated+machete clean","noop":true}
 {"ts":"2026-08-25T21:47:30Z","job_id":"improve-ops-noop","work_source":"improve","result":"noop","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":null,"tests":"CI hygiene already locked","noop":true}
 {"ts":"2026-08-25T21:51:00Z","job_id":"expand-fuzz-list-format-112","work_source":"expand","result":"landed","head":"e89d0bf2d715dd7d3c9388b53fa672b1f23e9cf6","pr":112,"tests":"fuzz list_format smoke","noop":false}
+{"ts":"2026-08-25T21:57:00Z","job_id":"improve-format-error-no-em-dash-113","work_source":"improve","result":"landed","head":"11b27bc516f04ae2d7f8a35285b5c3ff456798db","pr":113,"tests":"unknown_list_format strips U+2014","noop":false}
