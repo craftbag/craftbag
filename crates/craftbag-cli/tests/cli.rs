@@ -6,6 +6,19 @@ fn stdout_has_path(stdout: &str, want: &Path) -> bool {
     stdout.lines().any(|l| Path::new(l) == want)
 }
 
+fn list_json_source(stdout: &str, name: &str) -> String {
+    let v: serde_json::Value = serde_json::from_str(stdout).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let row = skills
+        .iter()
+        .find(|s| s["name"] == name)
+        .unwrap_or_else(|| panic!("missing skill {name}: {stdout}"));
+    row["source"]
+        .as_str()
+        .unwrap_or_else(|| panic!("source must be a string, not {row}: {stdout}"))
+        .to_owned()
+}
+
 fn bin() -> (tempfile::TempDir, Command) {
     let home = tempfile::tempdir().expect("home");
     let mut cmd = Command::cargo_bin("craftbag").expect("bin");
@@ -97,14 +110,10 @@ fn list_extra_path_json() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("minimal-valid"), "{stdout}");
-    assert!(
-        stdout.contains("\"source\": \"extra\""),
-        "list JSON source must match list XML/TSV extra: {stdout}"
-    );
-    assert!(
-        !stdout.contains("extraPath"),
-        "list JSON source must not use serde extraPath: {stdout}"
+    assert_eq!(
+        list_json_source(&stdout, "minimal-valid"),
+        "extra",
+        "list JSON source must be the wire token extra, not extraPath: {stdout}"
     );
 }
 
@@ -395,10 +404,10 @@ fn list_format_json_matches_json_flag() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("minimal-valid"), "{stdout}");
-    assert!(
-        stdout.contains("\"source\": \"extra\""),
-        "--format json must match --json extra source: {stdout}"
+    assert_eq!(
+        list_json_source(&stdout, "minimal-valid"),
+        "extra",
+        "--format json source must be extra, not extraPath: {stdout}"
     );
 }
 
@@ -1570,17 +1579,28 @@ fn list_vendor_claude_loads_user_home_layout() {
     let home = corpus().join("incumbent/claude-user");
     let cwd = tempfile::tempdir().expect("cwd");
     let mut cmd = Command::cargo_bin("craftbag").expect("bin");
-    cmd.env("HOME", &home)
+    let out = cmd
+        .env("HOME", &home)
         .env("USERPROFILE", &home)
         .current_dir(cwd.path())
         .arg("list")
         .arg("--json")
         .arg("--vendor")
         .arg("claude")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("home-note"))
-        .stdout(predicates::str::contains("\"source\": \"claude\""));
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "home-note"),
+        "claude",
+        "vendor JSON source must be the wire token, not a vendor object: {stdout}"
+    );
 }
 
 #[test]
