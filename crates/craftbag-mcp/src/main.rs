@@ -1054,4 +1054,46 @@ mod tests {
             );
         });
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_load_escaped_extra_path_skills_does_not_hide_sibling() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let outside = tempfile::tempdir().expect("out");
+            std::fs::create_dir_all(outside.path().join("stolen")).expect("mkdir");
+            std::fs::write(
+                outside.path().join("stolen").join("SKILL.md"),
+                "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+            )
+            .expect("write");
+            std::os::unix::fs::symlink(outside.path(), tmp.path().join("skills")).expect("symlink");
+            let pkg = tmp.path().join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+            )
+            .expect("write");
+            let resp = call(
+                30,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find sibling public when extra/skills/ escapes: {text}"
+            );
+            assert!(
+                text.contains("from-sibling"),
+                "must load the sibling package, not the escaped skills/ tree: {text}"
+            );
+            assert!(
+                !text.contains("SECRET_BODY"),
+                "must not load the escaped skills/ body: {text}"
+            );
+        });
+    }
 }
