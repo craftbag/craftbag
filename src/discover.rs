@@ -1218,7 +1218,24 @@ mod tests {
         assert_eq!(report.skills[0].content.trim(), "first");
         assert_eq!(report.skips.len(), 1);
         assert_eq!(report.skips[0].kind, SkipKind::NameCollision);
-        assert!(report.skips[0].winner_path.is_some());
+        let winner = root
+            .path()
+            .join(".agents")
+            .join("skills")
+            .join("foo")
+            .join("SKILL.md");
+        let winner = winner.canonicalize().unwrap_or(winner);
+        let loser = extra.path().join("foo").join("SKILL.md");
+        assert_eq!(
+            report.skips[0].winner_path.as_deref(),
+            Some(winner.as_path()),
+            "collision winner_path must be the agents-tree foo, not any Some(_): {:?}",
+            report.skips[0].winner_path
+        );
+        assert_eq!(
+            report.skips[0].path, loser,
+            "collision skip path must be the extra-path loser"
+        );
     }
 
     #[test]
@@ -1461,6 +1478,17 @@ mod tests {
             "extra-path skills/ package must load: {:?}",
             report
         );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from extra",
+            "must load skills/demo, not the loose skills/SKILL.md body: {:?}",
+            report.skills[0]
+        );
+        assert_eq!(
+            report.skills[0].source_path.as_deref(),
+            Some(skills.join("demo").join("SKILL.md").as_path()),
+            "loaded path must be the skills/ package, not the loose file"
+        );
         assert!(
             report
                 .skips
@@ -1471,9 +1499,12 @@ mod tests {
         );
         let why = crate::why(&report, Some("DEMO"), None, None);
         assert_eq!(why.loaded.len(), 1);
+        assert_eq!(why.loaded[0].name, "demo");
         assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::RootFile);
         assert!(why.unknown_skill_message().is_none());
-        assert!(find_skill_by_name(&report.skills, "demo").is_some());
+        let loaded = find_skill_by_name(&report.skills, "demo").expect("demo");
+        assert_eq!(loaded.content.trim(), "from extra");
     }
 
     #[test]
