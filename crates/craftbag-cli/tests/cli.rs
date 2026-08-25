@@ -793,6 +793,46 @@ fn load_minimal_valid() {
 }
 
 #[test]
+fn load_unicode_name_skips_with_ascii_names() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("café");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: café\ndescription: coffee\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("café")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("[Activated skill: café]"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("café")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--ascii-names")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("parse_error"),
+        "ascii-names must skip café: {stderr}"
+    );
+}
+
+#[test]
 fn list_does_not_print_banner() {
     let tmp = tempfile::tempdir().expect("tmp");
     fs::create_dir_all(tmp.path().join(".agents").join("skills")).expect("mkdir");

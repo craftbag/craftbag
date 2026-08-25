@@ -33,6 +33,9 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
+        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        #[arg(long = "ascii-names")]
+        ascii_names: bool,
     },
     /// Print one skill body plus package envelope.
     Load {
@@ -45,6 +48,9 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
+        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        #[arg(long = "ascii-names")]
+        ascii_names: bool,
     },
     /// Explain loaded, skipped, and activation decisions.
     Why {
@@ -61,6 +67,9 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
+        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        #[arg(long = "ascii-names")]
+        ascii_names: bool,
     },
     /// Validate one SKILL.md path.
     Validate {
@@ -89,8 +98,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             paths,
             vendor,
             user_dir,
+            ascii_names,
         } => {
-            let report = discover_cwd(&paths, &vendor, user_dir)?;
+            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
             if xml {
                 print!("{}", format_available_skills_xml(&report.skills));
             } else if json {
@@ -132,8 +142,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             paths,
             vendor,
             user_dir,
+            ascii_names,
         } => {
-            let report = discover_cwd(&paths, &vendor, user_dir)?;
+            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
             match find_skill_by_name(&report.skills, &name) {
                 Some(skill) => {
                     print!(
@@ -160,8 +171,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             paths,
             vendor,
             user_dir,
+            ascii_names,
         } => {
-            let report = discover_cwd(&paths, &vendor, user_dir)?;
+            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
             let budgets = progressive_budgets(context_tokens);
             let why = why(&report, name.as_deref(), context.as_deref(), Some(budgets));
             if let Some(msg) = why.unknown_skill_message() {
@@ -222,12 +234,14 @@ fn discover_cwd(
     paths: &[String],
     vendor: &[String],
     user_dir: Option<PathBuf>,
+    ascii_names: bool,
 ) -> Result<craftbag::DiscoveryReport, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let opts = DiscoveryOptions {
         paths: paths.to_vec(),
         vendor_roots: vendor.to_vec(),
         user_skills_dir: user_dir,
+        ascii_names,
         ..DiscoveryOptions::default()
     };
     discover(&cwd, &opts).map_err(|e| e.to_string())

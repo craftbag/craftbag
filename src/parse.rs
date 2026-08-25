@@ -179,6 +179,18 @@ pub fn validate_skill_name(name: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
+/// True when `name` is only `a-z0-9-` (Bline ASCII policy).
+///
+/// Call after [`validate_skill_name`]. Hyphen edges and consecutive
+/// hyphens are already rejected there.
+pub fn skill_name_is_ascii_policy(name: &str) -> bool {
+    let name = normalize_skill_name(name);
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 /// Frontmatter `name` when the field parsed, even if the skill is invalid.
 pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
     let trimmed = content.trim_start();
@@ -777,6 +789,15 @@ Use pdftotext.
         assert!(validate_skill_name("übersicht").is_ok());
         assert!(validate_skill_name("пере-вод").is_ok());
         assert!(validate_skill_name("Перевод").is_err());
+    }
+
+    #[test]
+    fn skill_name_is_ascii_policy_rejects_unicode() {
+        assert!(super::skill_name_is_ascii_policy("ok-name"));
+        assert!(super::skill_name_is_ascii_policy("a1"));
+        assert!(!super::skill_name_is_ascii_policy("café"));
+        assert!(!super::skill_name_is_ascii_policy("перевод"));
+        assert!(!super::skill_name_is_ascii_policy(""));
     }
 
     #[test]
