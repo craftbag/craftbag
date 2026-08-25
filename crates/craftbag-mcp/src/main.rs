@@ -8,8 +8,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, discover, find_skill_by_name, format_available_skills_xml,
-    format_load_message, progressive_budgets, unknown_or_skipped_skill_message, why,
+    DiscoveryOptions, FormatOptions, SkillSource, discover, find_skill_by_name,
+    format_available_skills_xml, format_load_message, progressive_budgets,
+    unknown_or_skipped_skill_message, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -104,7 +105,7 @@ fn opts_from(
     }
     Ok(DiscoveryOptions {
         paths,
-        vendor_roots: vendor,
+        vendor_roots: SkillSource::parse_vendor_roots(vendor)?,
         user_skills_dir: user_dir.map(PathBuf::from),
         ascii_names,
         ..DiscoveryOptions::default()
@@ -123,7 +124,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         return Ok(format_available_skills_xml(&report.skills));
     }
     if format != "json" {
-        return Err(format!("unknown format: {format}"));
+        return Err(format!("unknown format: {format} (use json or xml)"));
     }
     serde_json::to_string_pretty(&json!({
         "skills": report.skills.iter().map(|s| json!({
@@ -176,9 +177,9 @@ fn why_json(args: WhyArgs) -> Result<String, String> {
 
 fn discover_properties() -> Value {
     json!({
-        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md roots."},
-        "vendor": {"type": "array", "items": {"type": "string"}, "description": "Vendor roots: bline, claude, cursor, grok."},
-        "user_dir": {"type": "string", "description": "Host user skills directory."},
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Example: [\"./my-skill\"]."},
+        "vendor": {"type": "array", "items": {"type": "string"}, "description": "Opt-in vendor trees: bline, claude, cursor, grok. Example: [\"claude\"] or [\".claude\"]."},
+        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."}
     })
 }
@@ -411,6 +412,38 @@ mod tests {
         assert!(v.get("skills").is_some(), "{out}");
         assert!(v.get("skips").is_some(), "{out}");
         assert!(out.contains("minimal-valid"), "{out}");
+    }
+
+    #[test]
+    fn list_unknown_format_names_json_and_xml() {
+        empty_home(|| {
+            let err = list_json(DiscoverArgs {
+                format: Some("yaml".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect_err("format");
+            assert!(err.contains("unknown format: yaml"), "{err}");
+            assert!(
+                err.contains("json") && err.contains("xml"),
+                "must name valid formats: {err}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_unknown_vendor_is_error() {
+        empty_home(|| {
+            let resp = call(49, "skills_list", json!({"vendor": ["nope"]}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "unknown vendor must not look like an empty catalog: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(text.contains("unknown vendor: nope"), "{text}");
+            assert!(text.contains("claude"), "{text}");
+        });
     }
 
     #[test]

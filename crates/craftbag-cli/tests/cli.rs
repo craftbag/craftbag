@@ -1153,6 +1153,80 @@ fn load_explicit_extra_path_skill_md_file_symlink() {
 }
 
 #[test]
+fn list_unknown_vendor_is_rejected() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("list")
+        .arg("--vendor")
+        .arg("nope")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "unknown --vendor must not look like an empty catalog: stdout={}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown vendor: nope"),
+        "must name the bad token: {stderr}"
+    );
+    assert!(
+        stderr.contains("claude"),
+        "must list valid vendor tokens: {stderr}"
+    );
+}
+
+#[test]
+fn list_vendor_extra_token_is_rejected() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("list")
+        .arg("--vendor")
+        .arg("extra")
+        .output()
+        .expect("run");
+    assert_ne!(out.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown vendor: extra"),
+        "extra is --path, not --vendor: {stderr}"
+    );
+}
+
+#[test]
+fn list_vendor_leading_dot_loads_claude() {
+    let cwd = corpus().join("incumbent/claude-project");
+    let (_home, mut cmd) = bin();
+    cmd.current_dir(&cwd)
+        .arg("list")
+        .arg("--json")
+        .arg("--vendor")
+        .arg(".claude")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("pdf-helper"));
+}
+
+#[test]
+fn list_help_names_vendor_path_examples() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--vendor"))
+        .stdout(predicates::str::contains("claude"))
+        .stdout(predicates::str::contains("--path"))
+        .stdout(predicates::str::contains("Example:"));
+}
+
+#[test]
 fn list_does_not_print_banner() {
     let tmp = tempfile::tempdir().expect("tmp");
     fs::create_dir_all(tmp.path().join(".agents").join("skills")).expect("mkdir");
