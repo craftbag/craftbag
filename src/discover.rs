@@ -26,8 +26,10 @@ thread_local! {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiscoveryOptions {
     /// Extra paths (`~` expanded). Relative paths join the discover `cwd`.
+    /// Empty or whitespace-only items are ignored (not cwd).
     pub paths: Vec<String>,
     /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
+    /// Empty or whitespace-only items are ignored (not cwd).
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
@@ -294,6 +296,10 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     }
 
     for raw in &opts.paths {
+        // Empty or whitespace-only is not a path (not discover cwd).
+        if raw.trim().is_empty() {
+            continue;
+        }
         load_extra_path(raw, &cwd, &ignore, &opts.disabled, &mut skills, &mut skips);
     }
 
@@ -340,6 +346,10 @@ fn load_extra_path(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return;
+    }
     let expanded = expand_tilde(raw);
     // Relative extra paths join `cwd`, same as ignore prefixes. `.` / `..`
     // then keep a real package dir name after lexical collapse. NFKC
@@ -579,8 +589,13 @@ struct IgnorePrefix {
 fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
     paths
         .iter()
-        .map(|p| {
-            let expanded = expand_tilde(p);
+        .filter_map(|p| {
+            // Empty or whitespace-only is not a prefix (not discover cwd).
+            let raw = p.trim();
+            if raw.is_empty() {
+                return None;
+            }
+            let expanded = expand_tilde(raw);
             let joined = if expanded.is_absolute() {
                 expanded
             } else {
@@ -594,7 +609,7 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
                 .canonicalize()
                 .ok()
                 .or_else(|| lexical.canonicalize().ok());
-            IgnorePrefix { lexical, canonical }
+            Some(IgnorePrefix { lexical, canonical })
         })
         .collect()
 }
@@ -3991,6 +4006,74 @@ mod tests {
             "load/MCP must name the joined SKILL.md after extra-path `..`: msg={msg} path={skip_path}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn empty_extra_path_does_not_scan_discover_cwd() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(&cwd.path().join("planted"), "planted", "FROM_CWD");
+        for raw in ["", "   "] {
+            let report = empty_home_discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert!(
+                find_skill_by_name(&report.skills, "planted").is_none(),
+                "extra-path {raw:?} must not scan discover cwd: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| !s.content.contains("FROM_CWD")),
+                "extra-path {raw:?} must not load cwd package body: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| s.source != SkillSource::ExtraPath),
+                "extra-path {raw:?} must not become ExtraPath: {:?}",
+                report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn empty_ignore_does_not_hide_discover_cwd() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(
+            &cwd.path().join(".agents").join("skills").join("keep"),
+            "keep",
+            "KEEP_BODY",
+        );
+        for raw in ["", "   "] {
+            let report = empty_home_discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    ignore: vec![raw.to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert!(
+                find_skill_by_name(&report.skills, "keep").is_some(),
+                "ignore {raw:?} must not hide cwd .agents skills: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .any(|s| s.content.contains("KEEP_BODY")),
+                "ignore {raw:?} must not drop cwd skill body: {:?}",
+                report.skills
+            );
+        }
     }
 
     #[test]
