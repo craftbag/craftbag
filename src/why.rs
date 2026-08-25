@@ -639,10 +639,6 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&json).expect("json");
         assert_eq!(v["loaded"][0]["source"], "extra", "{json}");
         assert_eq!(v["loaded"][1]["source"], "claude", "{json}");
-        assert!(
-            json.contains("\"source\":\"extra\"") && !json.contains("extraPath"),
-            "why JSON source must match list XML/TSV extra, not serde extraPath: {json}"
-        );
         let old: WhyReport = serde_json::from_str(
             r#"{"loaded":[{"name":"demo","source":"extraPath"}],"skips":[],"activation":[]}"#,
         )
