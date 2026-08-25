@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use craftbag::{
-    DiscoveryOptions, FormatOptions, Skill, discover, find_skill_by_name,
+    DiscoveryOptions, FormatOptions, Skill, SkillSource, discover, find_skill_by_name,
     format_available_skills_xml, format_load_message, progressive_budgets,
     unknown_or_skipped_skill_message, validate_path_with_options, why,
 };
@@ -27,10 +27,13 @@ enum Cmd {
         /// Official skills-ref `<available_skills>` XML for host prompts.
         #[arg(long, conflicts_with = "json")]
         xml: bool,
+        /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
+        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
+        /// User skills root (child dirs are packages). Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -40,12 +43,16 @@ enum Cmd {
     /// Print one skill body plus package envelope.
     Load {
         name: String,
+        /// Copied into the load envelope. Example: --args --fix
         #[arg(long = "args", default_value = "")]
         args: String,
+        /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
+        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
+        /// User skills root (child dirs are packages). Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -57,14 +64,19 @@ enum Cmd {
         name: Option<String>,
         #[arg(long)]
         json: bool,
+        /// Activation context text. Example: --context rebase
         #[arg(long)]
         context: Option<String>,
+        /// Model context window size (default 8000).
         #[arg(long, default_value_t = 8_000)]
         context_tokens: usize,
+        /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
+        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
+        /// User skills root (child dirs are packages). Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -237,9 +249,10 @@ fn discover_cwd(
     ascii_names: bool,
 ) -> Result<craftbag::DiscoveryReport, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let vendor_roots = SkillSource::parse_vendor_roots(vendor)?;
     let opts = DiscoveryOptions {
         paths: paths.to_vec(),
-        vendor_roots: vendor.to_vec(),
+        vendor_roots,
         user_skills_dir: user_dir,
         ascii_names,
         ..DiscoveryOptions::default()

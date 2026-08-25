@@ -51,7 +51,8 @@ impl SkillSource {
     /// Map a host list / TUI token onto a v1 variant.
     ///
     /// Accepts `user`, `agents`, `extra` / `extraPath` / `config`,
-    /// and vendor tokens `bline` / `claude` / `cursor` / `grok`.
+    /// and vendor tokens `bline` / `claude` / `cursor` / `grok`
+    /// (a leading dot is the on-disk tree: `.claude` is `claude`).
     /// `project` and `community` have no v1 variant (the host keeps
     /// those).
     pub fn from_host_token(token: &str) -> Option<Self> {
@@ -62,8 +63,52 @@ impl SkillSource {
             "bline" | "claude" | "cursor" | "grok" => Some(Self::Vendor {
                 name: token.to_owned(),
             }),
+            ".bline" | ".claude" | ".cursor" | ".grok" => Some(Self::Vendor {
+                name: token.trim_start_matches('.').to_owned(),
+            }),
             _ => None,
         }
+    }
+
+    /// Frozen v1 vendor tokens (`bline`, `claude`, `cursor`, `grok`).
+    pub const VENDOR_TOKENS: &'static [&'static str] = &["bline", "claude", "cursor", "grok"];
+
+    /// Parse one `--vendor` / MCP `vendor` token.
+    ///
+    /// Empty or whitespace is omitted (same as empty `--path` items).
+    /// A leading dot and ASCII case are ignored (`.Claude` is `claude`).
+    /// Other values, including `user` / `extra`, are errors.
+    pub fn parse_vendor_token(token: &str) -> Result<Option<String>, String> {
+        let trimmed = token.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        let stripped = trimmed.strip_prefix('.').unwrap_or(trimmed);
+        let lower = stripped.to_ascii_lowercase();
+        if Self::VENDOR_TOKENS.contains(&lower.as_str()) {
+            return Ok(Some(lower));
+        }
+        Err(format!(
+            "unknown vendor: {token} (use bline, claude, cursor, or grok)"
+        ))
+    }
+
+    /// Parse a host vendor list. First spelling of each token wins.
+    pub fn parse_vendor_roots<I, S>(tokens: I) -> Result<Vec<String>, String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut out = Vec::new();
+        for token in tokens {
+            let Some(name) = Self::parse_vendor_token(token.as_ref())? else {
+                continue;
+            };
+            if !out.iter().any(|e| e == &name) {
+                out.push(name);
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -201,5 +246,40 @@ mod tests {
         assert_eq!(SkillSource::from_host_token("project"), None);
         assert_eq!(SkillSource::from_host_token("community"), None);
         assert_eq!(SkillSource::from_host_token("Project"), None);
+        assert_eq!(
+            SkillSource::from_host_token(".claude"),
+            Some(SkillSource::Vendor {
+                name: "claude".to_owned()
+            })
+        );
+        assert_eq!(
+            SkillSource::from_host_token(".bline"),
+            Some(SkillSource::Vendor {
+                name: "bline".to_owned()
+            })
+        );
+        assert_eq!(SkillSource::from_host_token(".user"), None);
+        assert_eq!(SkillSource::from_host_token(".extra"), None);
+    }
+
+    #[test]
+    fn parse_vendor_roots_accepts_dot_and_rejects_unknown() {
+        assert_eq!(
+            SkillSource::parse_vendor_roots([".claude", "Bline", " claude "]).expect("ok"),
+            ["claude", "bline"]
+        );
+        assert!(
+            SkillSource::parse_vendor_roots(["", "  "])
+                .expect("empty items")
+                .is_empty()
+        );
+        let err = SkillSource::parse_vendor_roots(["nope"]).expect_err("unknown");
+        assert!(err.contains("unknown vendor: nope"), "{err}");
+        assert!(err.contains("claude"), "{err}");
+        let extra = SkillSource::parse_vendor_roots(["extra"]).expect_err("extra");
+        assert!(
+            extra.contains("unknown vendor: extra"),
+            "extra is --path, not a vendor: {extra}"
+        );
     }
 }
