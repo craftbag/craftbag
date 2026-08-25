@@ -437,6 +437,23 @@ fn list_format_watch_lists_extra_collection() {
 }
 
 #[test]
+fn list_format_uppercase_suggests_lowercase() {
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("JSON")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "uppercase format must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown format: JSON") && stderr.contains("did you mean json?"),
+        "must point at the lowercase token: {stderr}"
+    );
+}
+
+#[test]
 fn list_format_unknown_names_valid_tokens() {
     let (_home, mut cmd) = bin();
     let out = cmd

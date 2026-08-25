@@ -112,6 +112,16 @@ fn opts_from(
     })
 }
 
+fn unknown_list_format(format: &str) -> String {
+    let lower = format.to_ascii_lowercase();
+    match lower.as_str() {
+        "json" | "xml" | "catalog" | "watch" => {
+            format!("unknown format: {format} (did you mean {lower}?)")
+        }
+        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
+    }
+}
+
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let opts = opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?;
@@ -137,9 +147,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         ));
     }
     if format != "json" {
-        return Err(format!(
-            "unknown format: {format} (use json, xml, catalog, or watch)"
-        ));
+        return Err(unknown_list_format(format));
     }
     serde_json::to_string_pretty(&json!({
         "skills": report.skills.iter().map(|s| json!({
@@ -674,6 +682,21 @@ mod tests {
                     && err.contains("catalog")
                     && err.contains("watch"),
                 "must name valid formats: {err}"
+            );
+        });
+    }
+
+    #[test]
+    fn list_uppercase_format_suggests_lowercase() {
+        empty_home(|| {
+            let err = list_json(DiscoverArgs {
+                format: Some("JSON".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect_err("format");
+            assert!(
+                err.contains("unknown format: JSON") && err.contains("did you mean json?"),
+                "must point at the lowercase token: {err}"
             );
         });
     }
