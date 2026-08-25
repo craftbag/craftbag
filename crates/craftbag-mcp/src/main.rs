@@ -539,6 +539,11 @@ mod tests {
             .expect("slash-only");
         assert_eq!(slash_row["user_invocable"], true, "{why_text}");
         assert_eq!(slash_row["disable_model_invocation"], true, "{why_text}");
+        assert_eq!(
+            hidden_row["description"], "model only",
+            "why JSON must carry description like list JSON/XML: {why_text}"
+        );
+        assert_eq!(slash_row["description"], "user only", "{why_text}");
     }
 
     #[test]
