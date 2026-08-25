@@ -332,11 +332,9 @@ fn load_extra_path(
         cwd.join(expanded)
     };
     let expanded = nfkc_dot_path_components(&expanded);
-    if expanded.is_file()
-        && expanded
-            .file_name()
-            .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
-    {
+    // `is_file` is false for FIFO/socket/device and symlink-to-those.
+    // Still try load so `read_skill_md` can emit unreadable (and not hang).
+    if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
         try_load_skill_file(
             &expanded,
             &SkillSource::ExtraPath,
@@ -354,7 +352,7 @@ fn load_extra_path(
     let package_md = ["SKILL.md", "skill.md"]
         .into_iter()
         .map(|name| expanded.join(name))
-        .find(|p| p.is_file());
+        .find(|p| skill_md_inode_exists(p));
     if let Some(skill_file) = package_md {
         // This extra path is that package unless we can prove the SKILL.md
         // is a loose collection root (a real name that is not this
@@ -403,7 +401,7 @@ fn dir_has_child_skill_packages(dir: &Path) -> bool {
         path.is_dir()
             && ["SKILL.md", "skill.md"]
                 .into_iter()
-                .any(|name| path.join(name).is_file())
+                .any(|name| skill_md_inode_exists(&path.join(name)))
     })
 }
 
@@ -662,7 +660,7 @@ fn load_skills_from_dir(
         let skill_file = ["SKILL.md", "skill.md"]
             .into_iter()
             .map(|name| path.join(name))
-            .find(|p| p.is_file());
+            .find(|p| skill_md_inode_exists(p));
         let Some(skill_file) = skill_file else {
             continue;
         };
@@ -784,6 +782,20 @@ fn try_load_skill_file(
             });
         }
     }
+}
+
+fn is_skill_md_filename(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
+}
+
+/// True when `path` exists as any inode (regular, FIFO, socket, device, symlink).
+///
+/// `Path::is_file` follows links and is false for FIFO/socket/device, so a
+/// package or extra-path SKILL.md of those types would be skipped before
+/// [`read_skill_md`] could report unreadable.
+fn skill_md_inode_exists(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
 }
 
 fn read_skill_md(path: &Path) -> Result<String, String> {
@@ -2775,6 +2787,259 @@ mod tests {
             skip.detail.contains("regular file"),
             "detail must name the file type: {}",
             skip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    fn discover_extra_path_with_timeout(
+        extra: PathBuf,
+        fifo: &std::path::Path,
+        panic_msg: &'static str,
+    ) -> crate::skip::DiscoveryReport {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let cwd_path = cwd.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(
+                    &cwd_path,
+                    &DiscoveryOptions {
+                        paths: vec![extra.display().to_string()],
+                        ..DiscoveryOptions::default()
+                    },
+                )
+                .expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => {
+                unblock_fifo(fifo);
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(2));
+                panic!("{panic_msg}");
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_fifo_skill_md_is_unreadable_not_silent() {
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("SKILL.md");
+        mkfifo(&fifo);
+        let report = discover_extra_path_with_timeout(
+            fifo.clone(),
+            &fifo,
+            "discover must not block on extra-path FIFO SKILL.md",
+        );
+        assert!(
+            report.skills.is_empty(),
+            "FIFO extra-path must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "extra-path FIFO SKILL.md must be unreadable, not a silent miss: {:?}",
+            report.skips
+        );
+        let validated = validate_path(&fifo);
+        assert!(!validated.ok, "validate must reject FIFO: {validated:?}");
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree: {}",
+            vskip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_package_fifo_skill_md_is_unreadable_not_silent() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let fifo = pkg.join("SKILL.md");
+        mkfifo(&fifo);
+        write_skill(&extra.path().join("public"), "public", "ok");
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on extra-path package FIFO SKILL.md",
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling packages must still load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("demo/SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "package FIFO SKILL.md must be unreadable, not a silent miss: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "FIFO package must not look unknown: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_symlink_to_fifo_is_unreadable_not_hang() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let fifo = extra.path().join("blocked.fifo");
+        mkfifo(&fifo);
+        std::os::unix::fs::symlink(&fifo, pkg.join("SKILL.md")).expect("symlink");
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on symlink-to-FIFO SKILL.md",
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "demo"),
+            "symlink-to-FIFO must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("demo/SKILL.md")
+                    && s.name.is_none()
+            }),
+            "symlink-to-FIFO must be unreadable, not a silent miss: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "symlink-to-FIFO package must not look unknown: {msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_unix_socket_skill_md_is_unreadable_not_hang() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let sock = pkg.join("SKILL.md");
+        let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind unix socket");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let extra_path = extra.path().to_path_buf();
+        let cwd_path = cwd.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(
+                    &cwd_path,
+                    &DiscoveryOptions {
+                        paths: vec![extra_path.display().to_string()],
+                        ..DiscoveryOptions::default()
+                    },
+                )
+                .expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => panic!("discover must not block on unix-socket SKILL.md"),
+        };
+        assert!(
+            report.skills.iter().all(|s| s.name != "demo"),
+            "socket SKILL.md must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("demo/SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "unix-socket SKILL.md must be unreadable, not a silent miss: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "socket package must not look unknown: {msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_symlink_to_dev_zero_is_unreadable_not_unbounded() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        std::os::unix::fs::symlink("/dev/zero", pkg.join("SKILL.md")).expect("symlink");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let extra_path = extra.path().to_path_buf();
+        let cwd_path = cwd.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(
+                    &cwd_path,
+                    &DiscoveryOptions {
+                        paths: vec![extra_path.display().to_string()],
+                        ..DiscoveryOptions::default()
+                    },
+                )
+                .expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => panic!("discover must not block on /dev/zero SKILL.md"),
+        };
+        assert!(
+            report.skills.iter().all(|s| s.name != "demo"),
+            "/dev/zero SKILL.md must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("demo/SKILL.md")
+                    && s.name.is_none()
+                    && (s.detail.contains("regular file") || s.detail.contains("escapes"))
+            }),
+            "symlink to /dev/zero must be unreadable, not an unbounded read: {:?}",
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: demo"),
+            "/dev/zero package must not look unknown: {msg}"
         );
     }
 
