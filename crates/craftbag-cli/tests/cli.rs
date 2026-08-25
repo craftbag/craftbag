@@ -1117,6 +1117,41 @@ fn load_unicode_name_skips_with_ascii_names() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_explicit_extra_path_skill_md_file_symlink() {
+    let outside = tempfile::tempdir().expect("out");
+    let pkg = outside.path().join("wanted");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: wanted\ndescription: extra file\n---\nhost asked\n",
+    )
+    .expect("write");
+    let link = tempfile::tempdir().expect("link");
+    let dest_dir = link.path().join("wanted");
+    fs::create_dir_all(&dest_dir).expect("mkdir");
+    let dest = dest_dir.join("SKILL.md");
+    std::os::unix::fs::symlink(pkg.join("SKILL.md"), &dest).expect("symlink");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("wanted")
+        .arg("--path")
+        .arg(&dest)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("[Activated skill: wanted]"))
+        .stdout(predicates::str::contains("host asked"));
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("wanted")
+        .arg("--path")
+        .arg(&dest)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("loaded\twanted"));
+}
+
 #[test]
 fn list_does_not_print_banner() {
     let tmp = tempfile::tempdir().expect("tmp");
