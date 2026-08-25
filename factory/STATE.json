@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a24094adc0b5e9735cd34279b5b303ee68f40ae2",
+  "ledger_sha": "51f31223ed5aef4f57a4fef741f02e1508a16f6b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
-  "expand_cursor": 4,
+  "expand_cursor": 5,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi-15-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-25T19:10:01Z",
-    "finished_at": "2026-08-25T19:10:01Z",
-    "result": "noop",
+    "id": "expand-prove-vercel-skills-collection",
+    "work_source": "expand",
+    "started_at": "2026-08-25T19:11:57Z",
+    "finished_at": "2026-08-25T19:11:57Z",
+    "result": "landed",
     "head": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
     "pr": null,
     "files": [],
-    "tests": "MPI 15 Observability skip/why rows already carry path+kind+code; no production logs",
+    "tests": "why --path incumbent/vercel-npx/skills loads deploy-hint",
     "review": "0"
   },
   "last_sha": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
@@ -50,9 +50,10 @@
       "tests/corpus/agentskills/package-full",
       "tests/corpus/lowercase-skill-md (cwd)",
       "tests/corpus/lowercase-skill-md/.agents/skills/lc-pack (--path)",
-      "tests/corpus/incumbent/claude-user (HOME + --vendor claude)"
+      "tests/corpus/incumbent/claude-user (HOME + --vendor claude)",
+      "tests/corpus/incumbent/vercel-npx/skills (--path collection)"
     ],
-    "last_why_summary": "incumbent claude-user home-note loads as Vendor claude via HOME. vercel skills/ collection extra-path still on main."
+    "last_why_summary": "vercel-npx/skills extra-path collection loads deploy-hint. name-mismatch extra-path is name_directory_mismatch good-name."
   },
   "budgets": {
     "max_cycles": null,
