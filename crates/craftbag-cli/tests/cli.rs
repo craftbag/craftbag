@@ -110,6 +110,56 @@ fn list_user_dir_expands_tilde() {
 }
 
 #[test]
+fn list_empty_user_dir_is_rejected() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--user-dir")
+        .arg("")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "empty --user-dir must not list cwd: stdout={}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("user-dir") || stderr.contains("required"),
+        "CLI must reject empty --user-dir: {stderr}"
+    );
+    assert!(
+        !String::from_utf8_lossy(&out.stdout).contains("\"skills\""),
+        "empty --user-dir must not print a catalog"
+    );
+}
+
+#[test]
+fn list_user_dir_relative_joins_cwd() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let pkg = cwd.path().join("myskills").join("mine");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: mine\ndescription: from-rel\n---\nfrom-rel\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--user-dir")
+        .arg("myskills")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("mine"));
+}
+
+#[test]
 fn list_xml_available_skills() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
