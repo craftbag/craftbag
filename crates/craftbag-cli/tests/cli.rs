@@ -625,6 +625,54 @@ fn load_escaped_extra_path_root_does_not_hide_sibling() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_escaped_extra_path_skills_does_not_hide_sibling() {
+    let extra = tempfile::tempdir().expect("extra");
+    let outside = tempfile::tempdir().expect("out");
+    fs::create_dir_all(outside.path().join("stolen")).expect("mkdir");
+    fs::write(
+        outside.path().join("stolen").join("SKILL.md"),
+        "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+    let pkg = extra.path().join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "sibling public must load when extra/skills/ escapes: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load the sibling package, not the escaped skills/ tree: {stdout}"
+    );
+    assert!(
+        !stdout.contains("SECRET_BODY"),
+        "must not load the escaped skills/ body: {stdout}"
+    );
+}
+
 #[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");

@@ -401,14 +401,13 @@ fn load_extra_path(
         }
     }
     let skills_subdir = expanded.join("skills");
-    let scan = if skills_subdir.is_dir() {
-        // Collection scan uses extra/skills/, so a leftover extra/SKILL.md
-        // would otherwise vanish. Record it first (stay-under before peek).
+    // Stay-under before treating extra/skills/ as the collection root.
+    // An escaped skills/ symlink is not a collection; fall back to extra/
+    // so sibling packages still load. Record leftover extra/SKILL.md only
+    // when the scan target is extra/skills/ (that walk never sees it).
+    let scan = if skills_subdir.is_dir() && !skip_if_dir_escapes(&skills_subdir, &expanded, skips) {
         if let Some(skill_file) = package_md.as_ref() {
             skip_loose_extra_path_root_skill_md(skill_file, &expanded, ignore, skips);
-        }
-        if skip_if_dir_escapes(&skills_subdir, &expanded, skips) {
-            return;
         }
         skills_subdir
     } else {
@@ -3631,6 +3630,122 @@ mod tests {
             "skills-subdir escape must be an unreadable skip: {:?}",
             report.skips
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_skills_subdir_symlink_escape_does_not_hide_sibling() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let extra = tempfile::tempdir().expect("extra");
+        std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when extra/skills/ escapes: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "must not load the escaped skills/ tree: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped skill body must not be loaded: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("escapes") }),
+            "skills-subdir escape must stay an unreadable skip: {:?}",
+            report.skips
+        );
+        let loaded = find_skill_by_name(&report.skills, "public").expect("public");
+        assert_eq!(loaded.content.trim(), "from-sibling");
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_escaped_skills_and_leftover_skill_md_does_not_hide_sibling() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover\n---\nloose\n",
+        )
+        .expect("write");
+        std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover SKILL.md and extra/skills/ escape: {:?}",
+            report
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "must not load the escaped skills/ tree: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose")),
+            "leftover extra-path SKILL.md must stay root_file: {:?}",
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("escapes") }),
+            "skills-subdir escape must stay unreadable: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
+        let why_loose = crate::why(&report, Some("loose"), None, None);
+        assert!(why_loose.loaded.is_empty());
+        assert_eq!(why_loose.skips[0].kind, SkipKind::RootFile);
+        assert!(why_loose.unknown_skill_message().is_none());
     }
 
     #[test]
