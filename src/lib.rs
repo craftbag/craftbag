@@ -10,10 +10,10 @@ mod source;
 mod why;
 
 pub use activate::{
-    DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills,
+    DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
     format_available_skills_xml, format_body_header, format_catalog, format_load_message,
-    format_package_envelope, progressive_budgets, rank_skills_for_catalog, skill_relevance_score,
-    trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
+    format_package_envelope, parse_list_format, progressive_budgets, rank_skills_for_catalog,
+    skill_relevance_score, trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,

@@ -412,6 +412,32 @@ fn list_format_json_matches_json_flag() {
 }
 
 #[test]
+fn list_format_padded_json_matches_json() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg(" json ")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "minimal-valid"),
+        "extra",
+        "--format with spaces around json must still emit JSON: {stdout}"
+    );
+}
+
+#[test]
 fn list_format_xml_matches_xml_flag() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

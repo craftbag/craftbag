@@ -312,16 +312,39 @@ pub fn format_catalog(
     out
 }
 
+/// Accepted `list --format` / MCP `skills_list` `format` token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListFormat {
+    Json,
+    Xml,
+    Catalog,
+    Watch,
+}
+
+/// Parse a format token. Surrounding whitespace is ignored.
+///
+/// Tokens stay lowercase. A case-only miss is an error with a hint.
+pub fn parse_list_format(format: &str) -> Result<ListFormat, String> {
+    match format.trim() {
+        "json" => Ok(ListFormat::Json),
+        "xml" => Ok(ListFormat::Xml),
+        "catalog" => Ok(ListFormat::Catalog),
+        "watch" => Ok(ListFormat::Watch),
+        other => Err(unknown_list_format(other)),
+    }
+}
+
 /// Error text for CLI `--format` / MCP `skills_list` `format`.
 ///
 /// Tokens are lowercase. A case-only miss names the matching token.
 pub fn unknown_list_format(format: &str) -> String {
-    let lower = format.to_ascii_lowercase();
+    let trimmed = format.trim();
+    let lower = trimmed.to_ascii_lowercase();
     match lower.as_str() {
         "json" | "xml" | "catalog" | "watch" => {
-            format!("unknown format: {format} (did you mean {lower}?)")
+            format!("unknown format: {trimmed} (did you mean {lower}?)")
         }
-        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
+        _ => format!("unknown format: {trimmed} (use json, xml, catalog, or watch)"),
     }
 }
 
@@ -526,9 +549,10 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_ACTIVATE_HINT, FormatOptions, ProgressiveBudgets, filter_skills,
+        DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
         format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
-        progressive_budgets, trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
+        parse_list_format, progressive_budgets, trigger_matches, truncate_skill_body_for_budget,
+        unknown_list_format,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -684,8 +708,22 @@ mod tests {
             "unknown format: JSON (did you mean json?)"
         );
         assert_eq!(
+            unknown_list_format(" JSON "),
+            "unknown format: JSON (did you mean json?)"
+        );
+        assert_eq!(
             unknown_list_format("yaml"),
             "unknown format: yaml (use json, xml, catalog, or watch)"
+        );
+    }
+
+    #[test]
+    fn parse_list_format_trims_whitespace() {
+        assert_eq!(parse_list_format(" json "), Ok(ListFormat::Json));
+        assert_eq!(parse_list_format("\txml\n"), Ok(ListFormat::Xml));
+        assert_eq!(
+            parse_list_format(" JSON ").unwrap_err(),
+            "unknown format: JSON (did you mean json?)"
         );
     }
 
