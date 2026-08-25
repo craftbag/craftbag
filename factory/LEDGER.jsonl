@@ -193,3 +193,4 @@
 {"ts":"2026-08-25T22:18:00Z","job_id":"improve-mcp-format-enum-115","work_source":"improve","result":"landed","head":"bcf1021e01bba72e47c96daaafe8dc4f5f991983","pr":115,"tests":"tools_list_advertises_format_enum","noop":false}
 {"ts":"2026-08-25T22:20:00Z","job_id":"adversary-after-115-noop","work_source":"adversary","result":"noop","head":"bcf1021e01bba72e47c96daaafe8dc4f5f991983","pr":null,"tests":"115 schema-only","noop":true}
 {"ts":"2026-08-25T22:25:00Z","job_id":"improve-mcp-vendor-enum-116","work_source":"improve","result":"landed","head":"6abab8b3ca906a486a9f9ac0b124e8dd7ca1afe8","pr":116,"tests":"tools_list_advertises_vendor_enum","noop":false}
+{"ts":"2026-08-25T22:32:00Z","job_id":"adversary-after-116-noop","work_source":"adversary","result":"noop","head":"6abab8b3ca906a486a9f9ac0b124e8dd7ca1afe8","pr":null,"tests":"116 schema-only","noop":true}
