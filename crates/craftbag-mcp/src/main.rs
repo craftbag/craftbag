@@ -301,7 +301,13 @@ fn handle(req: RpcRequest) -> Option<Value> {
                     },
                     Err(e) => (e, true),
                 },
-                other => return Some(err(id, -32601, &format!("unknown tool: {other}"))),
+                other => {
+                    return Some(err(
+                        id,
+                        -32601,
+                        &format!("unknown tool: {}", craftbag::sanitize_error_token(other)),
+                    ));
+                }
             };
             Some(ok(
                 id,
@@ -311,7 +317,14 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 }),
             ))
         }
-        other => Some(err(id, -32601, &format!("method not found: {other}"))),
+        other => Some(err(
+            id,
+            -32601,
+            &format!(
+                "method not found: {}",
+                craftbag::sanitize_error_token(other)
+            ),
+        )),
     }
 }
 

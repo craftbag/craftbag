@@ -124,7 +124,8 @@ impl SkillSource {
             return Ok(Some(lower));
         }
         Err(format!(
-            "unknown vendor: {token} (use bline, claude, cursor, or grok)"
+            "unknown vendor: {} (use bline, claude, cursor, or grok)",
+            crate::sanitize_error_token(trimmed)
         ))
     }
 
@@ -359,5 +360,11 @@ mod tests {
             extra.contains("unknown vendor: extra"),
             "extra is --path, not a vendor: {extra}"
         );
+        let injected = SkillSource::parse_vendor_roots(["no\npe"]).expect_err("control");
+        assert!(
+            injected.contains("unknown vendor: no?pe"),
+            "vendor errors must stay one line: {injected}"
+        );
+        assert!(!injected.contains('\n'), "{injected}");
     }
 }

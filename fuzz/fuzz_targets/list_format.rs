@@ -13,8 +13,11 @@ fuzz_target!(|data: &[u8]| {
         }
         Err(msg) => {
             assert!(
-                !msg.contains('\u{2014}'),
-                "format errors must not use an em dash: {msg}"
+                !msg.contains('\u{2014}')
+                    && !msg.contains('\n')
+                    && !msg.contains('\r')
+                    && !msg.contains('\0'),
+                "format errors must stay one line without an em dash: {msg:?}"
             );
             assert!(
                 msg.contains("unknown format:"),
@@ -30,7 +33,10 @@ fuzz_target!(|data: &[u8]| {
     }
     let hint = craftbag::unknown_list_format(&text);
     assert!(
-        !hint.contains('\u{2014}'),
-        "unknown_list_format must not use an em dash: {hint}"
+        !hint.contains('\u{2014}')
+            && !hint.contains('\n')
+            && !hint.contains('\r')
+            && !hint.contains('\0'),
+        "unknown_list_format must stay one line without an em dash: {hint:?}"
     );
 });

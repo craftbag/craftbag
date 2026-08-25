@@ -569,6 +569,27 @@ fn list_format_unknown_names_valid_tokens() {
 }
 
 #[test]
+fn list_format_newline_stays_one_stderr_line() {
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("json\nxml")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "newline format must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown format: json?xml"),
+        "control chars must not split stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("unknown format: json\nxml"),
+        "must not echo a raw newline: {stderr}"
+    );
+}
+
+#[test]
 fn list_format_conflicts_with_json() {
     let (_home, mut cmd) = bin();
     cmd.arg("list")
