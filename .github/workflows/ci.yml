@@ -50,6 +50,7 @@ jobs:
               - 'deny.toml'
               - '.github/workflows/ci.yml'
               - 'factory/scripts/deny-check.sh'
+              - 'AGENTS.md'
               - 'fuzz/**'
 
   lint:
