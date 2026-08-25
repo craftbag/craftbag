@@ -33,7 +33,7 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
     },
@@ -48,7 +48,7 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
     },
@@ -67,7 +67,7 @@ enum Cmd {
         vendor: Vec<String>,
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-` (Bline ASCII policy).
+        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
     },

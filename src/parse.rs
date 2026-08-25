@@ -179,7 +179,7 @@ pub fn validate_skill_name(name: &str) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// True when `name` is only `a-z0-9-` (Bline ASCII policy).
+/// True when `name` is only `a-z0-9-`.
 ///
 /// Call after [`validate_skill_name`]. Hyphen edges and consecutive
 /// hyphens are already rejected there.

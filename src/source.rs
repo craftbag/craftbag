@@ -42,8 +42,8 @@ impl SkillSource {
     /// Stable host-facing token. Same as [`Self::as_str`].
     ///
     /// This is not the serde enum token for [`Self::ExtraPath`]
-    /// (`"extraPath"`). Bline extra roots used to serialize as
-    /// `"config"`; use [`Self::from_host_token`] to accept that.
+    /// (`"extraPath"`). Some hosts serialize extra roots as `"config"`;
+    /// use [`Self::from_host_token`] to accept that.
     pub fn wire_name(&self) -> String {
         self.as_str().to_owned()
     }

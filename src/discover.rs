@@ -40,9 +40,8 @@ pub struct DiscoveryOptions {
     /// paths join the discover `cwd`, same as `paths`). Empty or
     /// whitespace-only is ignored.
     pub user_skills_dir: Option<PathBuf>,
-    /// When true, names outside `a-z0-9-` are a `parse_error` skip
-    /// (Bline ASCII policy). Default is off: Unicode / NFKC names
-    /// still load.
+    /// When true, names outside `a-z0-9-` are a `parse_error` skip.
+    /// Default is off: Unicode / NFKC names still load.
     pub ascii_names: bool,
 }
 
@@ -54,18 +53,24 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
     Ok(discover_report(cwd, opts))
 }
 
-/// Directories (and lone extra-path `SKILL.md` files) a host should
-/// watch so hot reload matches [`discover`].
+/// Existing directories (and lone extra-path `SKILL.md` files) a host
+/// should watch so hot reload matches [`discover`].
 ///
-/// Nearest git root first via [`walk_cwd_to_git_root`]. Empty
+/// Missing roots are omitted (`notify` cannot watch them). Empty
 /// `user_skills_dir` is omitted. `project` / `community` are not
-/// listed (host-only).
+/// listed (host-only). Nearest git root first via
+/// [`walk_cwd_to_git_root`].
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
         .unwrap_or_else(|_| lexical_normalize(cwd));
     let mut out = Vec::new();
+    // Only existing inodes. A notify watch on a missing `.agents/skills`
+    // fails; hosts that want "create later" watch the parent instead.
     let mut push = |p: PathBuf| {
+        if !p.exists() {
+            return;
+        }
         if !out.iter().any(|e| e == &p) {
             out.push(p);
         }
@@ -381,20 +386,9 @@ fn load_extra_path(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
-    let raw = raw.trim();
-    if raw.is_empty() {
+    let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
-    }
-    let expanded = expand_tilde(raw);
-    // Relative extra paths join `cwd`, same as ignore prefixes. `.` / `..`
-    // then keep a real package dir name after lexical collapse. NFKC
-    // compatibility dots (`．`, `‥`, …) are the same components.
-    let expanded = if expanded.is_absolute() {
-        expanded
-    } else {
-        cwd.join(expanded)
     };
-    let expanded = nfkc_dot_path_components(&expanded);
     // `is_file` is false for FIFO/socket/device and symlink-to-those.
     // Still try load so `read_skill_md` can emit unreadable (and not hang).
     if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
