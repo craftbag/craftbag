@@ -898,6 +898,48 @@ fn load_blank_peek_leftover_and_skills_file_does_not_hide_sibling() {
 }
 
 #[test]
+fn load_invalid_matching_peek_leftover_and_skills_dir_does_not_hide_collection() {
+    let extra_root = tempfile::tempdir().expect("extra-root");
+    let extra = extra_root.path().join("demo");
+    fs::create_dir_all(&extra).expect("mkdir extra");
+    fs::write(
+        extra.join("SKILL.md"),
+        "---\nname: DEMO\ndescription: leftover invalid name\n---\nloose\n",
+    )
+    .expect("write");
+    let pkg = extra.join("skills").join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: collection\n---\nfrom-collection\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(&extra)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "skills/public must load when leftover extra/SKILL.md peeks DEMO matching extra dir: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-collection"),
+        "must load the skills/ package, not the invalid-matching leftover: {stdout}"
+    );
+}
+
+#[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
