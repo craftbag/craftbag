@@ -1188,4 +1188,36 @@ mod tests {
             );
         });
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_load_fifo_leftover_and_skills_file_does_not_hide_sibling() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            mkfifo(&tmp.path().join("SKILL.md"));
+            std::fs::write(tmp.path().join("skills"), "not-a-dir").expect("skills file");
+            let pkg = tmp.path().join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+            )
+            .expect("write");
+            let resp = call(
+                33,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find sibling public when leftover extra/SKILL.md is a FIFO and extra/skills is a file: {text}"
+            );
+            assert!(
+                text.contains("from-sibling"),
+                "must load the sibling package, not the leftover FIFO: {text}"
+            );
+        });
+    }
 }
