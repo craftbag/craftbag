@@ -394,6 +394,9 @@ fn load_extra_path(
     // `is_file` is false for FIFO/socket/device and symlink-to-those.
     // Still try load so `read_skill_md` can emit unreadable (and not hang).
     if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
+        // Host pointed at this SKILL.md inode. Same as an explicit extra-path
+        // package dir symlink: do not treat a link target outside the parent
+        // dir as an escaped scan.
         try_load_skill_file(
             &expanded,
             &SkillSource::ExtraPath,
@@ -419,6 +422,9 @@ fn load_extra_path(
         // are path components, not names. Nested SKILL.md stays inside
         // the package tree.
         if !extra_path_is_loose_collection(&expanded, skill_file, opts.ascii_names) {
+            if skip_if_skill_md_escapes_package(skill_file, skips) {
+                return;
+            }
             try_load_skill_file(
                 skill_file,
                 &SkillSource::ExtraPath,
@@ -937,8 +943,25 @@ fn load_skills_from_dir(
             });
             continue;
         }
+        if skip_if_skill_md_escapes_package(&skill_file, skips) {
+            continue;
+        }
         try_load_skill_file(&skill_file, source, ignore, opts, denylist, skills, skips);
     }
+}
+
+fn skip_if_skill_md_escapes_package(skill_file: &Path, skips: &mut Vec<SkillSkip>) -> bool {
+    if skill_md_stays_in_package(skill_file) {
+        return false;
+    }
+    skips.push(SkillSkip {
+        path: skill_file.to_path_buf(),
+        name: None,
+        kind: SkipKind::Unreadable,
+        detail: "SKILL.md symlink escapes package root".to_owned(),
+        winner_path: None,
+    });
+    true
 }
 
 fn try_load_skill_file(
@@ -951,17 +974,6 @@ fn try_load_skill_file(
     skips: &mut Vec<SkillSkip>,
 ) {
     if path_is_ignored(skill_file, ignore) {
-        return;
-    }
-
-    if !skill_md_stays_in_package(skill_file) {
-        skips.push(SkillSkip {
-            path: skill_file.to_path_buf(),
-            name: None,
-            kind: SkipKind::Unreadable,
-            detail: "SKILL.md symlink escapes package root".to_owned(),
-            winner_path: None,
-        });
         return;
     }
 
@@ -4074,6 +4086,55 @@ mod tests {
         assert_eq!(report.skills[0].name, "wanted");
         assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
         assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_explicit_skill_md_file_symlink_still_loads() {
+        // Host extra-path is the SKILL.md file. A symlink to a matching
+        // package file is the same ask as extra_path_explicit_package_symlink
+        // (dir). Scan walks still refuse SKILL.md that escape their package.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("wanted"), "wanted", "host asked");
+        let link = tempfile::tempdir().expect("link");
+        let pkg = link.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let file = pkg.join("SKILL.md");
+        std::os::unix::fs::symlink(outside.path().join("wanted").join("SKILL.md"), &file)
+            .expect("symlink");
+        let opts = DiscoveryOptions {
+            paths: vec![file.display().to_string()],
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "explicit extra-path SKILL.md file symlink must load: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
+        assert_eq!(report.skills[0].content.trim(), "host asked");
+        assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+        let loaded = find_skill_by_name(&report.skills, "wanted").expect("wanted");
+        assert_eq!(loaded.content.trim(), "host asked");
+        let why = crate::why(&report, Some("wanted"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &file),
+            "watch_dirs must list the extra-path SKILL.md file: {dirs:?}"
+        );
     }
 
     #[cfg(unix)]
