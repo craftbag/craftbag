@@ -469,6 +469,52 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_invocation_flags() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hidden = extra.path().join("hidden-slash");
+        std::fs::create_dir_all(&hidden).expect("mkdir");
+        std::fs::write(
+            hidden.join("SKILL.md"),
+            "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nbody\n",
+        )
+        .expect("write");
+        let slash = extra.path().join("slash-only");
+        std::fs::create_dir_all(&slash).expect("mkdir");
+        std::fs::write(
+            slash.join("SKILL.md"),
+            "---\nname: slash-only\ndescription: user only\ndisable-model-invocation: true\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(40, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hidden_row = loaded
+            .iter()
+            .find(|s| s["name"] == "hidden-slash")
+            .expect("hidden-slash");
+        assert_eq!(
+            hidden_row["user_invocable"], false,
+            "MCP why must carry user_invocable like list JSON/XML: {why_text}"
+        );
+        assert_eq!(hidden_row["disable_model_invocation"], false, "{why_text}");
+        assert!(
+            hidden_row.get("userInvocable").is_none(),
+            "why JSON flags must match list snake_case, not Skill camelCase: {why_text}"
+        );
+        let slash_row = loaded
+            .iter()
+            .find(|s| s["name"] == "slash-only")
+            .expect("slash-only");
+        assert_eq!(slash_row["user_invocable"], true, "{why_text}");
+        assert_eq!(slash_row["disable_model_invocation"], true, "{why_text}");
+    }
+
+    #[test]
     fn list_unknown_format_names_json_and_xml() {
         empty_home(|| {
             let err = list_json(DiscoverArgs {

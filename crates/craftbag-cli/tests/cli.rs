@@ -1314,6 +1314,61 @@ fn list_json_includes_invocation_flags() {
 }
 
 #[test]
+fn why_json_includes_invocation_flags() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hidden = extra.path().join("hidden-slash");
+    fs::create_dir_all(&hidden).expect("mkdir");
+    fs::write(
+        hidden.join("SKILL.md"),
+        "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\ndisable_model_invocation: false\n---\nbody\n",
+    )
+    .expect("write");
+    let slash = extra.path().join("slash-only");
+    fs::create_dir_all(&slash).expect("mkdir");
+    fs::write(
+        slash.join("SKILL.md"),
+        "---\nname: slash-only\ndescription: user only\nuser-invocable: true\ndisable-model-invocation: true\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let hidden_row = loaded
+        .iter()
+        .find(|s| s["name"] == "hidden-slash")
+        .expect("hidden-slash");
+    assert_eq!(
+        hidden_row["user_invocable"], false,
+        "why JSON must carry user_invocable like list JSON/XML: {stdout}"
+    );
+    assert_eq!(hidden_row["disable_model_invocation"], false, "{stdout}");
+    assert!(
+        hidden_row.get("userInvocable").is_none(),
+        "why JSON flags must match list snake_case, not Skill camelCase: {stdout}"
+    );
+    let slash_row = loaded
+        .iter()
+        .find(|s| s["name"] == "slash-only")
+        .expect("slash-only");
+    assert_eq!(slash_row["user_invocable"], true, "{stdout}");
+    assert_eq!(slash_row["disable_model_invocation"], true, "{stdout}");
+}
+
+#[test]
 fn list_json_defaults_user_invocable_true() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

@@ -54,9 +54,11 @@ CLI `--vendor` and MCP `vendor` reject unknown tokens
 (`SkillSource::parse_vendor_roots`). A typo is an error, not an empty
 catalog. `extra` is `--path` / `paths`, not a vendor name.
 
-CLI `list --json` / `list --xml` and MCP `skills_list` (json or xml)
-include `user_invocable` and `disable_model_invocation` so a host can
-build a slash palette without re-parsing SKILL.md. `filter_skills` /
+CLI `list --json` / `list --xml`, MCP `skills_list` (json or xml), and
+`why` JSON `loaded` rows include `user_invocable` and
+`disable_model_invocation` so a host can build a slash palette without
+re-parsing SKILL.md. Keys stay snake_case on those wires (same as
+frontmatter), not Skill's camelCase serde. `filter_skills` /
 `why.activation` still use only `disable_model_invocation` for
 auto-inject.
 
