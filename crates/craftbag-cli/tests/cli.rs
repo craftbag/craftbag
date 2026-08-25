@@ -1720,6 +1720,7 @@ fn list_help_names_vendor_path_examples() {
         .stdout(predicates::str::contains("--path"))
         .stdout(predicates::str::contains("--format"))
         .stdout(predicates::str::contains("json, xml, catalog, watch"))
+        .stdout(predicates::str::contains("watch-dirs"))
         .stdout(predicates::str::contains("Example:"));
 }
 
