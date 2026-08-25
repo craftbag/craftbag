@@ -135,6 +135,10 @@ fn fuzz_smoke_runs_parse_skill_and_xml_catalog() {
         fuzz.contains("cargo fuzz run xml_catalog"),
         "fuzz-smoke must run xml_catalog so C0 catalog bytes stay XML 1.0: {fuzz}"
     );
+    assert!(
+        fuzz.contains("cargo fuzz run list_format"),
+        "fuzz-smoke must run list_format so padded and empty tokens stay parsed: {fuzz}"
+    );
 }
 
 #[test]
