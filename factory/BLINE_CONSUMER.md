@@ -58,7 +58,9 @@ CLI `list --json` / `list --xml`, MCP `skills_list` (json or xml), and
 `why` JSON `loaded` rows include `user_invocable` and
 `disable_model_invocation` so a host can build a slash palette without
 re-parsing SKILL.md. Keys stay snake_case on those wires (same as
-frontmatter), not Skill's camelCase serde. `filter_skills` /
+frontmatter), not Skill's camelCase serde. Omitted flags on old why
+JSON keep the pre-90 defaults (`user_invocable` true,
+`disable_model_invocation` false). `filter_skills` /
 `why.activation` still use only `disable_model_invocation` for
 auto-inject.
 
