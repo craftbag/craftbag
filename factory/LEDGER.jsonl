@@ -198,3 +198,4 @@
 {"ts":"2026-08-25T22:47:30Z","job_id":"adversary-after-117-noop","work_source":"adversary","result":"noop","head":"77250c347c191fe0b9dd505063ed604f71b4c4fd","pr":null,"tests":"leftover SKILL.md dir + extra/skills green","noop":true}
 {"ts":"2026-08-25T22:55:55Z","job_id":"improve-watch-dirs-alias-118","work_source":"improve","result":"landed","head":"7f0b23313ef88fff1d8e5db5360d579f3cb57c06","pr":118,"tests":"parse_list_format_accepts_watch_dirs_flag_name","noop":false}
 {"ts":"2026-08-25T22:57:20Z","job_id":"adversary-after-118-noop","work_source":"adversary","result":"noop","head":"7f0b23313ef88fff1d8e5db5360d579f3cb57c06","pr":null,"tests":"vendor extra_path still rejected","noop":true}
+{"ts":"2026-08-25T23:01:12Z","job_id":"improve-sanitize-line-separators-119","work_source":"improve","result":"landed","head":"2fc51a5b4d7928976aedcd4037b718a8c008203f","pr":119,"tests":"sanitize_error_token_keeps_one_line","noop":false}
