@@ -777,6 +777,44 @@ fn load_fifo_leftover_extra_path_skill_md_does_not_hide_skills_subdir() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_fifo_leftover_and_skills_file_does_not_hide_sibling() {
+    let extra = tempfile::tempdir().expect("extra");
+    mkfifo(&extra.path().join("SKILL.md"));
+    fs::write(extra.path().join("skills"), "not-a-dir").expect("skills file");
+    let pkg = extra.path().join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "sibling public must load when leftover extra/SKILL.md is a FIFO and extra/skills is a file: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load the sibling package, not the leftover FIFO: {stdout}"
+    );
+}
+
 #[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");

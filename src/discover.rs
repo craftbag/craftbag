@@ -442,6 +442,13 @@ fn extra_path_has_skills_subdir(dir: &Path) -> bool {
     dir.join("skills").is_dir()
 }
 
+/// True when `extra/skills` exists as any inode (dir, file, FIFO, socket,
+/// dangling symlink). A leftover that cannot be peeked uses this as the
+/// collection signal; a non-directory is not walked (FIFO hang).
+fn extra_path_has_skills_entry(dir: &Path) -> bool {
+    skill_md_inode_exists(&dir.join("skills"))
+}
+
 /// True when `extra/skills/` is a readable collection that stays under
 /// `extra/`. Escape and permission failures fall back to scanning
 /// `extra/` so sibling packages next to `skills/` still load.
@@ -478,14 +485,18 @@ fn extra_skills_subdir_is_collection(
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
 /// or a sibling package dir is enough to keep scanning that tree.
 /// A leftover that cannot be peeked (FIFO, socket, chmod, oversized) is
-/// the same for `extra/skills/`. Sibling package dirs alone still match
-/// a named package with nested SKILL.md, so those stay a package.
+/// the same for `extra/skills/` as a directory, and for `extra/skills` as
+/// any inode (file, FIFO, socket, dangling symlink). A non-directory
+/// `extra/skills` is not a usable collection; fall back to `extra/` so
+/// sibling packages still load. Do not open `extra/skills` as a file
+/// (FIFO hang). Sibling package dirs alone still match a named package
+/// with nested SKILL.md, so those stay a package.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     if !skill_md_stays_in_package(skill_file) {
         return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
     }
     let Ok(content) = read_skill_md(skill_file) else {
-        return extra_path_has_skills_subdir(dir);
+        return extra_path_has_skills_entry(dir);
     };
     let Some(name) = peek_frontmatter_name(&content) else {
         return false;
@@ -4622,6 +4633,142 @@ mod tests {
                 s.kind == SkipKind::Unreadable && s.path.ends_with("SKILL.md") && s.name.is_none()
             }),
             "unreadable leftover extra/SKILL.md must be a skip: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_fifo_leftover_and_skills_file_does_not_hide_sibling() {
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("SKILL.md");
+        mkfifo(&fifo);
+        fs::write(extra.path().join("skills"), "not-a-dir").expect("skills file");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on leftover FIFO SKILL.md plus extra/skills file",
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover extra/SKILL.md is a FIFO and extra/skills is a file: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-sibling",
+            "must load the sibling package, not treat leftover as the extra-path package: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "leftover FIFO extra/SKILL.md must stay unreadable: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "FIFO leftover SKILL.md must not become a root_file peek: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let validated = validate_path(&fifo);
+        assert!(
+            !validated.ok,
+            "validate must reject leftover FIFO: {validated:?}"
+        );
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree leftover FIFO is not a regular file: {}",
+            vskip.detail
+        );
+        let load_msg = unknown_or_skipped_skill_message("public", &report.skips);
+        assert!(
+            find_skill_by_name(&report.skills, "public").is_some(),
+            "load public must not be unknown: {load_msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_fifo_leftover_and_skills_fifo_does_not_hide_sibling() {
+        let extra = tempfile::tempdir().expect("extra");
+        let leftover = extra.path().join("SKILL.md");
+        mkfifo(&leftover);
+        let skills = extra.path().join("skills");
+        mkfifo(&skills);
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let extra_path = extra.path().to_path_buf();
+        let cwd_path = cwd.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(
+                    &cwd_path,
+                    &DiscoveryOptions {
+                        paths: vec![extra_path.display().to_string()],
+                        ..DiscoveryOptions::default()
+                    },
+                )
+                .expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => {
+                unblock_fifo(&leftover);
+                unblock_fifo(&skills);
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(2));
+                panic!("discover must not block on leftover FIFO SKILL.md plus extra/skills FIFO");
+            }
+        };
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover extra/SKILL.md is a FIFO and extra/skills is a FIFO: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-sibling",
+            "must load the sibling, not hang on extra/skills FIFO: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "leftover FIFO extra/SKILL.md must stay unreadable: {:?}",
             report.skips
         );
         let why = crate::why(&report, Some("public"), None, None);
