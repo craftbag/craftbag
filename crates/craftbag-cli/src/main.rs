@@ -6,10 +6,10 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, Skill, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_catalog, format_load_message, parse_list_format,
-    progressive_budgets, unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs,
-    why,
+    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
+    find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill_message,
+    validate_path_with_options, watch_dirs, why,
 };
 
 #[derive(Parser)]
@@ -149,7 +149,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 print!("{}", format_available_skills_xml(&report.skills));
             } else if matches!(mode, ListOutput::Json) {
                 let v = serde_json::json!({
-                    "skills": report.skills.iter().map(skill_json).collect::<Vec<_>>(),
+                    "skills": report.skills.iter().map(SkillSummary::from).collect::<Vec<_>>(),
                     "skips": report.skips,
                 });
                 println!(
@@ -338,15 +338,4 @@ fn discover_cwd(
 ) -> Result<craftbag::DiscoveryReport, String> {
     let (cwd, opts) = discovery_opts(paths, vendor, user_dir, ascii_names)?;
     discover(&cwd, &opts).map_err(|e| e.to_string())
-}
-
-fn skill_json(skill: &Skill) -> serde_json::Value {
-    serde_json::json!({
-        "name": skill.name,
-        "description": skill.description,
-        "source": skill.source.as_str(),
-        "path": skill.source_path,
-        "user_invocable": skill.user_invocable,
-        "disable_model_invocation": skill.disable_model_invocation,
-    })
 }

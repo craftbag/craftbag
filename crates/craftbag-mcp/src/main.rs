@@ -8,9 +8,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_catalog, format_load_message, parse_list_format,
-    progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
+    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
+    find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -138,14 +138,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         ));
     }
     serde_json::to_string_pretty(&json!({
-        "skills": report.skills.iter().map(|s| json!({
-            "name": s.name,
-            "description": s.description,
-            "source": s.source.as_str(),
-            "path": s.source_path,
-            "user_invocable": s.user_invocable,
-            "disable_model_invocation": s.disable_model_invocation,
-        })).collect::<Vec<_>>(),
+        "skills": report.skills.iter().map(SkillSummary::from).collect::<Vec<_>>(),
         "skips": report.skips,
     }))
     .map_err(|e| e.to_string())
@@ -701,6 +694,83 @@ mod tests {
             "why JSON must carry description like list JSON/XML: {why_text}"
         );
         assert_eq!(slash_row["description"], "user only", "{why_text}");
+    }
+
+    #[test]
+    fn list_json_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-hint");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hinted_row = skills
+            .iter()
+            .find(|s| s["name"] == "slash-hint")
+            .expect("slash-hint");
+        assert_eq!(
+            hinted_row["argument_hint"], "[name]",
+            "MCP list must carry argument_hint for slash palettes: {out}"
+        );
+        assert!(
+            hinted_row.get("argumentHint").is_none(),
+            "list JSON argument_hint must stay snake_case: {out}"
+        );
+        let bare_row = skills
+            .iter()
+            .find(|s| s["name"] == "no-hint")
+            .expect("no-hint");
+        assert!(
+            bare_row["argument_hint"].is_null(),
+            "omitted argument_hint is null on MCP list JSON: {out}"
+        );
+    }
+
+    #[test]
+    fn why_json_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument_hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(41, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hinted_row = loaded
+            .iter()
+            .find(|s| s["name"] == "slash-hint")
+            .expect("slash-hint");
+        assert_eq!(
+            hinted_row["argument_hint"], "[name]",
+            "MCP why must carry argument_hint like list JSON/XML: {why_text}"
+        );
     }
 
     #[test]

@@ -368,8 +368,9 @@ pub fn unknown_list_format(format: &str) -> String {
 
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
-/// Also emits `user_invocable` and `disable_model_invocation` so a host
-/// that lists via XML can build a slash palette without re-parsing.
+/// Also emits `user_invocable`, `disable_model_invocation`, and
+/// `argument_hint` so a host that lists via XML can build a slash
+/// palette without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -405,6 +406,11 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             "false"
         });
         out.push_str("</disable_model_invocation>\n");
+        out.push_str("<argument_hint>");
+        if let Some(hint) = skill.argument_hint.as_deref() {
+            out.push_str(&xml_escape(hint));
+        }
+        out.push_str("</argument_hint>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -897,6 +903,30 @@ mod tests {
         assert!(
             xml.contains("<disable_model_invocation>true</disable_model_invocation>"),
             "slash-ok must carry disable_model_invocation: {xml}"
+        );
+    }
+
+    #[test]
+    fn format_available_skills_xml_includes_argument_hint() {
+        let mut hinted = make_skill("slash-hint", &[], 10);
+        hinted.argument_hint = Some("name & id".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/slash-hint/SKILL.md"));
+        let mut bare = make_skill("no-hint", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-hint/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<argument_hint>name &amp; id</argument_hint>"),
+            "list XML must carry escaped argument_hint for slash palettes: {xml}"
+        );
+        assert!(xml.contains("<name>no-hint</name>\n<description>"), "{xml}");
+        let after_bare = xml
+            .split("<name>no-hint</name>")
+            .nth(1)
+            .expect("no-hint skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<argument_hint></argument_hint>"),
+            "omitted argument_hint must still emit an empty XML tag: {xml}"
         );
     }
 
