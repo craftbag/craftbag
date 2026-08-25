@@ -275,6 +275,38 @@ fn list_watch_dirs_lists_extra_collection() {
 }
 
 #[test]
+fn list_watch_dirs_lists_extra_path_skill_md_file() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("wanted");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    let skill = pkg.join("SKILL.md");
+    fs::write(&skill, "---\nname: wanted\ndescription: d\n---\nbody\n").expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&skill)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &skill),
+        "must watch an extra-path SKILL.md file: {stdout}"
+    );
+    assert!(
+        !stdout.contains("## Skills") && !stdout.contains("description: d"),
+        "watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
+#[test]
 fn list_watch_dirs_omits_named_package_skills_subdir() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

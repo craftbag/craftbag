@@ -496,6 +496,33 @@ mod tests {
     }
 
     #[test]
+    fn list_watch_prints_extra_path_skill_md_file() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let pkg = tmp.path().join("wanted");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        let skill = pkg.join("SKILL.md");
+        std::fs::write(&skill, "---\nname: wanted\ndescription: d\n---\nbody\n").expect("write");
+        let skill_s = skill.display().to_string();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![skill_s],
+                format: Some("watch".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == skill.as_path()),
+            "must watch an extra-path SKILL.md file: {out}"
+        );
+        assert!(
+            !out.contains("## Skills"),
+            "watch format must not load SKILL.md: {out}"
+        );
+    }
+
+    #[test]
     fn list_json_vendor_claude_loads_user_home_layout() {
         let home = corpus_claude_user();
         let off = craftbag::with_home_override(Some(home.clone()), || {

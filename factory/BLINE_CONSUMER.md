@@ -73,6 +73,10 @@ Default discover still loads `café` / `перевод`. With the option those
 names are a `parse_error` skip (`lowercase alphanumeric and hyphens
 only`) and do not appear in `skills`.
 
+CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
+same list (one path per line) without loading SKILL.md. An extra-path
+that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
+
 Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
 `.{name}/skills` trees, cwd-to-git `.agents/skills` roots, and extra
