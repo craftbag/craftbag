@@ -84,18 +84,25 @@ fn opts_from(
     paths: Vec<String>,
     vendor: Vec<String>,
     user_dir: Option<String>,
-) -> DiscoveryOptions {
-    DiscoveryOptions {
+) -> Result<DiscoveryOptions, String> {
+    // CLI clap rejects `--user-dir` with no value. Present empty or
+    // whitespace is the same miss, not discover-cwd as User.
+    if let Some(d) = user_dir.as_deref() {
+        if d.trim().is_empty() {
+            return Err("user_dir must be a non-empty string".to_owned());
+        }
+    }
+    Ok(DiscoveryOptions {
         paths,
         vendor_roots: vendor,
         user_skills_dir: user_dir.map(PathBuf::from),
         ..DiscoveryOptions::default()
-    }
+    })
 }
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
         .map_err(|e| e.to_string())?;
     let format = args.format.as_deref().unwrap_or("json");
     if format == "xml" {
@@ -118,7 +125,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
 
 fn load_text(args: LoadArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
         .map_err(|e| e.to_string())?;
     match find_skill_by_name(&report.skills, &args.name) {
         Some(skill) => Ok(format_load_message(
@@ -132,7 +139,7 @@ fn load_text(args: LoadArgs) -> Result<String, String> {
 
 fn why_json(args: WhyArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir))
+    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
         .map_err(|e| e.to_string())?;
     let budgets = progressive_budgets(args.context_tokens.unwrap_or(8_000));
     let why = why(
@@ -921,6 +928,50 @@ mod tests {
             assert!(
                 !text.contains("\"skills\""),
                 "must not return default catalog JSON for null format: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_empty_user_dir_is_error_not_cwd() {
+        empty_home(|| {
+            let resp = call(40, "skills_list", json!({"user_dir": ""}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "empty user_dir must not scan cwd: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("user_dir"),
+                "error must name user_dir: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return a catalog for empty user_dir: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_whitespace_user_dir_is_error_not_cwd() {
+        empty_home(|| {
+            let resp = call(41, "skills_list", json!({"user_dir": "   "}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "whitespace user_dir must not scan cwd: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("user_dir"),
+                "error must name user_dir: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return a catalog for whitespace user_dir: {text}"
             );
         });
     }

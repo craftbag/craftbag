@@ -34,7 +34,9 @@ pub struct DiscoveryOptions {
     pub disabled: Vec<String>,
     /// Host names: `bline`, `claude`, `cursor`, `grok`.
     pub vendor_roots: Vec<String>,
-    /// Host-supplied user skills dir (`~` / `~/` expanded, same as `paths`).
+    /// Host-supplied user skills dir (`~` / `~/` expanded, relative
+    /// paths join the discover `cwd`, same as `paths`). Empty or
+    /// whitespace-only is ignored.
     pub user_skills_dir: Option<PathBuf>,
 }
 
@@ -237,19 +239,35 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     if let Some(user_dir) = &opts.user_skills_dir {
         // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
         // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
+        // Relative user_dir joins discover cwd, same as extra-path.
+        // Empty or whitespace-only is not a directory (not cwd).
         let user_dir = match user_dir.to_str() {
-            Some(raw) => expand_tilde(raw),
-            None => user_dir.clone(),
+            Some(raw) => {
+                let raw = raw.trim();
+                if raw.is_empty() {
+                    None
+                } else {
+                    Some(expand_tilde(raw))
+                }
+            }
+            None => Some(user_dir.clone()),
         };
-        load_skills_from_dir(
-            &user_dir,
-            &SkillSource::User,
-            &ignore,
-            &opts.disabled,
-            &[],
-            &mut skills,
-            &mut skips,
-        );
+        if let Some(user_dir) = user_dir {
+            let user_dir = if user_dir.is_absolute() {
+                user_dir
+            } else {
+                cwd.join(user_dir)
+            };
+            load_skills_from_dir(
+                &user_dir,
+                &SkillSource::User,
+                &ignore,
+                &opts.disabled,
+                &[],
+                &mut skills,
+                &mut skips,
+            );
+        }
     }
 
     if let Some(home) = home_dir() {
@@ -3973,5 +3991,74 @@ mod tests {
             "load/MCP must name the joined SKILL.md after extra-path `..`: msg={msg} path={skip_path}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn empty_user_dir_does_not_scan_discover_cwd() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(&cwd.path().join("planted"), "planted", "FROM_CWD");
+        for raw in ["", "   "] {
+            let report = empty_home_discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    user_skills_dir: Some(std::path::PathBuf::from(raw)),
+                    ..DiscoveryOptions::default()
+                },
+            );
+            assert!(
+                find_skill_by_name(&report.skills, "planted").is_none(),
+                "user_dir {raw:?} must not scan discover cwd as User: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .all(|s| !s.content.contains("FROM_CWD")),
+                "user_dir {raw:?} must not load cwd package body: {:?}",
+                report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn user_dir_relative_joins_discover_cwd_like_extra_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(
+            &cwd.path().join("myskills").join("mine"),
+            "mine",
+            "from-cwd",
+        );
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                user_skills_dir: Some(std::path::PathBuf::from("myskills")),
+                ..DiscoveryOptions::default()
+            },
+        );
+        let loaded = find_skill_by_name(&report.skills, "mine");
+        assert!(
+            loaded.is_some(),
+            "relative user_dir must join discover cwd like extra-path: {:?}",
+            report.skills
+        );
+        assert_eq!(
+            loaded.map(|s| s.source.clone()),
+            Some(SkillSource::User),
+            "joined user_dir must stay User: {:?}",
+            report.skills
+        );
+        let via_path = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec!["myskills".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&via_path.skills, "mine").is_some(),
+            "extra-path myskills control: {:?}",
+            via_path.skills
+        );
     }
 }
