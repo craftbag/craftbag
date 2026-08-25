@@ -31,3 +31,10 @@ path = "fuzz_targets/xml_catalog.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "list_format"
+path = "fuzz_targets/list_format.rs"
+test = false
+doc = false
+bench = false
