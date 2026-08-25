@@ -202,7 +202,8 @@ fn list_xml_available_skills() {
         .assert()
         .success()
         .stdout(predicates::str::contains("<available_skills>"))
-        .stdout(predicates::str::contains("<name>minimal-valid</name>"));
+        .stdout(predicates::str::contains("<name>minimal-valid</name>"))
+        .stdout(predicates::str::contains("<source>extra</source>"));
 }
 
 #[test]

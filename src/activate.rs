@@ -334,6 +334,9 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
         out.push_str("<location>");
         out.push_str(&xml_escape(&location));
         out.push_str("</location>\n");
+        out.push_str("<source>");
+        out.push_str(&xml_escape(skill.source.as_str()));
+        out.push_str("</source>\n");
         out.push_str("<user_invocable>");
         out.push_str(if skill.user_invocable {
             "true"
@@ -698,7 +701,11 @@ mod tests {
         );
         assert!(
             xml.contains("<location>/tmp/ampersand/SKILL.md</location>"),
-            "{xml}"
+            "location: {xml}"
+        );
+        assert!(
+            xml.contains("<source>agents</source>"),
+            "list XML must carry source like list JSON: {xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
     }
