@@ -622,14 +622,23 @@ fn extra_skills_subdir_is_collection(
 /// inode (file, FIFO, socket, dangling symlink). A non-directory
 /// `extra/skills` is not a usable collection; fall back to `extra/` so
 /// sibling packages still load. Do not open `extra/skills` as a file
-/// (FIFO hang). Sibling package dirs alone still match a named package
-/// with nested SKILL.md, so those stay a package.
+/// (FIFO hang). A leftover `SKILL.md` directory also falls back to
+/// sibling packages when `extra/skills` is absent. FIFO, socket, and
+/// regular-file leftovers plus sibling package dirs still match a
+/// named package with nested SKILL.md, so those stay a package.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bool) -> bool {
     if !skill_md_stays_in_package(skill_file) {
         return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
     }
     let Ok(content) = read_skill_md(skill_file) else {
-        return extra_path_has_skills_entry(dir);
+        if extra_path_has_skills_entry(dir) {
+            return true;
+        }
+        // A leftover SKILL.md directory cannot be this extra-path
+        // package. Scan sibling packages. FIFO, socket, and unreadable
+        // regular-file leftovers still stay a package so nested
+        // SKILL.md is not scanned (PR 35, PR 59).
+        return skill_md_is_dir(skill_file) && dir_has_child_skill_packages(dir);
     };
     // Missing peek name is the same miss as a leftover that cannot be
     // read: extra/skills as any inode is the collection layout (PR 71).
@@ -1142,6 +1151,10 @@ fn is_skill_md_filename(path: &Path) -> bool {
 /// [`read_skill_md`] could report unreadable.
 fn skill_md_inode_exists(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok()
+}
+
+fn skill_md_is_dir(path: &Path) -> bool {
+    std::fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
 }
 
 fn read_skill_md(path: &Path) -> Result<String, String> {
@@ -5162,6 +5175,41 @@ mod tests {
             "validate/discover must agree leftover FIFO is not a regular file: {}",
             vskip.detail
         );
+    }
+
+    #[test]
+    fn extra_path_dir_leftover_skill_md_does_not_hide_sibling() {
+        let extra = tempfile::tempdir().expect("extra");
+        fs::create_dir_all(extra.path().join("SKILL.md")).expect("mkdir leftover dir");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover extra/SKILL.md is a directory: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-sibling",
+            "must load the sibling package, not hide it behind leftover SKILL.md dir: {:?}",
+            report.skills[0]
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[cfg(unix)]
