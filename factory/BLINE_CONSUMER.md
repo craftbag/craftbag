@@ -57,8 +57,9 @@ skip (`lowercase alphanumeric and hyphens only`) and do not appear in
 Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
 `.{name}/skills` trees, cwd-to-git `.agents/skills` roots, and extra
-paths (package dir or collection `dir` plus `dir/skills`) that
-`discover` walks.
+paths that `discover` walks: a named extra-path package is the package
+dir only; a collection is `dir` plus `dir/skills`. Escaped or
+unreadable extra `skills/` is omitted (discover falls back to `dir/`).
 
 ## Compare on one tree
 
