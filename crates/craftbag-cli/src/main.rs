@@ -293,9 +293,7 @@ fn list_output_mode(
             "xml" => Ok(ListOutput::Xml),
             "catalog" => Ok(ListOutput::Catalog),
             "watch" => Ok(ListOutput::Watch),
-            other => Err(format!(
-                "unknown format: {other} (use json, xml, catalog, or watch)"
-            )),
+            other => Err(unknown_list_format(other)),
         };
     }
     if watch {
@@ -311,6 +309,16 @@ fn list_output_mode(
         return Ok(ListOutput::Json);
     }
     Ok(ListOutput::Tsv)
+}
+
+fn unknown_list_format(format: &str) -> String {
+    let lower = format.to_ascii_lowercase();
+    match lower.as_str() {
+        "json" | "xml" | "catalog" | "watch" => {
+            format!("unknown format: {format} (did you mean {lower}?)")
+        }
+        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
+    }
 }
 
 fn discovery_opts(
