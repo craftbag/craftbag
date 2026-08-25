@@ -258,7 +258,11 @@ mod tests {
         let why = why(&report, Some("foo"), None, None);
         assert_eq!(why.loaded.len(), 1);
         assert_eq!(why.skips.len(), 1);
-        assert!(why.skips[0].winner_path.is_some());
+        assert_eq!(
+            why.skips[0].winner_path.as_deref(),
+            Some(std::path::Path::new("/a/foo/SKILL.md")),
+            "why must keep the collision winner path, not only Some(_)"
+        );
         assert!(why.activation.is_empty());
     }
 
