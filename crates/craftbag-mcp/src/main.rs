@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use craftbag::{
     DiscoveryOptions, FormatOptions, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_load_message, progressive_budgets,
+    format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
     unknown_or_skipped_skill_message, why,
 };
 use serde::Deserialize;
@@ -123,8 +123,18 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     if format == "xml" {
         return Ok(format_available_skills_xml(&report.skills));
     }
+    if format == "catalog" {
+        return Ok(format_catalog(
+            &report.skills,
+            "",
+            progressive_budgets(8_000),
+            FormatOptions::default(),
+        ));
+    }
     if format != "json" {
-        return Err(format!("unknown format: {format} (use json or xml)"));
+        return Err(format!(
+            "unknown format: {format} (use json, xml, or catalog)"
+        ));
     }
     serde_json::to_string_pretty(&json!({
         "skills": report.skills.iter().map(|s| json!({
@@ -190,7 +200,7 @@ fn tools() -> Value {
     let mut list_props = discover_properties();
     list_props["format"] = json!({
         "type": "string",
-        "description": "json (default) or xml (skills-ref <available_skills>)."
+        "description": "json (default), xml (skills-ref <available_skills>), or catalog (markdown name + description)."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -429,6 +439,24 @@ mod tests {
     }
 
     #[test]
+    fn list_catalog_prints_markdown_names() {
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![corpus_pkg()],
+                format: Some("catalog".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(out.contains("## Skills"), "{out}");
+        assert!(out.contains("minimal-valid"), "{out}");
+        assert!(
+            out.contains("Use the host activate command"),
+            "catalog must stay host-neutral: {out}"
+        );
+    }
+
+    #[test]
     fn list_json_vendor_claude_loads_user_home_layout() {
         let home = corpus_claude_user();
         let off = craftbag::with_home_override(Some(home.clone()), || {
@@ -556,7 +584,7 @@ mod tests {
             .expect_err("format");
             assert!(err.contains("unknown format: yaml"), "{err}");
             assert!(
-                err.contains("json") && err.contains("xml"),
+                err.contains("json") && err.contains("xml") && err.contains("catalog"),
                 "must name valid formats: {err}"
             );
         });
