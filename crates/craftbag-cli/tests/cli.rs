@@ -403,6 +403,38 @@ fn list_format_json_matches_json_flag() {
 }
 
 #[test]
+fn list_format_xml_matches_xml_flag() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--format")
+        .arg("xml")
+        .arg("--path")
+        .arg(&pkg)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("<available_skills>"))
+        .stdout(predicates::str::contains("<name>minimal-valid</name>"))
+        .stdout(predicates::str::contains("<source>extra</source>"));
+}
+
+#[test]
+fn list_format_catalog_matches_catalog_flag() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--format")
+        .arg("catalog")
+        .arg("--path")
+        .arg(&pkg)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("## Skills"))
+        .stdout(predicates::str::contains("minimal-valid"))
+        .stdout(predicates::str::contains("Use the host activate command"));
+}
+
+#[test]
 fn list_format_watch_lists_extra_collection() {
     let extra = corpus().join("incumbent/vercel-npx");
     let extra_skills = extra.join("skills");
