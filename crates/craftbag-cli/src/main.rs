@@ -35,6 +35,7 @@ enum Cmd {
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
         /// Same tokens as MCP skills_list format: json, xml, catalog, watch.
+        /// `watch-dirs` is the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
         /// Extra package or collection root (not a project walk). Example: --path ./my-skill
