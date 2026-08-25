@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, Skill, SkillSource, discover, find_skill_by_name,
     format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_or_skipped_skill_message, validate_path_with_options, why,
+    unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs, why,
 };
 
 #[derive(Parser)]
@@ -30,6 +30,9 @@ enum Cmd {
         /// Markdown catalog (name + description) for host prompts.
         #[arg(long, conflicts_with_all = ["json", "xml"])]
         catalog: bool,
+        /// Print notify-watch roots (same walk as discover). Does not load SKILL.md.
+        #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
+        watch_dirs: bool,
         /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
@@ -111,11 +114,19 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             json,
             xml,
             catalog,
+            watch_dirs: watch,
             paths,
             vendor,
             user_dir,
             ascii_names,
         } => {
+            if watch {
+                let (cwd, opts) = discovery_opts(&paths, &vendor, user_dir, ascii_names)?;
+                for dir in watch_dirs(&cwd, &opts) {
+                    println!("{}", dir.display());
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
             if catalog {
                 print!(
@@ -256,12 +267,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
     }
 }
 
-fn discover_cwd(
+fn discovery_opts(
     paths: &[String],
     vendor: &[String],
     user_dir: Option<PathBuf>,
     ascii_names: bool,
-) -> Result<craftbag::DiscoveryReport, String> {
+) -> Result<(PathBuf, DiscoveryOptions), String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let vendor_roots = SkillSource::parse_vendor_roots(vendor)?;
     let opts = DiscoveryOptions {
@@ -271,6 +282,16 @@ fn discover_cwd(
         ascii_names,
         ..DiscoveryOptions::default()
     };
+    Ok((cwd, opts))
+}
+
+fn discover_cwd(
+    paths: &[String],
+    vendor: &[String],
+    user_dir: Option<PathBuf>,
+    ascii_names: bool,
+) -> Result<craftbag::DiscoveryReport, String> {
+    let (cwd, opts) = discovery_opts(paths, vendor, user_dir, ascii_names)?;
     discover(&cwd, &opts).map_err(|e| e.to_string())
 }
 

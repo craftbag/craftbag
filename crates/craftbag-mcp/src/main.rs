@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use craftbag::{
     DiscoveryOptions, FormatOptions, SkillSource, discover, find_skill_by_name,
     format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_or_skipped_skill_message, why,
+    unknown_or_skipped_skill_message, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -114,12 +114,17 @@ fn opts_from(
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(
-        &cwd,
-        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
-    )
-    .map_err(|e| e.to_string())?;
+    let opts = opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?;
     let format = args.format.as_deref().unwrap_or("json");
+    if format == "watch" {
+        let mut out = String::new();
+        for dir in watch_dirs(&cwd, &opts) {
+            out.push_str(&dir.display().to_string());
+            out.push('\n');
+        }
+        return Ok(out);
+    }
+    let report = discover(&cwd, &opts).map_err(|e| e.to_string())?;
     if format == "xml" {
         return Ok(format_available_skills_xml(&report.skills));
     }
@@ -133,7 +138,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     }
     if format != "json" {
         return Err(format!(
-            "unknown format: {format} (use json, xml, or catalog)"
+            "unknown format: {format} (use json, xml, catalog, or watch)"
         ));
     }
     serde_json::to_string_pretty(&json!({
@@ -200,7 +205,7 @@ fn tools() -> Value {
     let mut list_props = discover_properties();
     list_props["format"] = json!({
         "type": "string",
-        "description": "json (default), xml (skills-ref <available_skills>), or catalog (markdown name + description)."
+        "description": "json (default), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md)."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -457,6 +462,36 @@ mod tests {
     }
 
     #[test]
+    fn list_watch_prints_extra_collection_dirs() {
+        let extra = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/corpus/incumbent/vercel-npx");
+        let extra_s = extra.display().to_string();
+        let skills = extra.join("skills");
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![extra_s],
+                format: Some("watch".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == extra.as_path()),
+            "must watch the extra-path collection root: {out}"
+        );
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == skills.as_path()),
+            "must watch extra/skills when discover walks it: {out}"
+        );
+        assert!(
+            !out.contains("deploy-hint") && !out.contains("## Skills"),
+            "watch format must not load SKILL.md: {out}"
+        );
+    }
+
+    #[test]
     fn list_json_vendor_claude_loads_user_home_layout() {
         let home = corpus_claude_user();
         let off = craftbag::with_home_override(Some(home.clone()), || {
@@ -584,7 +619,10 @@ mod tests {
             .expect_err("format");
             assert!(err.contains("unknown format: yaml"), "{err}");
             assert!(
-                err.contains("json") && err.contains("xml") && err.contains("catalog"),
+                err.contains("json")
+                    && err.contains("xml")
+                    && err.contains("catalog")
+                    && err.contains("watch"),
                 "must name valid formats: {err}"
             );
         });
