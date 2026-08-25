@@ -95,7 +95,7 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         // user_dir is always a skills root. leftover SKILL.md is a
         // root_file skip, not a named package. Watch user/skills when
         // discover would walk that collection.
-        if user_dir_should_watch_skills_subdir(&user_dir) {
+        if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names) {
             push(user_dir.join("skills"));
         }
     }
@@ -332,7 +332,9 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         // leftover + extra/skills is a collection; user_dir is never a
         // named package, so leftover must not hide user/skills.
         let skills_subdir = user_dir.join("skills");
-        if extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips) {
+        if extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips)
+            && user_dir_skills_subdir_is_loose_collection(&skills_subdir, opts.ascii_names)
+        {
             load_skills_from_dir(
                 &skills_subdir,
                 &SkillSource::User,
@@ -529,14 +531,29 @@ fn extra_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
     }
 }
 
+/// True when `user_dir/skills` is a leftover collection, not the skill
+/// named `skills`. Named packages keep nested `SKILL.md` as assets.
+fn user_dir_skills_subdir_is_loose_collection(skills_subdir: &Path, ascii_names: bool) -> bool {
+    let package_md = ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|name| skills_subdir.join(name))
+        .find(|p| skill_md_inode_exists(p));
+    match package_md.as_ref() {
+        Some(skill_file) => extra_path_is_loose_collection(skills_subdir, skill_file, ascii_names),
+        None => true,
+    }
+}
+
 /// True when [`watch_dirs`] should list `user_dir/skills` because
 /// [`discover`] walks that collection.
 ///
 /// `user_skills_dir` is always a skills root. leftover `SKILL.md` /
 /// `skill.md` is a `root_file` skip, never a named package, so a
 /// matching peek must not hide `user_dir/skills` the way extra-path
-/// named packages keep nested `skills/` as assets.
-fn user_dir_should_watch_skills_subdir(dir: &Path) -> bool {
+/// named packages keep nested `skills/` as assets. A loadable
+/// `user_dir/skills/SKILL.md` is the skill named `skills`; do not
+/// watch or walk that tree as a collection.
+fn user_dir_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
     let skills_subdir = dir.join("skills");
     if !skills_subdir.is_dir() {
         return false;
@@ -544,7 +561,10 @@ fn user_dir_should_watch_skills_subdir(dir: &Path) -> bool {
     if !stays_under(&skills_subdir, dir) {
         return false;
     }
-    std::fs::read_dir(&skills_subdir).is_ok()
+    if std::fs::read_dir(&skills_subdir).is_err() {
+        return false;
+    }
+    user_dir_skills_subdir_is_loose_collection(&skills_subdir, ascii_names)
 }
 
 /// True when `extra/skills` exists as any inode (dir, file, FIFO, socket,
@@ -6180,6 +6200,57 @@ mod tests {
         assert!(
             watch_paths_contain(&dirs, &user.join("skills")),
             "watch_dirs must list user/skills when leftover peeks skills matching user dir: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn user_dir_named_skills_package_does_not_scan_nested() {
+        // user_dir/skills/SKILL.md is the skill named skills. The leftover
+        // collection walk must not also treat that dir as extra/skills.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let user = tempfile::tempdir().expect("user");
+        write_skill(&user.path().join("skills"), "skills", "PACKAGE_BODY");
+        write_skill(
+            &user.path().join("skills").join("evil"),
+            "evil",
+            "NESTED_SECRET",
+        );
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(user.path().to_path_buf()),
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["skills"],
+            "user_dir/skills named package must not scan nested SKILL.md: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load: {:?}",
+            report.skills
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, user.path()),
+            "must watch user_dir: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &user.path().join("skills")),
+            "watch_dirs must not list user/skills when it is a named package: {dirs:?}"
         );
     }
 }
