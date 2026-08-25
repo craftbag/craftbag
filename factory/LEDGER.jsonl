@@ -181,3 +181,4 @@
 {"ts":"2026-08-25T21:32:48Z","job_id":"adversary-trim-list-format-109","work_source":"adversary","result":"landed","head":"a3a1215a449836d2bb4f13b1318dcfd0751c0b81","pr":109,"tests":"parse_list_format_trims_whitespace","noop":false}
 {"ts":"2026-08-25T21:38:00Z","job_id":"adversary-leftover-dir-sibling-110","work_source":"adversary","result":"landed","head":"3f6e50c99d3018021eb5b07a5d2004a7c5f8221d","pr":110,"tests":"extra_path_dir_leftover_skill_md_does_not_hide_sibling","noop":false}
 {"ts":"2026-08-25T21:40:20Z","job_id":"adversary-after-110-noop","work_source":"adversary","result":"noop","head":"3f6e50c99d3018021eb5b07a5d2004a7c5f8221d","pr":null,"tests":"110 leftover dir+sibling; symlink-to-dir public loads","noop":true}
+{"ts":"2026-08-25T21:44:00Z","job_id":"improve-empty-list-format-111","work_source":"improve","result":"landed","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":111,"tests":"unknown_list_format empty; nextest 364","noop":false}
