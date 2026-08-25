@@ -42,6 +42,9 @@ struct DiscoverArgs {
     user_dir: Option<String>,
     #[serde(default, deserialize_with = "present_non_null")]
     format: Option<String>,
+    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
+    #[serde(default)]
+    ascii_names: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +58,9 @@ struct LoadArgs {
     vendor: Vec<String>,
     #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
+    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
+    #[serde(default)]
+    ascii_names: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -71,6 +77,9 @@ struct WhyArgs {
     vendor: Vec<String>,
     #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
+    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
+    #[serde(default)]
+    ascii_names: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +93,7 @@ fn opts_from(
     paths: Vec<String>,
     vendor: Vec<String>,
     user_dir: Option<String>,
+    ascii_names: bool,
 ) -> Result<DiscoveryOptions, String> {
     // CLI clap rejects `--user-dir` with no value. Present empty or
     // whitespace is the same miss, not discover-cwd as User.
@@ -96,14 +106,18 @@ fn opts_from(
         paths,
         vendor_roots: vendor,
         user_skills_dir: user_dir.map(PathBuf::from),
+        ascii_names,
         ..DiscoveryOptions::default()
     })
 }
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
-        .map_err(|e| e.to_string())?;
+    let report = discover(
+        &cwd,
+        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
+    )
+    .map_err(|e| e.to_string())?;
     let format = args.format.as_deref().unwrap_or("json");
     if format == "xml" {
         return Ok(format_available_skills_xml(&report.skills));
@@ -125,8 +139,11 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
 
 fn load_text(args: LoadArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
-        .map_err(|e| e.to_string())?;
+    let report = discover(
+        &cwd,
+        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
+    )
+    .map_err(|e| e.to_string())?;
     match find_skill_by_name(&report.skills, &args.name) {
         Some(skill) => Ok(format_load_message(
             skill,
@@ -139,8 +156,11 @@ fn load_text(args: LoadArgs) -> Result<String, String> {
 
 fn why_json(args: WhyArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(&cwd, &opts_from(args.paths, args.vendor, args.user_dir)?)
-        .map_err(|e| e.to_string())?;
+    let report = discover(
+        &cwd,
+        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
+    )
+    .map_err(|e| e.to_string())?;
     let budgets = progressive_budgets(args.context_tokens.unwrap_or(8_000));
     let why = why(
         &report,
@@ -158,7 +178,8 @@ fn discover_properties() -> Value {
     json!({
         "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md roots."},
         "vendor": {"type": "array", "items": {"type": "string"}, "description": "Vendor roots: bline, claude, cursor, grok."},
-        "user_dir": {"type": "string", "description": "Host user skills directory."}
+        "user_dir": {"type": "string", "description": "Host user skills directory."},
+        "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."}
     })
 }
 
@@ -1393,5 +1414,159 @@ mod tests {
                 "must load the skills/ package, not the path-component leftover: {text}"
             );
         });
+    }
+
+    fn write_cafe_extra() -> tempfile::TempDir {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("café");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: café\ndescription: coffee\n---\nbody\n",
+        )
+        .expect("write");
+        extra
+    }
+
+    #[test]
+    fn skills_list_load_why_ascii_names_skips_unicode_like_cli() {
+        empty_home(|| {
+            let extra = write_cafe_extra();
+            let path = extra.path();
+
+            let listed = call(42, "skills_list", json!({"paths": [path]}));
+            assert_eq!(listed["result"]["isError"], false, "{}", call_text(&listed));
+            let listed_text = call_text(&listed);
+            assert!(
+                listed_text.contains("café"),
+                "omitted ascii_names must still load café like CLI default: {listed_text}"
+            );
+
+            let load_ok = call(43, "skills_load", json!({"name": "café", "paths": [path]}));
+            assert_eq!(
+                load_ok["result"]["isError"],
+                false,
+                "{}",
+                call_text(&load_ok)
+            );
+            assert!(
+                call_text(&load_ok).contains("[Activated skill: café]"),
+                "omitted ascii_names must load café: {}",
+                call_text(&load_ok)
+            );
+
+            let listed_ascii = call(
+                44,
+                "skills_list",
+                json!({"paths": [path], "ascii_names": true}),
+            );
+            assert_eq!(
+                listed_ascii["result"]["isError"],
+                false,
+                "{}",
+                call_text(&listed_ascii)
+            );
+            let listed_ascii_text = call_text(&listed_ascii);
+            let listed_v: serde_json::Value =
+                serde_json::from_str(listed_ascii_text).expect("list json");
+            assert!(
+                listed_v["skills"].as_array().is_some_and(|s| s.is_empty()),
+                "ascii_names must not list café: {listed_ascii_text}"
+            );
+            assert_eq!(
+                listed_v["skips"][0]["kind"], "parse_error",
+                "ascii_names must skip café as parse_error: {listed_ascii_text}"
+            );
+            assert_eq!(listed_v["skips"][0]["name"], "café", "{listed_ascii_text}");
+
+            let load_ascii = call(
+                45,
+                "skills_load",
+                json!({"name": "café", "paths": [path], "ascii_names": true}),
+            );
+            assert_eq!(
+                load_ascii["result"]["isError"],
+                true,
+                "ascii_names load must not return café: {}",
+                call_text(&load_ascii)
+            );
+            let load_text = call_text(&load_ascii);
+            assert!(
+                load_text.contains("skipped skill: café"),
+                "ascii_names load must name the skip: {load_text}"
+            );
+            assert!(
+                load_text.contains("parse_error"),
+                "ascii_names load must be parse_error like CLI --ascii-names: {load_text}"
+            );
+            assert!(
+                !load_text.contains("unknown skill"),
+                "ascii_names skip must not look missing: {load_text}"
+            );
+
+            let why_ascii = call(
+                46,
+                "skills_why",
+                json!({"name": "café", "paths": [path], "ascii_names": true}),
+            );
+            assert_eq!(
+                why_ascii["result"]["isError"],
+                false,
+                "ascii_names why must report the skip, not unknown: {}",
+                call_text(&why_ascii)
+            );
+            let why_text = call_text(&why_ascii);
+            let why_v: serde_json::Value = serde_json::from_str(why_text).expect("why json");
+            assert!(why_v["loaded"].as_array().is_some_and(|s| s.is_empty()));
+            assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
+            assert_eq!(why_v["skips"][0]["name"], "café", "{why_text}");
+        });
+    }
+
+    #[test]
+    fn skills_list_null_ascii_names_is_error() {
+        empty_home(|| {
+            let resp = call(47, "skills_list", json!({"ascii_names": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says ascii_names is boolean; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog for null ascii_names: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn tools_list_advertises_ascii_names() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(48)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let props = &tool["inputSchema"]["properties"];
+            assert!(
+                props.get("ascii_names").is_some(),
+                "{} must advertise ascii_names like CLI --ascii-names: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["ascii_names"]["type"], "boolean",
+                "{} ascii_names type: {props}",
+                tool["name"]
+            );
+        }
     }
 }

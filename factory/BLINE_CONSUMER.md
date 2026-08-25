@@ -48,11 +48,11 @@ and `SkillSource::from_host_token` to accept Bline list / TUI tokens
 `bline` / `claude` / `cursor` / `grok`). `project` and `community` have
 no v1 variant. The host keeps those.
 
-Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`) until Bline
-chooses Unicode / NFKC as product policy. Default discover still loads
-`café` / `перевод`. With the option those names are a `parse_error`
-skip (`lowercase alphanumeric and hyphens only`) and do not appear in
-`skills`.
+Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`, MCP
+`ascii_names`) until Bline chooses Unicode / NFKC as product policy.
+Default discover still loads `café` / `перевод`. With the option those
+names are a `parse_error` skip (`lowercase alphanumeric and hyphens
+only`) and do not appear in `skills`.
 
 Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
