@@ -72,8 +72,11 @@ Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
 `.{name}/skills` trees, cwd-to-git `.agents/skills` roots, and extra
 paths that `discover` walks: a named extra-path package is the package
-dir only; a collection is `dir` plus `dir/skills`. Escaped or
-unreadable extra `skills/` is omitted (discover falls back to `dir/`).
+dir only; a collection is `dir` plus `dir/skills`. An extra-path
+`SKILL.md` file is listed only when it is a regular file (or a symlink
+to one). A FIFO, socket, or device is omitted, same as discover.
+Escaped or unreadable extra `skills/` is omitted (discover falls back
+to `dir/`).
 
 ## Compare on one tree
 

@@ -115,7 +115,11 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         };
         if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir()
         {
-            push(expanded);
+            // Discover loads a regular file (or symlink to one). A FIFO /
+            // socket / device is unreadable; listing it for notify can hang.
+            if expanded.is_file() {
+                push(expanded);
+            }
             continue;
         }
         if !expanded.is_dir() {
@@ -3076,6 +3080,18 @@ mod tests {
         assert_eq!(report.skills.len(), 1);
         assert_eq!(report.skills[0].source, SkillSource::ExtraPath);
         assert_eq!(report.skills[0].name, "one");
+        let opts = DiscoveryOptions {
+            paths: vec![path.display().to_string()],
+            ..DiscoveryOptions::default()
+        };
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &path),
+            "watch_dirs must still list a regular extra-path SKILL.md file: {dirs:?}"
+        );
     }
 
     fn env_home() -> Option<PathBuf> {
@@ -3757,6 +3773,27 @@ mod tests {
             vskip.detail.contains("regular file"),
             "validate/discover must agree: {}",
             vskip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn watch_dirs_omits_extra_path_fifo_skill_md() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("SKILL.md");
+        mkfifo(&fifo);
+        let opts = DiscoveryOptions {
+            paths: vec![fifo.to_string_lossy().into_owned()],
+            ..DiscoveryOptions::default()
+        };
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            !watch_paths_contain(&dirs, &fifo),
+            "watch_dirs must not list extra-path FIFO SKILL.md (discover does not load it): {dirs:?}"
         );
     }
 
