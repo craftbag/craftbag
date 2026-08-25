@@ -313,6 +313,9 @@ pub fn format_catalog(
 }
 
 /// Official skills-ref `<available_skills>` XML for host system prompts.
+///
+/// Also emits `user_invocable` and `disable_model_invocation` so a host
+/// that lists via XML can build a slash palette without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -331,6 +334,20 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
         out.push_str("<location>");
         out.push_str(&xml_escape(&location));
         out.push_str("</location>\n");
+        out.push_str("<user_invocable>");
+        out.push_str(if skill.user_invocable {
+            "true"
+        } else {
+            "false"
+        });
+        out.push_str("</user_invocable>\n");
+        out.push_str("<disable_model_invocation>");
+        out.push_str(if skill.disable_model_invocation {
+            "true"
+        } else {
+            "false"
+        });
+        out.push_str("</disable_model_invocation>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -684,6 +701,35 @@ mod tests {
             "{xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
+    }
+
+    #[test]
+    fn format_available_skills_xml_includes_user_invocable() {
+        let mut hidden = make_skill("hidden-slash", &[], 10);
+        hidden.user_invocable = false;
+        hidden.source_path = Some(PathBuf::from("/tmp/hidden-slash/SKILL.md"));
+        let mut slash = make_skill("slash-ok", &[], 10);
+        slash.disable_model_invocation = true;
+        slash.source_path = Some(PathBuf::from("/tmp/slash-ok/SKILL.md"));
+        let xml = format_available_skills_xml(&[hidden, slash]);
+        assert!(xml.contains("<name>hidden-slash</name>"), "xml={xml}");
+        assert!(
+            xml.contains("<user_invocable>false</user_invocable>"),
+            "list XML must carry user_invocable for slash palettes: {xml}"
+        );
+        assert!(
+            xml.contains("<disable_model_invocation>false</disable_model_invocation>"),
+            "hidden-slash must keep disable_model_invocation: {xml}"
+        );
+        assert!(xml.contains("<name>slash-ok</name>"), "xml={xml}");
+        assert!(
+            xml.contains("<user_invocable>true</user_invocable>"),
+            "omitted user_invocable defaults true: {xml}"
+        );
+        assert!(
+            xml.contains("<disable_model_invocation>true</disable_model_invocation>"),
+            "slash-ok must carry disable_model_invocation: {xml}"
+        );
     }
 
     #[test]
