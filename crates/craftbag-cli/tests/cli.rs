@@ -1383,6 +1383,11 @@ fn why_json_includes_invocation_flags() {
         .expect("slash-only");
     assert_eq!(slash_row["user_invocable"], true, "{stdout}");
     assert_eq!(slash_row["disable_model_invocation"], true, "{stdout}");
+    assert_eq!(
+        hidden_row["description"], "model only",
+        "why JSON must carry description like list JSON/XML: {stdout}"
+    );
+    assert_eq!(slash_row["description"], "user only", "{stdout}");
 }
 
 #[test]

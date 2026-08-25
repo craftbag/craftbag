@@ -74,6 +74,10 @@ impl ActivationDecision {
 #[serde(rename_all = "camelCase")]
 pub struct SkillSummary {
     pub name: String,
+    /// Same key as list JSON / list XML. Omitted on cached pre-this-PR
+    /// why JSON (empty string).
+    #[serde(default)]
+    pub description: String,
     pub source: SkillSource,
     pub path: Option<PathBuf>,
     /// Same snake_case key as list JSON / list XML (not Skill camelCase).
@@ -116,10 +120,10 @@ impl WhyReport {
 
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
-/// Loaded rows include `user_invocable` and `disable_model_invocation`
-/// (snake_case, same as list JSON / list XML). Does not take
-/// [`crate::DiscoveryOptions`], so disabled-by-name and vendor denylist
-/// are not activation reasons.
+/// Loaded rows include `description`, `user_invocable`, and
+/// `disable_model_invocation` (same keys as list JSON / list XML).
+/// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
+/// vendor denylist are not activation reasons.
 pub fn why(
     report: &DiscoveryReport,
     query: Option<&str>,
@@ -135,6 +139,7 @@ pub fn why(
         .filter(|s| name_matches(q, &s.name))
         .map(|s| SkillSummary {
             name: s.name.clone(),
+            description: s.description.clone(),
             source: s.source.clone(),
             path: s.source_path.clone(),
             user_invocable: s.user_invocable,
@@ -578,6 +583,11 @@ mod tests {
         );
         assert_eq!(v["loaded"][1]["user_invocable"], true, "{json}");
         assert_eq!(v["loaded"][1]["disable_model_invocation"], true, "{json}");
+        assert_eq!(
+            v["loaded"][0]["description"], "d",
+            "why JSON must carry description like list JSON/XML: {json}"
+        );
+        assert_eq!(v["loaded"][1]["description"], "d", "{json}");
         assert!(
             v["loaded"][0].get("userInvocable").is_none(),
             "why JSON flags must match list snake_case, not Skill camelCase: {json}"
@@ -601,6 +611,10 @@ mod tests {
         assert!(
             !report.loaded[0].disable_model_invocation,
             "omitted disable_model_invocation must stay false (pre-90 default): {json}"
+        );
+        assert!(
+            report.loaded[0].description.is_empty(),
+            "omitted description must stay empty: {json}"
         );
     }
 }
