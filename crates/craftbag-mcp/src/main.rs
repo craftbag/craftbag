@@ -523,6 +523,25 @@ mod tests {
     }
 
     #[test]
+    fn list_watch_vendor_claude_lists_user_home() {
+        let home = corpus_claude_user();
+        let want = home.join(".claude").join("skills");
+        let out = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["claude".to_owned()],
+                format: Some("watch".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == want.as_path()),
+            "must watch HOME/.claude/skills when vendor claude is on: {out}"
+        );
+    }
+
+    #[test]
     fn list_json_vendor_claude_loads_user_home_layout() {
         let home = corpus_claude_user();
         let off = craftbag::with_home_override(Some(home.clone()), || {

@@ -337,6 +337,35 @@ fn list_watch_dirs_omits_named_package_skills_subdir() {
 }
 
 #[test]
+fn list_watch_dirs_vendor_claude_lists_user_home() {
+    let home = corpus().join("incumbent/claude-user");
+    let want = home.join(".claude").join("skills");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let out = cmd
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--vendor")
+        .arg("claude")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &want),
+        "must watch HOME/.claude/skills when vendor claude is on: {stdout}"
+    );
+}
+
+#[test]
 fn list_watch_dirs_conflicts_with_json() {
     let (_home, mut cmd) = bin();
     cmd.arg("list")
