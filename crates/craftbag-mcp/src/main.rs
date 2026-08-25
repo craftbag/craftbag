@@ -1328,6 +1328,38 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_unparseable_matching_peek_leftover_and_skills_dir_does_not_hide_collection() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let extra = tmp.path().join("demo");
+            std::fs::create_dir_all(&extra).expect("mkdir extra");
+            std::fs::write(extra.join("SKILL.md"), "---\nname: demo\n---\nloose\n").expect("write");
+            let pkg = extra.join("skills").join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: collection\n---\nfrom-collection\n",
+            )
+            .expect("write");
+            let resp = call(
+                38,
+                "skills_load",
+                json!({"name": "public", "paths": [extra]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find skills/public when leftover extra/SKILL.md peeks demo matching extra dir but cannot parse: {text}"
+            );
+            assert!(
+                text.contains("from-collection"),
+                "must load the skills/ package, not the unparseable leftover: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_load_path_component_peek_leftover_and_skills_dir_does_not_hide_collection() {
         empty_home(|| {
             let tmp = tempfile::tempdir().expect("tmp");
