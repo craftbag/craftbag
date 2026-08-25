@@ -2,12 +2,15 @@
 
 /// Echo a host or CLI token on one stderr line.
 ///
-/// Control characters become `?`. U+2014 becomes ASCII `-`.
+/// Control characters become `?`. U+2028 / U+2029 (line and
+/// paragraph separators) also become `?`; they are not `Cc` so
+/// `is_control` misses them. U+2014 becomes ASCII `-`.
 pub fn sanitize_error_token(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     for c in raw.chars() {
         match c {
             '\u{2014}' => out.push('-'),
+            '\u{2028}' | '\u{2029}' => out.push('?'),
             c if c.is_control() => out.push('?'),
             c => out.push(c),
         }
@@ -47,6 +50,16 @@ mod tests {
         assert_eq!(sanitize_error_token("foo\0bar"), "foo?bar");
         assert_eq!(sanitize_error_token("foo\u{2014}bar"), "foo-bar");
         assert_eq!(sanitize_error_token("   "), "   ");
+        assert_eq!(
+            sanitize_error_token("json\u{2028}xml"),
+            "json?xml",
+            "U+2028 must not split a CLI or MCP error line"
+        );
+        assert_eq!(
+            sanitize_error_token("json\u{2029}xml"),
+            "json?xml",
+            "U+2029 must not split a CLI or MCP error line"
+        );
     }
 
     #[test]

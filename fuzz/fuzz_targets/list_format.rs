@@ -17,6 +17,8 @@ fuzz_target!(|data: &[u8]| {
         Err(msg) => {
             assert!(
                 !msg.contains('\u{2014}')
+                    && !msg.contains('\u{2028}')
+                    && !msg.contains('\u{2029}')
                     && !msg.contains('\n')
                     && !msg.contains('\r')
                     && !msg.contains('\0'),
@@ -37,6 +39,8 @@ fuzz_target!(|data: &[u8]| {
     let hint = craftbag::unknown_list_format(&text);
     assert!(
         !hint.contains('\u{2014}')
+            && !hint.contains('\u{2028}')
+            && !hint.contains('\u{2029}')
             && !hint.contains('\n')
             && !hint.contains('\r')
             && !hint.contains('\0'),

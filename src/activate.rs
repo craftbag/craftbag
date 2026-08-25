@@ -732,6 +732,10 @@ mod tests {
             unknown_list_format("json\nxml"),
             "unknown format: json?xml (use json, xml, catalog, or watch)"
         );
+        assert_eq!(
+            unknown_list_format("json\u{2028}xml"),
+            "unknown format: json?xml (use json, xml, catalog, or watch)"
+        );
     }
 
     #[test]
