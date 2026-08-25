@@ -136,7 +136,9 @@ Bline: `discover_skills_for_cwd_report` (the doctor skip source).
 | `root-file` | extra path as package dir | skip `name_directory_mismatch` `loose` | same | expected (this extra path is a package, not a skills-root loose file) |
 | `collision/a` + `collision/b` | two extra paths | load `a/foo`; skip `name_collision` `b/foo` `winnerPath`=`a/foo` | same | match |
 | `incumbent/claude-project` | cwd + `--vendor claude` | load `pdf-helper` source vendor claude | load `pdf-helper` | expected (source wire: vendor vs Claude) |
+| `incumbent/claude-user` | `HOME` + `--vendor claude` | load `home-note` from `~/.claude/skills` | load `home-note` | expected (source wire: vendor vs Claude) |
 | `incumbent/vercel-npx` | extra path | load `deploy-hint` via `skills/` | load `deploy-hint` via `skills/` | match |
+| `incumbent/vercel-npx/skills` | extra path is the `skills/` collection | load `deploy-hint` | load `deploy-hint` | match |
 
 `--path` on a project root (`lowercase-skill-md`) does not walk
 `.agents/skills` (extra-path package/collection rules). Bline cwd

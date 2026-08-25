@@ -1250,6 +1250,23 @@ fn list_vendor_leading_dot_loads_claude() {
 }
 
 #[test]
+fn list_vendor_claude_loads_user_home_layout() {
+    let home = corpus().join("incumbent/claude-user");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("claude")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("home-note"));
+}
+
+#[test]
 fn list_help_names_vendor_path_examples() {
     let (_home, mut cmd) = bin();
     cmd.arg("list")

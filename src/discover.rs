@@ -3042,9 +3042,75 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_claude_user_home_vendor_layout_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = corpus_dir().join("incumbent/claude-user");
+        let off = with_home_override(Some(home.clone()), || {
+            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        assert!(
+            off.skills.iter().all(|s| s.name != "home-note"),
+            "claude vendor is opt-in at HOME too"
+        );
+        let on = with_home_override(Some(home.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["claude".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "home-note")
+            .expect("home-note");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "claude".to_owned()
+            }
+        );
+        let dirs = with_home_override(Some(home.clone()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["claude".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, &home.join(".claude").join("skills")),
+            "watch_dirs must list HOME/.claude/skills when vendor claude is on: {dirs:?}"
+        );
+    }
+
+    #[test]
     fn incumbent_vercel_skills_dir_as_extra_path() {
         let cwd = tempfile::tempdir().expect("cwd");
         let extra = corpus_dir().join("incumbent/vercel-npx");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let skill = report
+            .skills
+            .iter()
+            .find(|s| s.name == "deploy-hint")
+            .expect("deploy-hint");
+        assert_eq!(skill.source, SkillSource::ExtraPath);
+    }
+
+    #[test]
+    fn incumbent_vercel_skills_collection_as_extra_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = corpus_dir().join("incumbent/vercel-npx/skills");
         let report = empty_home_discover(
             cwd.path(),
             &DiscoveryOptions {
