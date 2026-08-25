@@ -183,3 +183,4 @@
 {"ts":"2026-08-25T21:40:20Z","job_id":"adversary-after-110-noop","work_source":"adversary","result":"noop","head":"3f6e50c99d3018021eb5b07a5d2004a7c5f8221d","pr":null,"tests":"110 leftover dir+sibling; symlink-to-dir public loads","noop":true}
 {"ts":"2026-08-25T21:44:00Z","job_id":"improve-empty-list-format-111","work_source":"improve","result":"landed","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":111,"tests":"unknown_list_format empty; nextest 364","noop":false}
 {"ts":"2026-08-25T21:46:00Z","job_id":"adversary-after-111-noop","work_source":"adversary","result":"noop","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":null,"tests":"user_dir leftover SKILL.md dir loads public+nested","noop":true}
+{"ts":"2026-08-25T21:47:00Z","job_id":"improve-maintainer-noop","work_source":"improve","result":"noop","head":"a18f870f64de44aa4507e35b068a6b834c39e3c4","pr":null,"tests":"outdated+machete clean","noop":true}
