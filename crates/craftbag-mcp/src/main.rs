@@ -203,8 +203,10 @@ fn tools() -> Value {
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
-    load_props["args"] =
-        json!({"type": "string", "description": "Optional arguments passed into the envelope."});
+    load_props["args"] = json!({
+        "type": "string",
+        "description": "Optional arguments copied into the envelope as User arguments. Matches SKILL.md argument-hint when set."
+    });
     let mut why_props = discover_properties();
     why_props["name"] = json!({"type": "string", "description": "Optional skill name filter."});
     why_props["context"] = json!({"type": "string", "description": "Activation context text."});
@@ -218,7 +220,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope. Does not dump scripts/ or references/ file bodies.",
+            "description": "Load one skill body and package envelope (includes argument-hint when set). Does not dump scripts/ or references/ file bodies.",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -771,6 +773,64 @@ mod tests {
             hinted_row["argument_hint"], "[name]",
             "MCP why must carry argument_hint like list JSON/XML: {why_text}"
         );
+    }
+
+    #[test]
+    fn skills_load_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-hint");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                50,
+                "skills_load",
+                json!({"name": "slash-hint", "args": "alice", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("Argument hint: [name]"),
+                "MCP load must carry argument_hint like list JSON/XML: {hinted_text}"
+            );
+            assert!(
+                hinted_text.contains("User arguments: alice"),
+                "args still follow the hint: {hinted_text}"
+            );
+            let bare_load = call(
+                51,
+                "skills_load",
+                json!({"name": "no-hint", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("Argument hint:"),
+                "omitted argument_hint must not add a load line: {bare_text}"
+            );
+        });
     }
 
     #[test]

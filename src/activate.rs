@@ -557,6 +557,14 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     if let Some(compat) = &skill.compatibility {
         out.push_str(&format!("Compatibility: {compat}\n"));
     }
+    // Same text as list/why JSON and list XML. Fold to one line so
+    // a literal `|` argument-hint cannot split the envelope.
+    if let Some(hint) = skill.argument_hint.as_deref() {
+        let hint = catalog_one_line(hint);
+        if !hint.is_empty() {
+            out.push_str(&format!("Argument hint: {hint}\n"));
+        }
+    }
     if !args.is_empty() {
         out.push_str(&format!("User arguments: {args}\n"));
     }
@@ -989,5 +997,35 @@ mod tests {
         let env = format_package_envelope(&skill);
         assert!(env.contains("unknown"));
         assert!(!env.contains('\u{2014}'));
+    }
+
+    #[test]
+    fn format_load_message_includes_argument_hint() {
+        let mut hinted = Skill::new("slash-hint", "hinted", "body");
+        hinted.argument_hint = Some("name &\nid".to_owned());
+        let load = format_load_message(&hinted, "--fix", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Argument hint: name & id\n"),
+            "load must carry flattened argument_hint like list JSON/XML: {load}"
+        );
+        assert!(
+            header.contains("User arguments: --fix\n"),
+            "args still follow the hint: {load}"
+        );
+        assert!(
+            !header.contains("name &\nid"),
+            "folded argument_hint must stay one envelope line: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-hint", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Argument hint:"),
+            "omitted argument_hint must not add a load line: {bare}"
+        );
     }
 }

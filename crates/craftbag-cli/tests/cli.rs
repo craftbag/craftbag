@@ -1557,6 +1557,59 @@ fn load_minimal_valid() {
 }
 
 #[test]
+fn load_includes_argument_hint() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("slash-hint");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-hint");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("slash-hint")
+        .arg("--args")
+        .arg("alice")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Argument hint: [name]"))
+        .stdout(predicates::str::contains("User arguments: alice"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("no-hint")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: no-hint]"),
+        "bare skill must still load: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Argument hint:"),
+        "omitted argument_hint must not add a load line: {stdout}"
+    );
+}
+
+#[test]
 fn load_unicode_name_skips_with_ascii_names() {
     let extra = tempfile::tempdir().expect("extra");
     let pkg = extra.path().join("café");
@@ -1734,6 +1787,18 @@ fn list_help_names_vendor_path_examples() {
         .stdout(predicates::str::contains("--format"))
         .stdout(predicates::str::contains("json, xml, catalog, watch"))
         .stdout(predicates::str::contains("watch-dirs"))
+        .stdout(predicates::str::contains("Example:"));
+}
+
+#[test]
+fn load_help_names_args_and_argument_hint() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--args"))
+        .stdout(predicates::str::contains("argument-hint"))
         .stdout(predicates::str::contains("Example:"));
 }
 
