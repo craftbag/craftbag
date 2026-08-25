@@ -76,6 +76,16 @@ pub struct SkillSummary {
     pub name: String,
     pub source: SkillSource,
     pub path: Option<PathBuf>,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    #[serde(rename = "user_invocable", default = "default_user_invocable")]
+    pub user_invocable: bool,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    #[serde(rename = "disable_model_invocation", default)]
+    pub disable_model_invocation: bool,
+}
+
+fn default_user_invocable() -> bool {
+    true
 }
 
 /// Doctor report: loaded, skipped, and activation decisions.
@@ -106,8 +116,10 @@ impl WhyReport {
 
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
-/// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and vendor
-/// denylist are not activation reasons.
+/// Loaded rows include `user_invocable` and `disable_model_invocation`
+/// (snake_case, same as list JSON / list XML). Does not take
+/// [`crate::DiscoveryOptions`], so disabled-by-name and vendor denylist
+/// are not activation reasons.
 pub fn why(
     report: &DiscoveryReport,
     query: Option<&str>,
@@ -125,6 +137,8 @@ pub fn why(
             name: s.name.clone(),
             source: s.source.clone(),
             path: s.source_path.clone(),
+            user_invocable: s.user_invocable,
+            disable_model_invocation: s.disable_model_invocation,
         })
         .collect();
     let skips: Vec<SkillSkip> = report
@@ -537,5 +551,36 @@ mod tests {
             .expect("activation reason");
         assert_eq!(v["activation"][0]["code"].as_str(), Some(reason), "{json}");
         assert_eq!(why.activation[0].code(), why.activation[0].reason.as_str());
+    }
+
+    #[test]
+    fn why_json_includes_invocation_flags() {
+        let mut hidden = Skill::new("hidden-slash", "d", "body");
+        hidden.user_invocable = false;
+        hidden.disable_model_invocation = false;
+        let mut slash = Skill::new("slash-ok", "d", "body");
+        slash.user_invocable = true;
+        slash.disable_model_invocation = true;
+        let report = DiscoveryReport {
+            skills: vec![hidden, slash],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["user_invocable"], false,
+            "why JSON must carry user_invocable like list JSON/XML: {json}"
+        );
+        assert_eq!(
+            v["loaded"][0]["disable_model_invocation"], false,
+            "why JSON must carry disable_model_invocation like list JSON/XML: {json}"
+        );
+        assert_eq!(v["loaded"][1]["user_invocable"], true, "{json}");
+        assert_eq!(v["loaded"][1]["disable_model_invocation"], true, "{json}");
+        assert!(
+            v["loaded"][0].get("userInvocable").is_none(),
+            "why JSON flags must match list snake_case, not Skill camelCase: {json}"
+        );
     }
 }
