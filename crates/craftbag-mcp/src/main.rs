@@ -342,6 +342,10 @@ mod tests {
             .into_owned()
     }
 
+    fn corpus_claude_user() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/claude-user")
+    }
+
     fn call(id: i64, name: &str, arguments: serde_json::Value) -> serde_json::Value {
         handle(RpcRequest {
             jsonrpc: Some("2.0".into()),
@@ -421,6 +425,29 @@ mod tests {
         assert_eq!(
             v["skills"][0]["disable_model_invocation"], false,
             "omitted disable_model_invocation defaults false: {out}"
+        );
+    }
+
+    #[test]
+    fn list_json_vendor_claude_loads_user_home_layout() {
+        let home = corpus_claude_user();
+        let off = craftbag::with_home_override(Some(home.clone()), || {
+            list_json(DiscoverArgs::default()).expect("list")
+        });
+        assert!(
+            !off.contains("home-note"),
+            "claude vendor is opt-in at HOME too: {off}"
+        );
+        let on = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["claude".to_owned()],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            on.contains("home-note"),
+            "MCP list must find HOME/.claude/skills when vendor claude is on: {on}"
         );
     }
 
