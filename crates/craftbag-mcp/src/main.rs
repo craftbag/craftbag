@@ -132,6 +132,8 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
             "description": s.description,
             "source": s.source,
             "path": s.source_path,
+            "user_invocable": s.user_invocable,
+            "disable_model_invocation": s.disable_model_invocation,
         })).collect::<Vec<_>>(),
         "skips": report.skips,
     }))
@@ -412,6 +414,58 @@ mod tests {
         assert!(v.get("skills").is_some(), "{out}");
         assert!(v.get("skips").is_some(), "{out}");
         assert!(out.contains("minimal-valid"), "{out}");
+        assert_eq!(
+            v["skills"][0]["user_invocable"], true,
+            "omitted user_invocable defaults true: {out}"
+        );
+        assert_eq!(
+            v["skills"][0]["disable_model_invocation"], false,
+            "omitted disable_model_invocation defaults false: {out}"
+        );
+    }
+
+    #[test]
+    fn list_json_includes_invocation_flags() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hidden = extra.path().join("hidden-slash");
+        std::fs::create_dir_all(&hidden).expect("mkdir");
+        std::fs::write(
+            hidden.join("SKILL.md"),
+            "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nbody\n",
+        )
+        .expect("write");
+        let slash = extra.path().join("slash-only");
+        std::fs::create_dir_all(&slash).expect("mkdir");
+        std::fs::write(
+            slash.join("SKILL.md"),
+            "---\nname: slash-only\ndescription: user only\ndisable-model-invocation: true\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hidden_row = skills
+            .iter()
+            .find(|s| s["name"] == "hidden-slash")
+            .expect("hidden-slash");
+        assert_eq!(
+            hidden_row["user_invocable"], false,
+            "MCP list must carry user_invocable for slash palettes: {out}"
+        );
+        assert_eq!(hidden_row["disable_model_invocation"], false, "{out}");
+        let slash_row = skills
+            .iter()
+            .find(|s| s["name"] == "slash-only")
+            .expect("slash-only");
+        assert_eq!(slash_row["user_invocable"], true, "{out}");
+        assert_eq!(slash_row["disable_model_invocation"], true, "{out}");
     }
 
     #[test]

@@ -109,6 +109,7 @@ fn is_vendor_compat(source: &SkillSource) -> bool {
 ///
 /// Vendor sources `claude` / `cursor` / `grok` with empty triggers are not
 /// always-active. `disable_model_invocation` never auto-injects.
+/// `user_invocable` is slash-palette only and does not change this filter.
 pub fn filter_skills<'a>(
     skills: &'a [Skill],
     context: &str,
@@ -581,6 +582,20 @@ mod tests {
         let mut s = make_skill("slash-only", &[], 100);
         s.disable_model_invocation = true;
         assert!(filter_skills(&[s], "anything", 10_000).is_empty());
+    }
+
+    #[test]
+    fn filter_skills_user_invocable_false_still_auto_injects() {
+        let mut s = make_skill("model-only", &[], 100);
+        s.user_invocable = false;
+        let skills = [s];
+        let result = filter_skills(&skills, "anything", 10_000);
+        assert_eq!(
+            result.len(),
+            1,
+            "user_invocable is slash-palette, not auto-inject"
+        );
+        assert_eq!(result[0].name, "model-only");
     }
 
     #[test]

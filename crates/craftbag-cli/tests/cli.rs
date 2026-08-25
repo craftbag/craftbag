@@ -1227,6 +1227,87 @@ fn list_help_names_vendor_path_examples() {
 }
 
 #[test]
+fn list_json_includes_invocation_flags() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hidden = extra.path().join("hidden-slash");
+    fs::create_dir_all(&hidden).expect("mkdir");
+    fs::write(
+        hidden.join("SKILL.md"),
+        "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\ndisable_model_invocation: false\n---\nbody\n",
+    )
+    .expect("write");
+    let slash = extra.path().join("slash-only");
+    fs::create_dir_all(&slash).expect("mkdir");
+    fs::write(
+        slash.join("SKILL.md"),
+        "---\nname: slash-only\ndescription: user only\nuser-invocable: true\ndisable-model-invocation: true\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let hidden_row = skills
+        .iter()
+        .find(|s| s["name"] == "hidden-slash")
+        .expect("hidden-slash");
+    assert_eq!(
+        hidden_row["user_invocable"], false,
+        "list JSON must carry user_invocable for slash palettes: {stdout}"
+    );
+    assert_eq!(hidden_row["disable_model_invocation"], false, "{stdout}");
+    let slash_row = skills
+        .iter()
+        .find(|s| s["name"] == "slash-only")
+        .expect("slash-only");
+    assert_eq!(slash_row["user_invocable"], true, "{stdout}");
+    assert_eq!(slash_row["disable_model_invocation"], true, "{stdout}");
+}
+
+#[test]
+fn list_json_defaults_user_invocable_true() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    assert_eq!(v["skills"][0]["name"], "minimal-valid", "{stdout}");
+    assert_eq!(
+        v["skills"][0]["user_invocable"], true,
+        "omitted user_invocable defaults true: {stdout}"
+    );
+    assert_eq!(
+        v["skills"][0]["disable_model_invocation"], false,
+        "omitted disable_model_invocation defaults false: {stdout}"
+    );
+}
+
+#[test]
 fn list_does_not_print_banner() {
     let tmp = tempfile::tempdir().expect("tmp");
     fs::create_dir_all(tmp.path().join(".agents").join("skills")).expect("mkdir");
