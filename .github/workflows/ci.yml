@@ -138,6 +138,9 @@ jobs:
       - run: cargo fuzz run parse_skill --target x86_64-unknown-linux-gnu -- -max_total_time=5
         env:
           RUSTFLAGS: ""
+      - run: cargo fuzz run xml_catalog --target x86_64-unknown-linux-gnu -- -max_total_time=5
+        env:
+          RUSTFLAGS: ""
 
   test-windows:
     name: Test (Windows)

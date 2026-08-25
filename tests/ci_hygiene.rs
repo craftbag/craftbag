@@ -120,6 +120,24 @@ fn parse_jobs_finds_ci_yml_jobs() {
 }
 
 #[test]
+fn fuzz_smoke_runs_parse_skill_and_xml_catalog() {
+    let ci = read_rel(".github/workflows/ci.yml");
+    let fuzz = parse_jobs(&ci)
+        .into_iter()
+        .find(|(n, _)| n == "fuzz-smoke")
+        .map(|(_, body)| body)
+        .expect("fuzz-smoke job");
+    assert!(
+        fuzz.contains("cargo fuzz run parse_skill"),
+        "fuzz-smoke must still run parse_skill: {fuzz}"
+    );
+    assert!(
+        fuzz.contains("cargo fuzz run xml_catalog"),
+        "fuzz-smoke must run xml_catalog so C0 catalog bytes stay XML 1.0: {fuzz}"
+    );
+}
+
+#[test]
 fn workflows_have_dispatch_concurrency_timeouts_and_harden() {
     for path in workflow_files() {
         let rel = rel_display(&path);

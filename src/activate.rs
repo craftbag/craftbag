@@ -735,12 +735,17 @@ mod tests {
     #[test]
     fn format_available_skills_xml_strips_invalid_xml_chars() {
         let mut skill = make_skill("ctrl", &[], 10);
+        skill.name = "n\u{0000}ame".to_owned();
         skill.description = "ok\u{0000}bad\u{0001}\u{0008}\u{000B}\u{000C}\u{000E}".to_owned();
         skill.source_path = Some(PathBuf::from("/tmp/ctrl\u{0000}/SKILL.md"));
         let xml = format_available_skills_xml(&[skill]);
         assert!(
             !xml.chars().any(|c| !super::is_xml10_char(c)),
             "catalog must be XML 1.0: {xml:?}"
+        );
+        assert!(
+            xml.contains("<name>name</name>"),
+            "name must drop NUL: {xml}"
         );
         assert!(
             xml.contains("<description>okbad</description>"),
