@@ -353,15 +353,15 @@ fn load_extra_path(
         .into_iter()
         .map(|name| expanded.join(name))
         .find(|p| skill_md_inode_exists(p));
-    if let Some(skill_file) = package_md {
+    if let Some(skill_file) = package_md.as_ref() {
         // This extra path is that package unless we can prove the SKILL.md
         // is a loose collection root (a real name that is not this
-        // directory, plus sibling packages). `.` / `..` are path
-        // components, not names. Nested SKILL.md stays inside the
-        // package tree.
-        if !extra_path_is_loose_collection(&expanded, &skill_file) {
+        // directory, plus sibling packages or a skills/ tree). `.` / `..`
+        // are path components, not names. Nested SKILL.md stays inside
+        // the package tree.
+        if !extra_path_is_loose_collection(&expanded, skill_file) {
             try_load_skill_file(
-                &skill_file,
+                skill_file,
                 &SkillSource::ExtraPath,
                 ignore,
                 disabled,
@@ -374,6 +374,11 @@ fn load_extra_path(
     }
     let skills_subdir = expanded.join("skills");
     let scan = if skills_subdir.is_dir() {
+        // Collection scan uses extra/skills/, so a leftover extra/SKILL.md
+        // would otherwise vanish. Record it first (stay-under before peek).
+        if let Some(skill_file) = package_md.as_ref() {
+            skip_loose_extra_path_root_skill_md(skill_file, &expanded, ignore, skips);
+        }
         if skip_if_dir_escapes(&skills_subdir, &expanded, skips) {
             return;
         }
@@ -405,10 +410,18 @@ fn dir_has_child_skill_packages(dir: &Path) -> bool {
     })
 }
 
-/// True when this extra-path SKILL.md is a loose root next to sibling packages.
+fn extra_path_has_skills_subdir(dir: &Path) -> bool {
+    dir.join("skills").is_dir()
+}
+
+/// True when this extra-path SKILL.md is a leftover collection root.
+///
+/// A `skills/` subdirectory is the extra-path collection layout, same as
+/// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
+/// is enough to keep scanning that tree.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     if !skill_md_stays_in_package(skill_file) {
-        return false;
+        return extra_path_has_skills_subdir(dir);
     }
     let Ok(content) = read_skill_md(skill_file) else {
         return false;
@@ -425,7 +438,50 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     {
         return false;
     }
-    dir_has_child_skill_packages(dir)
+    dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir)
+}
+
+/// Record a leftover extra-path root SKILL.md when the scan target is
+/// `extra/skills/` (that walk never sees `extra/SKILL.md`).
+fn skip_loose_extra_path_root_skill_md(
+    skill_file: &Path,
+    confine: &Path,
+    ignore: &[IgnorePrefix],
+    skips: &mut Vec<SkillSkip>,
+) {
+    if path_is_ignored(skill_file, ignore) {
+        return;
+    }
+    if !stays_under(skill_file, confine) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "SKILL.md symlink escapes walk root".to_owned(),
+            winner_path: None,
+        });
+        return;
+    }
+    match read_skill_md(skill_file) {
+        Ok(content) => {
+            skips.push(SkillSkip {
+                path: skill_file.to_path_buf(),
+                name: peek_frontmatter_name(&content),
+                kind: SkipKind::RootFile,
+                detail: "put the file in a named subdirectory.".to_owned(),
+                winner_path: None,
+            });
+        }
+        Err(e) => {
+            skips.push(SkillSkip {
+                path: skill_file.to_path_buf(),
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail: e,
+                winner_path: None,
+            });
+        }
+    }
 }
 
 fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
@@ -1418,6 +1474,161 @@ mod tests {
         assert_eq!(why.skips.len(), 1);
         assert!(why.unknown_skill_message().is_none());
         assert!(find_skill_by_name(&report.skills, "demo").is_some());
+    }
+
+    #[test]
+    fn extra_path_root_skill_md_does_not_hide_skills_subdir_package() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover root file\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&extra.path().join("skills").join("public"), "public", "ok");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when extra-path has a leftover SKILL.md: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose") }),
+            "leftover extra-path SKILL.md must be root_file: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "public").is_some());
+        let load_msg = unknown_or_skipped_skill_message("loose", &report.skips);
+        assert!(
+            load_msg.contains("skipped skill: loose"),
+            "leftover root SKILL.md must stay a named skip: {load_msg}"
+        );
+        assert!(!load_msg.contains("unknown skill"), "{load_msg}");
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let why_loose = crate::why(&report, Some("loose"), None, None);
+        assert!(why_loose.loaded.is_empty());
+        assert_eq!(why_loose.skips[0].kind, SkipKind::RootFile);
+        assert!(why_loose.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_named_package_with_skills_subdir_does_not_scan_nested() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        write_skill(&pkg.join("skills").join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "matching extra-path package must not scan its skills/ tree: {:?}",
+            report
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load: {:?}",
+            report.skills
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_escaped_root_skill_md_does_not_hide_skills_subdir() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        fs::write(
+            outside.path().join("secret.md"),
+            "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        let extra = tempfile::tempdir().expect("extra");
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.md"),
+            extra.path().join("SKILL.md"),
+        )
+        .expect("symlink");
+        write_skill(&extra.path().join("skills").join("public"), "public", "ok");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when extra-path SKILL.md escapes: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "stolen"),
+            "must not load escaped extra-path SKILL.md: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "escaped SKILL.md body must not be loaded: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.detail.contains("escapes")
+                    && s.name.is_none()
+                    && s.path.ends_with("SKILL.md")
+            }),
+            "escaped extra-path SKILL.md must be unreadable, not peeked: {:?}",
+            report.skips
+        );
+        let stolen = unknown_or_skipped_skill_message("stolen", &report.skips);
+        assert!(
+            stolen.contains("unknown skill: stolen"),
+            "must not peek stolen from an escaped extra-path SKILL.md: {stolen}"
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[test]

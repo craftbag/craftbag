@@ -924,4 +924,38 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn skills_load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            std::fs::write(
+                tmp.path().join("SKILL.md"),
+                "---\nname: loose\ndescription: leftover\n---\nloose\n",
+            )
+            .expect("write");
+            let pkg = tmp.path().join("skills").join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: from-skills\n---\nfrom-skills\n",
+            )
+            .expect("write");
+            let resp = call(
+                28,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find skills/public behind a leftover extra-path SKILL.md: {text}"
+            );
+            assert!(
+                text.contains("from-skills"),
+                "must load the skills/ package, not the leftover root file: {text}"
+            );
+        });
+    }
 }

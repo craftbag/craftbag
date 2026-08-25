@@ -453,6 +453,46 @@ fn why_extra_path_root_file_and_package_agree_with_load() {
 }
 
 #[test]
+fn load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::write(
+        extra.path().join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover\n---\nloose\n",
+    )
+    .expect("write");
+    let pkg = extra.path().join("skills").join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: from-skills\n---\nfrom-skills\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "skills/public must load: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-skills"),
+        "must load the skills/ package, not the leftover root file: {stdout}"
+    );
+}
+
+#[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
