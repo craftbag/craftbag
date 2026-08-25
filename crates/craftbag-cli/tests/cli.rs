@@ -139,6 +139,38 @@ fn list_empty_user_dir_is_rejected() {
 }
 
 #[test]
+fn list_empty_path_does_not_scan_cwd() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let pkg = cwd.path().join("planted");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: planted\ndescription: from-cwd\n---\nFROM_CWD\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg("")
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success() || stderr.contains("path") || stderr.contains("required"),
+        "empty --path must not crash: status={:?} stderr={stderr}",
+        out.status.code()
+    );
+    assert!(
+        !stdout.contains("planted") && !stdout.contains("FROM_CWD"),
+        "empty --path must not load cwd package: {stdout}"
+    );
+}
+
+#[test]
 fn list_user_dir_relative_joins_cwd() {
     let cwd = tempfile::tempdir().expect("cwd");
     let pkg = cwd.path().join("myskills").join("mine");

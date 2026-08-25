@@ -46,6 +46,53 @@ fn stdio_initialize() {
 }
 
 #[test]
+fn stdio_skills_list_empty_path_does_not_scan_cwd() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let pkg = cwd.path().join("planted");
+    std::fs::create_dir_all(&pkg).expect("mkdir");
+    std::fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: planted\ndescription: from-cwd\n---\nFROM_CWD\n",
+    )
+    .expect("write");
+    let req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "skills_list",
+            "arguments": {"paths": [""]}
+        }
+    });
+    let out = bin()
+        .current_dir(cwd.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .write_stdin(format!("{req}\n"))
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let line = stdout.lines().next().expect("one line");
+    let resp: serde_json::Value =
+        serde_json::from_str(line).unwrap_or_else(|e| panic!("json {e}: {line}"));
+    assert_eq!(
+        resp["result"]["isError"], false,
+        "empty paths item must be ignored: {line}"
+    );
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        !text.contains("planted") && !text.contains("FROM_CWD"),
+        "empty extra-path must not load cwd package: {text}"
+    );
+}
+
+#[test]
 fn stdio_skills_list_corpus() {
     let resp = rpc(&serde_json::json!({
         "jsonrpc": "2.0",
