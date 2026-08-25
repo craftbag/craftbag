@@ -78,6 +78,10 @@ pub struct SkillSummary {
     /// why JSON (empty string).
     #[serde(default)]
     pub description: String,
+    #[serde(
+        serialize_with = "SkillSource::serialize_wire",
+        deserialize_with = "SkillSource::deserialize_host"
+    )]
     pub source: SkillSource,
     pub path: Option<PathBuf>,
     /// Same snake_case key as list JSON / list XML (not Skill camelCase).
@@ -616,5 +620,33 @@ mod tests {
             report.loaded[0].description.is_empty(),
             "omitted description must stay empty: {json}"
         );
+    }
+
+    #[test]
+    fn why_json_source_is_wire_name_like_list_xml() {
+        let mut extra = Skill::new("demo", "d", "body");
+        extra.source = SkillSource::ExtraPath;
+        let mut vendor = Skill::new("home-note", "d", "body");
+        vendor.source = SkillSource::Vendor {
+            name: "claude".to_owned(),
+        };
+        let report = DiscoveryReport {
+            skills: vec![extra, vendor],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["loaded"][0]["source"], "extra", "{json}");
+        assert_eq!(v["loaded"][1]["source"], "claude", "{json}");
+        assert!(
+            json.contains("\"source\":\"extra\"") && !json.contains("extraPath"),
+            "why JSON source must match list XML/TSV extra, not serde extraPath: {json}"
+        );
+        let old: WhyReport = serde_json::from_str(
+            r#"{"loaded":[{"name":"demo","source":"extraPath"}],"skips":[],"activation":[]}"#,
+        )
+        .expect("old extraPath");
+        assert_eq!(old.loaded[0].source, SkillSource::ExtraPath);
     }
 }

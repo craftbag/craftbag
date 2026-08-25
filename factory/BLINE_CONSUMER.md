@@ -41,8 +41,10 @@ A thin Bline module can re-export `Skill`, `SkipKind`, `DiscoveryReport`,
 and `WhyReport` if wire names stay aligned (`camelCase` structs,
 `snake_case` skip kinds). Do not require Bline types in this crate.
 
-`SkillSource::as_str()` for extra-path is `extra`. Serde still emits
-`extraPath`. Use `SkillSource::wire_name()` for a stable display token
+`SkillSource::as_str()` for extra-path is `extra`. Lib serde still emits
+`extraPath`. CLI/MCP list JSON and why JSON `source` use the wire token
+(`extra`, `claude`) so they match list XML/TSV. Use
+`SkillSource::wire_name()` for a stable display token
 and `SkillSource::from_host_token` to accept Bline list / TUI tokens
 (`user`, `agents`, `extra` / `extraPath` / `config`, plus vendor names
 `bline` / `claude` / `cursor` / `grok`, or the on-disk form `.claude`).

@@ -83,13 +83,29 @@ fn validate_strict_corpus_ok() {
 fn list_extra_path_json() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
-    cmd.arg("list")
+    let out = cmd
+        .arg("list")
         .arg("--json")
         .arg("--path")
         .arg(&pkg)
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("minimal-valid"));
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("minimal-valid"), "{stdout}");
+    assert!(
+        stdout.contains("\"source\": \"extra\""),
+        "list JSON source must match list XML/TSV extra: {stdout}"
+    );
+    assert!(
+        !stdout.contains("extraPath"),
+        "list JSON source must not use serde extraPath: {stdout}"
+    );
 }
 
 #[test]
@@ -1357,7 +1373,8 @@ fn list_vendor_claude_loads_user_home_layout() {
         .arg("claude")
         .assert()
         .success()
-        .stdout(predicates::str::contains("home-note"));
+        .stdout(predicates::str::contains("home-note"))
+        .stdout(predicates::str::contains("\"source\": \"claude\""));
 }
 
 #[test]

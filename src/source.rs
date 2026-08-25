@@ -27,9 +27,9 @@ pub enum SkillSource {
 impl SkillSource {
     /// Wire/label name. Unit variants are fixed; vendor uses `name`.
     ///
-    /// [`Self::ExtraPath`] is `"extra"` here. Serde still emits
-    /// `"extraPath"` (`rename_all = "camelCase"`). Hosts that need a
-    /// stable display / list token should call [`Self::wire_name`].
+    /// [`Self::ExtraPath`] is `"extra"` here. Lib serde still emits
+    /// `"extraPath"` (`rename_all = "camelCase"`). CLI/MCP list JSON
+    /// and why JSON `source` use this token so they match list XML/TSV.
     pub fn as_str(&self) -> &str {
         match self {
             Self::User => "user",
@@ -46,6 +46,42 @@ impl SkillSource {
     /// use [`Self::from_host_token`] to accept that.
     pub fn wire_name(&self) -> String {
         self.as_str().to_owned()
+    }
+
+    /// Host list / why JSON: `extra`, `claude`. Not the serde enum tag.
+    pub fn serialize_wire<S: serde::Serializer>(
+        src: &Self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(src.as_str())
+    }
+
+    /// Accept wire tokens and the older serde enum shape (`extraPath`,
+    /// `{vendor:{name}}`).
+    pub fn deserialize_host<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
+        struct HostVisitor;
+        impl<'de> serde::de::Visitor<'de> for HostVisitor {
+            type Value = SkillSource;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a source wire token or serde SkillSource")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<SkillSource, E> {
+                SkillSource::from_host_token(v)
+                    .ok_or_else(|| E::custom(format!("unknown source token: {v}")))
+            }
+
+            fn visit_map<M: serde::de::MapAccess<'de>>(
+                self,
+                map: M,
+            ) -> Result<SkillSource, M::Error> {
+                SkillSource::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            }
+        }
+        deserializer.deserialize_any(HostVisitor)
     }
 
     /// Map a host list / TUI token onto a v1 variant.
@@ -194,6 +230,35 @@ mod tests {
         assert_eq!(SkillSource::ExtraPath.wire_name(), "extra");
         let json = serde_json::to_string(&SkillSource::ExtraPath).expect("ser");
         assert_eq!(json, "\"extraPath\"");
+    }
+
+    #[test]
+    fn host_json_source_is_wire_name_and_accepts_old_enum() {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Row {
+            #[serde(
+                serialize_with = "SkillSource::serialize_wire",
+                deserialize_with = "SkillSource::deserialize_host"
+            )]
+            source: SkillSource,
+        }
+        let extra = serde_json::to_value(&Row {
+            source: SkillSource::ExtraPath,
+        })
+        .expect("ser extra");
+        assert_eq!(extra["source"], "extra", "{extra}");
+        let vendor = serde_json::to_value(&Row {
+            source: SkillSource::Vendor {
+                name: "claude".to_owned(),
+            },
+        })
+        .expect("ser vendor");
+        assert_eq!(vendor["source"], "claude", "{vendor}");
+        let old_extra: Row = serde_json::from_str(r#"{"source":"extraPath"}"#).expect("old extra");
+        assert_eq!(old_extra.source, SkillSource::ExtraPath);
+        let old_vendor: Row =
+            serde_json::from_str(r#"{"source":{"vendor":{"name":"claude"}}}"#).expect("old vendor");
+        assert_eq!(old_vendor.source.as_str(), "claude");
     }
 
     #[test]

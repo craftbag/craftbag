@@ -145,7 +145,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         "skills": report.skills.iter().map(|s| json!({
             "name": s.name,
             "description": s.description,
-            "source": s.source,
+            "source": s.source.as_str(),
             "path": s.source_path,
             "user_invocable": s.user_invocable,
             "disable_model_invocation": s.disable_model_invocation,
@@ -440,6 +440,10 @@ mod tests {
         assert_eq!(
             v["skills"][0]["disable_model_invocation"], false,
             "omitted disable_model_invocation defaults false: {out}"
+        );
+        assert_eq!(
+            v["skills"][0]["source"], "extra",
+            "list JSON source must match list XML extra, not serde extraPath: {out}"
         );
     }
 
