@@ -190,3 +190,4 @@
 {"ts":"2026-08-25T21:58:00Z","job_id":"adversary-after-113-noop","work_source":"adversary","result":"noop","head":"11b27bc516f04ae2d7f8a35285b5c3ff456798db","pr":null,"tests":"leftover extra/skill.md dir green","noop":true}
 {"ts":"2026-08-25T22:12:00Z","job_id":"improve-sanitize-error-tokens-114","work_source":"improve","result":"landed","head":"a34a25fbb31fd6355436784933046f67c5b78e66","pr":114,"tests":"sanitize_error_token; nextest 366","noop":false}
 {"ts":"2026-08-25T22:14:00Z","job_id":"adversary-after-114-noop","work_source":"adversary","result":"noop","head":"a34a25fbb31fd6355436784933046f67c5b78e66","pr":null,"tests":"leftover SKILL.md dir nested evil not loaded","noop":true}
+{"ts":"2026-08-25T22:18:00Z","job_id":"improve-mcp-format-enum-115","work_source":"improve","result":"landed","head":"bcf1021e01bba72e47c96daaafe8dc4f5f991983","pr":115,"tests":"tools_list_advertises_format_enum","noop":false}
