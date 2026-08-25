@@ -249,7 +249,7 @@ fn is_vendor_compat(source: &SkillSource) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ActivationReason, why};
+    use super::{ActivationReason, WhyReport, why};
     use crate::skill::Skill;
     use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
     use crate::source::SkillSource;
@@ -581,6 +581,26 @@ mod tests {
         assert!(
             v["loaded"][0].get("userInvocable").is_none(),
             "why JSON flags must match list snake_case, not Skill camelCase: {json}"
+        );
+    }
+
+    #[test]
+    fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
+        // Cached why JSON from before PR 90 has no invocation flags.
+        let json = r#"{
+            "loaded":[{"name":"demo","source":"agents","path":"/tmp/demo/SKILL.md"}],
+            "skips":[],
+            "activation":[]
+        }"#;
+        let report: WhyReport = serde_json::from_str(json).expect("old why JSON");
+        assert_eq!(report.loaded.len(), 1, "{json}");
+        assert!(
+            report.loaded[0].user_invocable,
+            "omitted user_invocable must stay true (pre-90 default): {json}"
+        );
+        assert!(
+            !report.loaded[0].disable_model_invocation,
+            "omitted disable_model_invocation must stay false (pre-90 default): {json}"
         );
     }
 }
