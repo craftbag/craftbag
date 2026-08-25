@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "improve",
+  "phase": "expand",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "8f6a6e0224bc52b60fb030d422b25bdec1ffd694",
+  "ledger_sha": "a24094adc0b5e9735cd34279b5b303ee68f40ae2",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
   "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi-14-noop",
+    "id": "improve-mpi-15-noop",
     "work_source": "improve",
-    "started_at": "2026-08-25T19:09:37Z",
-    "finished_at": "2026-08-25T19:09:37Z",
+    "started_at": "2026-08-25T19:10:01Z",
+    "finished_at": "2026-08-25T19:10:01Z",
     "result": "noop",
     "head": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
     "pr": null,
     "files": [],
-    "tests": "MPI 14 New Contributor AGENTS local gate matches CI lint/test/deny/stealth/ledger; no CONTRIBUTING by stealth",
+    "tests": "MPI 15 Observability skip/why rows already carry path+kind+code; no production logs",
     "review": "0"
   },
   "last_sha": "7123cbc28fd7268b92df4fa97fdef3dade99a3d9",
-  "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "next_work_source": "expand",
+  "consecutive_noop": 3,
   "ci_status": {
     "main": "green",
     "ready_pr": "unknown",
@@ -34,9 +34,9 @@
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 22,
-    "next_perspective": 15,
-    "clean_cycles": 21
+    "cycle": 23,
+    "next_perspective": 1,
+    "clean_cycles": 22
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
