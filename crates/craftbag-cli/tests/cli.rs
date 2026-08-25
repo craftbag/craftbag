@@ -206,6 +206,21 @@ fn list_xml_available_skills() {
 }
 
 #[test]
+fn list_catalog_prints_markdown_names() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--catalog")
+        .arg("--path")
+        .arg(&pkg)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("## Skills"))
+        .stdout(predicates::str::contains("minimal-valid"))
+        .stdout(predicates::str::contains("Use the host activate command"));
+}
+
+#[test]
 fn list_xml_includes_invocation_flags() {
     let extra = tempfile::tempdir().expect("extra");
     let hidden = extra.path().join("hidden-slash");

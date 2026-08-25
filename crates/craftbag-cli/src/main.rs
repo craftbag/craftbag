@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, Skill, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_load_message, progressive_budgets,
+    format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
     unknown_or_skipped_skill_message, validate_path_with_options, why,
 };
 
@@ -27,6 +27,9 @@ enum Cmd {
         /// Official skills-ref `<available_skills>` XML for host prompts.
         #[arg(long, conflicts_with = "json")]
         xml: bool,
+        /// Markdown catalog (name + description) for host prompts.
+        #[arg(long, conflicts_with_all = ["json", "xml"])]
+        catalog: bool,
         /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
@@ -107,13 +110,24 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         Cmd::List {
             json,
             xml,
+            catalog,
             paths,
             vendor,
             user_dir,
             ascii_names,
         } => {
             let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
-            if xml {
+            if catalog {
+                print!(
+                    "{}",
+                    format_catalog(
+                        &report.skills,
+                        "",
+                        progressive_budgets(8_000),
+                        FormatOptions::default(),
+                    )
+                );
+            } else if xml {
                 print!("{}", format_available_skills_xml(&report.skills));
             } else if json {
                 let v = serde_json::json!({
