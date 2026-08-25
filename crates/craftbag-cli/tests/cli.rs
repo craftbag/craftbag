@@ -222,6 +222,83 @@ fn list_catalog_prints_markdown_names() {
 }
 
 #[test]
+fn list_watch_dirs_lists_extra_collection() {
+    let extra = corpus().join("incumbent/vercel-npx");
+    let extra_skills = extra.join("skills");
+    let extra_s = extra.display().to_string();
+    let skills_s = extra_skills.display().to_string();
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&extra)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.lines().any(|l| l == extra_s),
+        "must watch the extra-path collection root: {stdout}"
+    );
+    assert!(
+        stdout.lines().any(|l| l == skills_s),
+        "must watch extra/skills when discover walks it: {stdout}"
+    );
+    assert!(
+        !stdout.contains("deploy-hint") && !stdout.contains("## Skills"),
+        "watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
+#[test]
+fn list_watch_dirs_omits_named_package_skills_subdir() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let pkg_s = pkg.display().to_string();
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.lines().any(|l| l == pkg_s),
+        "must watch the named extra-path package: {stdout}"
+    );
+    assert!(
+        !stdout
+            .lines()
+            .any(|l| l.ends_with("minimal-valid/skills") || l.ends_with("minimal-valid\\skills")),
+        "named extra-path package must not watch nested skills/: {stdout}"
+    );
+}
+
+#[test]
+fn list_watch_dirs_conflicts_with_json() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--watch-dirs")
+        .arg("--json")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("cannot be used with"));
+}
+
+#[test]
 fn list_xml_includes_invocation_flags() {
     let extra = tempfile::tempdir().expect("extra");
     let hidden = extra.path().join("hidden-slash");
