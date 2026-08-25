@@ -342,7 +342,7 @@ pub fn unknown_list_format(format: &str) -> String {
     if trimmed.is_empty() {
         return "unknown format: empty (use json, xml, catalog, or watch)".to_owned();
     }
-    let shown = trimmed.replace('\u{2014}', "-");
+    let shown = crate::sanitize_error_token(trimmed);
     let lower = trimmed.to_ascii_lowercase();
     match lower.as_str() {
         "json" | "xml" | "catalog" | "watch" => {
@@ -726,6 +726,10 @@ mod tests {
         assert_eq!(
             unknown_list_format("foo\u{2014}bar"),
             "unknown format: foo-bar (use json, xml, catalog, or watch)"
+        );
+        assert_eq!(
+            unknown_list_format("json\nxml"),
+            "unknown format: json?xml (use json, xml, catalog, or watch)"
         );
     }
 

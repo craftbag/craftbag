@@ -164,7 +164,7 @@ pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> Stri
             skip.path.display(),
             skip.detail
         ),
-        None => format!("unknown skill: {name}"),
+        None => format!("unknown skill: {}", crate::sanitize_error_token(name)),
     }
 }
 
@@ -1266,6 +1266,10 @@ mod tests {
         assert_eq!(
             unknown_or_skipped_skill_message("no-such", &[]),
             "unknown skill: no-such"
+        );
+        assert_eq!(
+            unknown_or_skipped_skill_message("no\nsuch", &[]),
+            "unknown skill: no?such"
         );
     }
 

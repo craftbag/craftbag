@@ -1,5 +1,20 @@
 //! Parse and crate errors. Display strings match Bline `SkillParseError`.
 
+/// Echo a host or CLI token on one stderr line.
+///
+/// Control characters become `?`. U+2014 becomes ASCII `-`.
+pub fn sanitize_error_token(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        match c {
+            '\u{2014}' => out.push('-'),
+            c if c.is_control() => out.push('?'),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// Frontmatter or agentskills field failure.
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
 pub enum ParseError {
@@ -24,7 +39,15 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, ParseError};
+    use super::{Error, ParseError, sanitize_error_token};
+
+    #[test]
+    fn sanitize_error_token_keeps_one_line() {
+        assert_eq!(sanitize_error_token("json\nxml"), "json?xml");
+        assert_eq!(sanitize_error_token("foo\0bar"), "foo?bar");
+        assert_eq!(sanitize_error_token("foo\u{2014}bar"), "foo-bar");
+        assert_eq!(sanitize_error_token("   "), "   ");
+    }
 
     #[test]
     fn parse_error_display_matches_bline() {
