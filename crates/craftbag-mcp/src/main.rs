@@ -1148,4 +1148,44 @@ mod tests {
             );
         });
     }
+
+    #[cfg(unix)]
+    fn mkfifo(path: &std::path::Path) {
+        let status = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .expect("run mkfifo");
+        assert!(status.success(), "mkfifo {path:?} failed: {status}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_load_fifo_leftover_extra_path_skill_md_does_not_hide_skills_subdir() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            mkfifo(&tmp.path().join("SKILL.md"));
+            let pkg = tmp.path().join("skills").join("public");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: public\ndescription: from-skills\n---\nfrom-skills\n",
+            )
+            .expect("write");
+            let resp = call(
+                32,
+                "skills_load",
+                json!({"name": "public", "paths": [tmp.path()]}),
+            );
+            assert_eq!(resp["result"]["isError"], false, "{}", call_text(&resp));
+            let text = call_text(&resp);
+            assert!(
+                text.contains("[Activated skill: public]"),
+                "MCP load must find skills/public behind a leftover extra-path FIFO SKILL.md: {text}"
+            );
+            assert!(
+                text.contains("from-skills"),
+                "must load the skills/ package, not the leftover FIFO: {text}"
+            );
+        });
+    }
 }

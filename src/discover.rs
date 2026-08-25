@@ -477,12 +477,15 @@ fn extra_skills_subdir_is_collection(
 /// A `skills/` subdirectory is the extra-path collection layout, same as
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
 /// or a sibling package dir is enough to keep scanning that tree.
+/// A leftover that cannot be peeked (FIFO, socket, chmod, oversized) is
+/// the same for `extra/skills/`. Sibling package dirs alone still match
+/// a named package with nested SKILL.md, so those stay a package.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     if !skill_md_stays_in_package(skill_file) {
         return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
     }
     let Ok(content) = read_skill_md(skill_file) else {
-        return false;
+        return extra_path_has_skills_subdir(dir);
     };
     let Some(name) = peek_frontmatter_name(&content) else {
         return false;
@@ -4421,5 +4424,208 @@ mod tests {
             "extra-path myskills control: {:?}",
             via_path.skills
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_fifo_leftover_skill_md_does_not_hide_skills_subdir() {
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("SKILL.md");
+        mkfifo(&fifo);
+        write_skill(
+            &extra.path().join("skills").join("public"),
+            "public",
+            "from-skills",
+        );
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on leftover extra-path FIFO SKILL.md",
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when leftover extra/SKILL.md is a FIFO: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-skills",
+            "must load the skills/ package, not hang on leftover FIFO SKILL.md: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "leftover FIFO extra/SKILL.md must be unreadable, not peeked: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "FIFO leftover SKILL.md must not become a root_file peek: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let validated = validate_path(&fifo);
+        assert!(
+            !validated.ok,
+            "validate must reject leftover FIFO: {validated:?}"
+        );
+        let vskip = validated.skip.expect("validate skip");
+        assert_eq!(vskip.kind, SkipKind::Unreadable);
+        assert!(
+            vskip.detail.contains("regular file"),
+            "validate/discover must agree leftover FIFO is not a regular file: {}",
+            vskip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_fifo_leftover_and_unreadable_skills_does_not_hide_sibling() {
+        use std::os::unix::fs::PermissionsExt;
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("SKILL.md");
+        mkfifo(&fifo);
+        let skills = extra.path().join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        write_skill(&skills.join("hidden"), "hidden", "locked");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let original = fs::metadata(&skills).expect("meta").permissions();
+        struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = fs::set_permissions(self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(&skills, original.clone());
+        let mut locked = original.clone();
+        locked.set_mode(0o000);
+        fs::set_permissions(&skills, locked).expect("chmod");
+        if fs::read_dir(&skills).is_ok() {
+            return;
+        }
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on leftover FIFO SKILL.md plus unreadable extra/skills/",
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover extra/SKILL.md is a FIFO and extra/skills/ is unreadable: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "hidden"),
+            "must not load packages inside unreadable extra/skills/: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::Unreadable && s.path == skills),
+            "unreadable extra/skills/ must stay a skip row: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "leftover FIFO extra/SKILL.md must stay unreadable: {:?}",
+            report.skips
+        );
+        let loaded = find_skill_by_name(&report.skills, "public").expect("public");
+        assert_eq!(loaded.content.trim(), "from-sibling");
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_unreadable_leftover_skill_md_does_not_hide_skills_subdir() {
+        use std::os::unix::fs::PermissionsExt;
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let leftover = extra.path().join("SKILL.md");
+        fs::write(
+            &leftover,
+            "---\nname: loose\ndescription: leftover\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(
+            &extra.path().join("skills").join("public"),
+            "public",
+            "from-skills",
+        );
+        let original = fs::metadata(&leftover).expect("meta").permissions();
+        struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = fs::set_permissions(self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(&leftover, original.clone());
+        let mut locked = original.clone();
+        locked.set_mode(0o000);
+        fs::set_permissions(&leftover, locked).expect("chmod");
+        if fs::read(&leftover).is_ok() {
+            return;
+        }
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "skills/public must still load when leftover extra/SKILL.md is unreadable: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-skills",
+            "must load the skills/ package, not treat leftover as the extra-path package: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable && s.path.ends_with("SKILL.md") && s.name.is_none()
+            }),
+            "unreadable leftover extra/SKILL.md must be a skip: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
     }
 }

@@ -731,6 +731,52 @@ fn load_unreadable_extra_path_skills_does_not_hide_sibling() {
     );
 }
 
+#[cfg(unix)]
+fn mkfifo(path: &std::path::Path) {
+    let status = std::process::Command::new("mkfifo")
+        .arg(path)
+        .status()
+        .expect("run mkfifo");
+    assert!(status.success(), "mkfifo {path:?} failed: {status}");
+}
+
+#[cfg(unix)]
+#[test]
+fn load_fifo_leftover_extra_path_skill_md_does_not_hide_skills_subdir() {
+    let extra = tempfile::tempdir().expect("extra");
+    mkfifo(&extra.path().join("SKILL.md"));
+    let pkg = extra.path().join("skills").join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: from-skills\n---\nfrom-skills\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "skills/public must load when leftover extra/SKILL.md is a FIFO: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-skills"),
+        "must load the skills/ package, not the leftover FIFO: {stdout}"
+    );
+}
+
 #[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
