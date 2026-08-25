@@ -26,12 +26,43 @@ pub enum SkillSource {
 
 impl SkillSource {
     /// Wire/label name. Unit variants are fixed; vendor uses `name`.
+    ///
+    /// [`Self::ExtraPath`] is `"extra"` here. Serde still emits
+    /// `"extraPath"` (`rename_all = "camelCase"`). Hosts that need a
+    /// stable display / list token should call [`Self::wire_name`].
     pub fn as_str(&self) -> &str {
         match self {
             Self::User => "user",
             Self::Agents => "agents",
             Self::Vendor { name } => name.as_str(),
             Self::ExtraPath => "extra",
+        }
+    }
+
+    /// Stable host-facing token. Same as [`Self::as_str`].
+    ///
+    /// This is not the serde enum token for [`Self::ExtraPath`]
+    /// (`"extraPath"`). Some hosts serialize extra roots as `"config"`;
+    /// use [`Self::from_host_token`] to accept that.
+    pub fn wire_name(&self) -> String {
+        self.as_str().to_owned()
+    }
+
+    /// Map a host list / TUI token onto a v1 variant.
+    ///
+    /// Accepts `user`, `agents`, `extra` / `extraPath` / `config`,
+    /// and vendor tokens `bline` / `claude` / `cursor` / `grok`.
+    /// `project` and `community` have no v1 variant (the host keeps
+    /// those).
+    pub fn from_host_token(token: &str) -> Option<Self> {
+        match token {
+            "user" => Some(Self::User),
+            "agents" => Some(Self::Agents),
+            "extra" | "extraPath" | "config" => Some(Self::ExtraPath),
+            "bline" | "claude" | "cursor" | "grok" => Some(Self::Vendor {
+                name: token.to_owned(),
+            }),
+            _ => None,
         }
     }
 }
@@ -111,5 +142,64 @@ mod tests {
             | SkillSource::Vendor { .. }
             | SkillSource::ExtraPath => {}
         }
+    }
+
+    #[test]
+    fn extra_as_str_is_not_serde_token() {
+        assert_eq!(SkillSource::ExtraPath.as_str(), "extra");
+        assert_eq!(SkillSource::ExtraPath.wire_name(), "extra");
+        let json = serde_json::to_string(&SkillSource::ExtraPath).expect("ser");
+        assert_eq!(json, "\"extraPath\"");
+    }
+
+    #[test]
+    fn from_host_token_maps_list_and_tui_tokens() {
+        assert_eq!(
+            SkillSource::from_host_token("user"),
+            Some(SkillSource::User)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("agents"),
+            Some(SkillSource::Agents)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("extra"),
+            Some(SkillSource::ExtraPath)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("extraPath"),
+            Some(SkillSource::ExtraPath)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("config"),
+            Some(SkillSource::ExtraPath)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("bline"),
+            Some(SkillSource::Vendor {
+                name: "bline".to_owned()
+            })
+        );
+        assert_eq!(
+            SkillSource::from_host_token("claude"),
+            Some(SkillSource::Vendor {
+                name: "claude".to_owned()
+            })
+        );
+        assert_eq!(
+            SkillSource::from_host_token("cursor"),
+            Some(SkillSource::Vendor {
+                name: "cursor".to_owned()
+            })
+        );
+        assert_eq!(
+            SkillSource::from_host_token("grok"),
+            Some(SkillSource::Vendor {
+                name: "grok".to_owned()
+            })
+        );
+        assert_eq!(SkillSource::from_host_token("project"), None);
+        assert_eq!(SkillSource::from_host_token("community"), None);
+        assert_eq!(SkillSource::from_host_token("Project"), None);
     }
 }

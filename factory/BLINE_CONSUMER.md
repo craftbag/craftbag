@@ -41,6 +41,25 @@ A thin Bline module can re-export `Skill`, `SkipKind`, `DiscoveryReport`,
 and `WhyReport` if wire names stay aligned (`camelCase` structs,
 `snake_case` skip kinds). Do not require Bline types in this crate.
 
+`SkillSource::as_str()` for extra-path is `extra`. Serde still emits
+`extraPath`. Use `SkillSource::wire_name()` for a stable display token
+and `SkillSource::from_host_token` to accept Bline list / TUI tokens
+(`user`, `agents`, `extra` / `extraPath` / `config`, plus vendor names
+`bline` / `claude` / `cursor` / `grok`). `project` and `community` have
+no v1 variant. The host keeps those.
+
+Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`) until Bline
+chooses Unicode / NFKC as product policy. Default discover still loads
+`café` / `перевод`. With the option those names are a `parse_error`
+skip (`lowercase alphanumeric and hyphens only`) and do not appear in
+`skills`.
+
+Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
+`walk_cwd_to_git_root`. That list is the same user dir, vendor
+`.{name}/skills` trees, cwd-to-git `.agents/skills` roots, and extra
+paths (package dir or collection `dir` plus `dir/skills`) that
+`discover` walks.
+
 ## Compare on one tree
 
 On the same fixture tree (this repo `tests/corpus/` first):

@@ -18,12 +18,12 @@ pub use activate::{
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
     unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-    with_home_override,
+    walk_cwd_to_git_root, watch_dirs, with_home_override,
 };
 pub use error::{Error, ParseError};
 pub use parse::{
-    normalize_skill_name, parse_skill, skill_name_matches_directory, skill_names_equal,
-    validate_skill_name,
+    normalize_skill_name, parse_skill, skill_name_is_ascii_policy, skill_name_matches_directory,
+    skill_names_equal, validate_skill_name,
 };
 pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,

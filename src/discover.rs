@@ -40,6 +40,9 @@ pub struct DiscoveryOptions {
     /// paths join the discover `cwd`, same as `paths`). Empty or
     /// whitespace-only is ignored.
     pub user_skills_dir: Option<PathBuf>,
+    /// When true, names outside `a-z0-9-` are a `parse_error` skip.
+    /// Default is off: Unicode / NFKC names still load.
+    pub ascii_names: bool,
 }
 
 /// Discover skills for `cwd` using the host-neutral root matrix.
@@ -48,6 +51,73 @@ pub struct DiscoveryOptions {
 /// [`SkillSkip`] rows.
 pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, Error> {
     Ok(discover_report(cwd, opts))
+}
+
+/// Existing directories (and lone extra-path `SKILL.md` files) a host
+/// should watch so hot reload matches [`discover`].
+///
+/// Missing roots are omitted (`notify` cannot watch them). Empty
+/// `user_skills_dir` is omitted. `project` / `community` are not
+/// listed (host-only). Nearest git root first via
+/// [`walk_cwd_to_git_root`].
+pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
+    let cwd = cwd
+        .canonicalize()
+        .unwrap_or_else(|_| lexical_normalize(cwd));
+    let mut out = Vec::new();
+    // Only existing inodes. A notify watch on a missing `.agents/skills`
+    // fails; hosts that want "create later" watch the parent instead.
+    let mut push = |p: PathBuf| {
+        if !p.exists() {
+            return;
+        }
+        if !out.iter().any(|e| e == &p) {
+            out.push(p);
+        }
+    };
+
+    for dir in walk_cwd_to_git_root(&cwd) {
+        push(dir.join(".agents").join("skills"));
+        for name in ["bline", "claude", "cursor", "grok"] {
+            if vendor_enabled(opts, name) {
+                push(dir.join(format!(".{name}")).join("skills"));
+            }
+        }
+    }
+
+    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+        push(user_dir);
+    }
+
+    if let Some(home) = home_dir() {
+        push(home.join(".agents").join("skills"));
+        for name in ["bline", "claude", "cursor", "grok"] {
+            if vendor_enabled(opts, name) {
+                push(home.join(format!(".{name}")).join("skills"));
+            }
+        }
+    }
+
+    for raw in &opts.paths {
+        let Some(expanded) = expand_extra_path_arg(raw, &cwd) else {
+            continue;
+        };
+        if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir()
+        {
+            push(expanded);
+            continue;
+        }
+        if !expanded.is_dir() {
+            continue;
+        }
+        push(expanded.clone());
+        let skills_subdir = expanded.join("skills");
+        if extra_path_has_skills_subdir(&expanded) {
+            push(skills_subdir);
+        }
+    }
+
+    out
 }
 
 /// Case-insensitive skill lookup by frontmatter `name` (NFKC).
@@ -229,47 +299,25 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 &agents,
                 &SkillSource::Agents,
                 &ignore,
-                &opts.disabled,
+                opts,
                 &[],
                 &mut skills,
                 &mut skips,
             );
         }
-        load_vendor_tree(&dir, opts, &ignore, &opts.disabled, &mut skills, &mut skips);
+        load_vendor_tree(&dir, opts, &ignore, &mut skills, &mut skips);
     }
 
-    if let Some(user_dir) = &opts.user_skills_dir {
-        // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
-        // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
-        // Relative user_dir joins discover cwd, same as extra-path.
-        // Empty or whitespace-only is not a directory (not cwd).
-        let user_dir = match user_dir.to_str() {
-            Some(raw) => {
-                let raw = raw.trim();
-                if raw.is_empty() {
-                    None
-                } else {
-                    Some(expand_tilde(raw))
-                }
-            }
-            None => Some(user_dir.clone()),
-        };
-        if let Some(user_dir) = user_dir {
-            let user_dir = if user_dir.is_absolute() {
-                user_dir
-            } else {
-                cwd.join(user_dir)
-            };
-            load_skills_from_dir(
-                &user_dir,
-                &SkillSource::User,
-                &ignore,
-                &opts.disabled,
-                &[],
-                &mut skills,
-                &mut skips,
-            );
-        }
+    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+        load_skills_from_dir(
+            &user_dir,
+            &SkillSource::User,
+            &ignore,
+            opts,
+            &[],
+            &mut skills,
+            &mut skips,
+        );
     }
 
     if let Some(home) = home_dir() {
@@ -279,20 +327,13 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 &agents,
                 &SkillSource::Agents,
                 &ignore,
-                &opts.disabled,
+                opts,
                 &[],
                 &mut skills,
                 &mut skips,
             );
         }
-        load_vendor_tree(
-            &home,
-            opts,
-            &ignore,
-            &opts.disabled,
-            &mut skills,
-            &mut skips,
-        );
+        load_vendor_tree(&home, opts, &ignore, &mut skills, &mut skips);
     }
 
     for raw in &opts.paths {
@@ -300,7 +341,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         if raw.trim().is_empty() {
             continue;
         }
-        load_extra_path(raw, &cwd, &ignore, &opts.disabled, &mut skills, &mut skips);
+        load_extra_path(raw, &cwd, &ignore, opts, &mut skills, &mut skips);
     }
 
     DiscoveryReport { skills, skips }
@@ -310,7 +351,6 @@ fn load_vendor_tree(
     root: &Path,
     opts: &DiscoveryOptions,
     ignore: &[IgnorePrefix],
-    disabled: &[String],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
@@ -330,7 +370,7 @@ fn load_vendor_tree(
         let source = SkillSource::Vendor {
             name: name.to_owned(),
         };
-        load_skills_from_dir(&dir, &source, ignore, disabled, denylist, skills, skips);
+        load_skills_from_dir(&dir, &source, ignore, opts, denylist, skills, skips);
     }
 }
 
@@ -342,24 +382,13 @@ fn load_extra_path(
     raw: &str,
     cwd: &Path,
     ignore: &[IgnorePrefix],
-    disabled: &[String],
+    opts: &DiscoveryOptions,
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
-    let raw = raw.trim();
-    if raw.is_empty() {
+    let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
-    }
-    let expanded = expand_tilde(raw);
-    // Relative extra paths join `cwd`, same as ignore prefixes. `.` / `..`
-    // then keep a real package dir name after lexical collapse. NFKC
-    // compatibility dots (`．`, `‥`, …) are the same components.
-    let expanded = if expanded.is_absolute() {
-        expanded
-    } else {
-        cwd.join(expanded)
     };
-    let expanded = nfkc_dot_path_components(&expanded);
     // `is_file` is false for FIFO/socket/device and symlink-to-those.
     // Still try load so `read_skill_md` can emit unreadable (and not hang).
     if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
@@ -367,7 +396,7 @@ fn load_extra_path(
             &expanded,
             &SkillSource::ExtraPath,
             ignore,
-            disabled,
+            opts,
             &[],
             skills,
             skips,
@@ -392,7 +421,7 @@ fn load_extra_path(
                 skill_file,
                 &SkillSource::ExtraPath,
                 ignore,
-                disabled,
+                opts,
                 &[],
                 skills,
                 skips,
@@ -418,7 +447,7 @@ fn load_extra_path(
         &scan,
         &SkillSource::ExtraPath,
         ignore,
-        disabled,
+        opts,
         &[],
         skills,
         skips,
@@ -556,7 +585,11 @@ fn skip_loose_extra_path_root_skill_md(
     }
 }
 
-fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
+/// Ancestors of `cwd` through the nearest `.git` (cwd first).
+///
+/// When no `.git` exists, the walk is `cwd` only so a nested tree
+/// without a repo does not climb into an unrelated parent.
+pub fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut current = Some(cwd.to_path_buf());
     let mut found_git = false;
@@ -611,6 +644,43 @@ fn nfkc_dot_path_components(path: &Path) -> PathBuf {
         }
     }
     out
+}
+
+fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf> {
+    // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
+    // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
+    // Relative user_dir joins discover cwd, same as extra-path.
+    // Empty or whitespace-only is not a directory (not cwd).
+    let user_dir = user_dir?;
+    let expanded = match user_dir.to_str() {
+        Some(raw) => {
+            let raw = raw.trim();
+            if raw.is_empty() {
+                return None;
+            }
+            expand_tilde(raw)
+        }
+        None => user_dir.to_path_buf(),
+    };
+    Some(if expanded.is_absolute() {
+        expanded
+    } else {
+        cwd.join(expanded)
+    })
+}
+
+fn expand_extra_path_arg(raw: &str, cwd: &Path) -> Option<PathBuf> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let expanded = expand_tilde(raw);
+    let expanded = if expanded.is_absolute() {
+        expanded
+    } else {
+        cwd.join(expanded)
+    };
+    Some(nfkc_dot_path_components(&expanded))
 }
 
 fn expand_tilde(raw: &str) -> PathBuf {
@@ -726,7 +796,7 @@ fn load_skills_from_dir(
     dir: &Path,
     source: &SkillSource,
     ignore: &[IgnorePrefix],
-    disabled: &[String],
+    opts: &DiscoveryOptions,
     denylist: &[&str],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
@@ -807,15 +877,7 @@ fn load_skills_from_dir(
             });
             continue;
         }
-        try_load_skill_file(
-            &skill_file,
-            source,
-            ignore,
-            disabled,
-            denylist,
-            skills,
-            skips,
-        );
+        try_load_skill_file(&skill_file, source, ignore, opts, denylist, skills, skips);
     }
 }
 
@@ -823,7 +885,7 @@ fn try_load_skill_file(
     skill_file: &Path,
     source: &SkillSource,
     ignore: &[IgnorePrefix],
-    disabled: &[String],
+    opts: &DiscoveryOptions,
     denylist: &[&str],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
@@ -859,7 +921,21 @@ fn try_load_skill_file(
 
     match parse_skill(&content) {
         Ok(mut skill) => {
-            if disabled
+            if opts.ascii_names && !crate::parse::skill_name_is_ascii_policy(&skill.name) {
+                skips.push(SkillSkip {
+                    path: skill_file.to_path_buf(),
+                    name: Some(skill.name.clone()),
+                    kind: SkipKind::ParseError,
+                    detail: ParseError::InvalidYaml(
+                        "name must be lowercase alphanumeric and hyphens only".to_owned(),
+                    )
+                    .to_string(),
+                    winner_path: None,
+                });
+                return;
+            }
+            if opts
+                .disabled
                 .iter()
                 .any(|d| crate::parse::skill_names_equal(d, &skill.name))
             {
@@ -988,7 +1064,7 @@ mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, discover, find_skill_by_name,
         unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-        with_home_override,
+        walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -2325,6 +2401,158 @@ mod tests {
         );
         assert_eq!(why.loaded[0].name, "перевод");
         assert!(why.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn extra_path_unicode_loads_by_default_and_skips_when_ascii_names() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("café"), "café", "coffee");
+        let on = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            on.skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["café"]
+        );
+        assert!(on.skips.is_empty());
+        let off = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ascii_names: true,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            off.skills.is_empty(),
+            "ascii_names must not load café: {:?}",
+            off.skills
+        );
+        assert!(
+            off.skips.iter().any(|s| {
+                s.kind == SkipKind::ParseError
+                    && s.name.as_deref() == Some("café")
+                    && s.detail.contains("lowercase alphanumeric and hyphens only")
+            }),
+            "ascii_names must skip café as parse_error: {:?}",
+            off.skips
+        );
+        let ascii_ok = tempfile::tempdir().expect("ascii");
+        write_skill(&ascii_ok.path().join("ok-name"), "ok-name", "ascii");
+        let keep = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![ascii_ok.path().display().to_string()],
+                ascii_names: true,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            keep.skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["ok-name"]
+        );
+    }
+
+    #[test]
+    fn walk_cwd_to_git_root_stops_at_nested_git() {
+        let outer = tempfile::tempdir().expect("outer");
+        fs::create_dir_all(outer.path().join(".git")).expect("outer git");
+        let inner = outer.path().join("inner");
+        fs::create_dir_all(inner.join(".git")).expect("inner git");
+        let walked = walk_cwd_to_git_root(&inner);
+        assert_eq!(walked, vec![inner.clone()]);
+        let no_git = tempfile::tempdir().expect("plain");
+        let nested = no_git.path().join("a").join("b");
+        fs::create_dir_all(&nested).expect("mkdir");
+        assert_eq!(walk_cwd_to_git_root(&nested), vec![nested]);
+    }
+
+    #[test]
+    fn watch_dirs_lists_cwd_vendor_user_and_extra() {
+        let root = tempfile::tempdir().expect("root");
+        fs::create_dir_all(root.path().join(".git")).expect("git");
+        let agents = root.path().join(".agents").join("skills");
+        let bline = root.path().join(".bline").join("skills");
+        fs::create_dir_all(&agents).expect("agents");
+        fs::create_dir_all(&bline).expect("bline");
+        let user = tempfile::tempdir().expect("user");
+        let pkg = tempfile::tempdir().expect("pkg");
+        write_skill(&pkg.path().join("wanted"), "wanted", "pkg");
+        let collection = tempfile::tempdir().expect("col");
+        write_skill(&collection.path().join("skills").join("hint"), "hint", "c");
+        let same = |dirs: &[PathBuf], want: &std::path::Path| {
+            dirs.iter().any(|p| {
+                p == want
+                    || p.canonicalize()
+                        .ok()
+                        .zip(want.canonicalize().ok())
+                        .is_some_and(|(a, b)| a == b)
+            })
+        };
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                root.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["bline".to_owned()],
+                    user_skills_dir: Some(user.path().to_path_buf()),
+                    paths: vec![
+                        pkg.path().join("wanted").display().to_string(),
+                        collection.path().display().to_string(),
+                    ],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(same(&dirs, &agents), "cwd .agents/skills: {dirs:?}");
+        assert!(same(&dirs, &bline), "vendor .bline/skills: {dirs:?}");
+        assert!(
+            !dirs.iter().any(|p| p.ends_with(".claude/skills")),
+            "disabled vendor must not appear: {dirs:?}"
+        );
+        assert!(same(&dirs, user.path()), "user dir: {dirs:?}");
+        assert!(
+            same(&dirs, &pkg.path().join("wanted")),
+            "extra package: {dirs:?}"
+        );
+        assert!(
+            same(&dirs, collection.path()),
+            "extra collection root: {dirs:?}"
+        );
+        assert!(
+            same(&dirs, &collection.path().join("skills")),
+            "extra collection skills/: {dirs:?}"
+        );
+        let empty_user = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                root.path(),
+                &DiscoveryOptions {
+                    user_skills_dir: Some(PathBuf::from("   ")),
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            empty_user.iter().all(|p| p != root.path()),
+            "empty user_dir must not become cwd: {empty_user:?}"
+        );
+        assert!(
+            !empty_user
+                .iter()
+                .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("   ")),
+            "empty user_dir omitted: {empty_user:?}"
+        );
     }
 
     #[cfg(unix)]
