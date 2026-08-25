@@ -8,9 +8,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_list_format, unknown_or_skipped_skill_message, watch_dirs, why,
+    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, discover, find_skill_by_name,
+    format_available_skills_xml, format_catalog, format_load_message, parse_list_format,
+    progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -116,7 +116,8 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let opts = opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?;
     let format = args.format.as_deref().unwrap_or("json");
-    if format == "watch" {
+    let format = parse_list_format(format)?;
+    if format == ListFormat::Watch {
         let mut out = String::new();
         for dir in watch_dirs(&cwd, &opts) {
             out.push_str(&dir.display().to_string());
@@ -125,19 +126,16 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         return Ok(out);
     }
     let report = discover(&cwd, &opts).map_err(|e| e.to_string())?;
-    if format == "xml" {
+    if format == ListFormat::Xml {
         return Ok(format_available_skills_xml(&report.skills));
     }
-    if format == "catalog" {
+    if format == ListFormat::Catalog {
         return Ok(format_catalog(
             &report.skills,
             "",
             progressive_budgets(8_000),
             FormatOptions::default(),
         ));
-    }
-    if format != "json" {
-        return Err(unknown_list_format(format));
     }
     serde_json::to_string_pretty(&json!({
         "skills": report.skills.iter().map(|s| json!({
@@ -687,6 +685,21 @@ mod tests {
             assert!(
                 err.contains("unknown format: JSON") && err.contains("did you mean json?"),
                 "must point at the lowercase token: {err}"
+            );
+        });
+    }
+
+    #[test]
+    fn list_padded_format_is_json() {
+        empty_home(|| {
+            let text = list_json(DiscoverArgs {
+                format: Some(" json ".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("padded json");
+            assert!(
+                text.contains("\"skills\""),
+                "spaces around json must still emit JSON: {text}"
             );
         });
     }

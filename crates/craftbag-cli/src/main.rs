@@ -6,9 +6,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use craftbag::{
-    DiscoveryOptions, FormatOptions, Skill, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_list_format, unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs,
+    DiscoveryOptions, FormatOptions, ListFormat, Skill, SkillSource, discover, find_skill_by_name,
+    format_available_skills_xml, format_catalog, format_load_message, parse_list_format,
+    progressive_budgets, unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs,
     why,
 };
 
@@ -289,13 +289,12 @@ fn list_output_mode(
     format: Option<String>,
 ) -> Result<ListOutput, String> {
     if let Some(format) = format {
-        return match format.as_str() {
-            "json" => Ok(ListOutput::Json),
-            "xml" => Ok(ListOutput::Xml),
-            "catalog" => Ok(ListOutput::Catalog),
-            "watch" => Ok(ListOutput::Watch),
-            other => Err(unknown_list_format(other)),
-        };
+        return Ok(match parse_list_format(&format)? {
+            ListFormat::Json => ListOutput::Json,
+            ListFormat::Xml => ListOutput::Xml,
+            ListFormat::Catalog => ListOutput::Catalog,
+            ListFormat::Watch => ListOutput::Watch,
+        });
     }
     if watch {
         return Ok(ListOutput::Watch);
