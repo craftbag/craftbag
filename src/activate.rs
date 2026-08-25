@@ -342,12 +342,13 @@ pub fn unknown_list_format(format: &str) -> String {
     if trimmed.is_empty() {
         return "unknown format: empty (use json, xml, catalog, or watch)".to_owned();
     }
+    let shown = trimmed.replace('\u{2014}', "-");
     let lower = trimmed.to_ascii_lowercase();
     match lower.as_str() {
         "json" | "xml" | "catalog" | "watch" => {
-            format!("unknown format: {trimmed} (did you mean {lower}?)")
+            format!("unknown format: {shown} (did you mean {lower}?)")
         }
-        _ => format!("unknown format: {trimmed} (use json, xml, catalog, or watch)"),
+        _ => format!("unknown format: {shown} (use json, xml, catalog, or watch)"),
     }
 }
 
@@ -721,6 +722,10 @@ mod tests {
         assert_eq!(
             unknown_list_format("   "),
             "unknown format: empty (use json, xml, catalog, or watch)"
+        );
+        assert_eq!(
+            unknown_list_format("foo\u{2014}bar"),
+            "unknown format: foo-bar (use json, xml, catalog, or watch)"
         );
     }
 
