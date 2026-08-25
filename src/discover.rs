@@ -543,15 +543,15 @@ fn extra_skills_subdir_is_collection(
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
 /// or a sibling package dir is enough to keep scanning that tree.
 /// A leftover that cannot be peeked (FIFO, socket, chmod, oversized, no
-/// frontmatter name, a blank/whitespace peek, an invalid peek that
-/// case-folds/trims to this extra-path dir, or a valid Unicode peek that
-/// `ascii_names` still cannot load) is the same for `extra/skills/` as a
-/// directory, and for `extra/skills` as any inode (file, FIFO, socket,
-/// dangling symlink). A non-directory `extra/skills` is not a usable
-/// collection; fall back to `extra/` so sibling packages still load. Do
-/// not open `extra/skills` as a file (FIFO hang). Sibling package dirs
-/// alone still match a named package with nested SKILL.md, so those stay
-/// a package.
+/// frontmatter name, a blank/whitespace peek, a `.` / `..` peek including
+/// NFKC forms, an invalid peek that case-folds/trims to this extra-path
+/// dir, or a valid Unicode peek that `ascii_names` still cannot load) is
+/// the same for `extra/skills/` as a directory, and for `extra/skills` as
+/// any inode (file, FIFO, socket, dangling symlink). A non-directory
+/// `extra/skills` is not a usable collection; fall back to `extra/` so
+/// sibling packages still load. Do not open `extra/skills` as a file
+/// (FIFO hang). Sibling package dirs alone still match a named package
+/// with nested SKILL.md, so those stay a package.
 fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bool) -> bool {
     if !skill_md_stays_in_package(skill_file) {
         return extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir);
@@ -561,7 +561,6 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bo
     };
     // Missing peek name is the same miss as a leftover that cannot be
     // read: extra/skills as any inode is the collection layout (PR 71).
-    // `.` / `..` below stay a package so nested SKILL.md is not scanned.
     let Some(name) = peek_frontmatter_name(&content) else {
         return extra_path_has_skills_entry(dir);
     };
@@ -574,9 +573,10 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path, ascii_names: bo
     }
     // `.` / `..` (including NFKC compatibility forms) never match a
     // package dir after lexical collapse, and they are not skill names.
-    // Stay a package so nested SKILL.md is not scanned.
+    // Same extra/skills signal as a missing peek. Stay a package when
+    // extra/skills is absent so nested SKILL.md is not scanned.
     if crate::parse::is_path_component_skill_name(&name) {
-        return false;
+        return extra_path_has_skills_entry(dir);
     }
     // parse_frontmatter also accepts invalid names (`DEMO`, `name: "demo "`).
     // skill_name_matches_directory case-folds and trims, so those look like
@@ -5655,5 +5655,115 @@ mod tests {
             "package dir remains the identity: {msg}"
         );
         assert!(!msg.contains("unknown skill"), "msg={msg}");
+    }
+
+    #[test]
+    fn leftover_path_component_peek_and_skills_dir_still_loads_collection() {
+        // `.` / `..` (and NFKC forms) cannot load. extra/skills is the
+        // collection, same as a missing peek. Nested siblings stay inside
+        // the leftover package (see extra_path_dot_or_dotdot_*).
+        for peeked in [".", "..", "．", "‥", "․", "﹒", "︰"] {
+            let cwd = tempfile::tempdir().expect("cwd");
+            let extra_root = tempfile::tempdir().expect("extra-root");
+            let extra = extra_root.path().join("wanted");
+            fs::create_dir_all(&extra).expect("mkdir extra");
+            fs::write(
+                extra.join("SKILL.md"),
+                format!("---\nname: {peeked}\ndescription: leftover path-like name\n---\nloose\n"),
+            )
+            .expect("write");
+            write_skill(&extra.join("skills").join("public"), "public", "ok");
+            let opts = DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(cwd.path(), &opts);
+            assert_eq!(
+                report
+                    .skills
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["public"],
+                "skills/public must still load when leftover extra/SKILL.md peeks `{peeked}`: skills={:?} skips={:?}",
+                report.skills,
+                report.skips
+            );
+            assert!(
+                report
+                    .skips
+                    .iter()
+                    .any(|s| { s.kind == SkipKind::RootFile && s.path.ends_with("SKILL.md") }),
+                "path-component leftover extra/SKILL.md must stay a skip for `{peeked}`: {:?}",
+                report.skips
+            );
+            let why = crate::why(&report, Some("public"), None, None);
+            assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+            assert!(why.unknown_skill_message().is_none());
+            let home = tempfile::tempdir().expect("home");
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                watch_paths_contain(&dirs, &extra),
+                "must watch extra/ for a path-component leftover collection (`{peeked}`): {dirs:?}"
+            );
+            assert!(
+                watch_paths_contain(&dirs, &extra.join("skills")),
+                "watch_dirs must list extra/skills when leftover peeks `{peeked}`: {dirs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn leftover_path_component_peek_and_skills_file_does_not_hide_sibling() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra_root = tempfile::tempdir().expect("extra-root");
+        let extra = extra_root.path().join("wanted");
+        fs::create_dir_all(&extra).expect("mkdir extra");
+        fs::write(
+            extra.join("SKILL.md"),
+            "---\nname: .\ndescription: leftover path-like name\n---\nloose\n",
+        )
+        .expect("write");
+        fs::write(extra.join("skills"), "not-a-dir").expect("skills file");
+        write_skill(&extra.join("public"), "public", "from-sibling");
+        let opts = DiscoveryOptions {
+            paths: vec![extra.display().to_string()],
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when leftover extra/SKILL.md peeks `.` and extra/skills is a file: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].content.trim(),
+            "from-sibling",
+            "must load the sibling package, not the path-component leftover: {:?}",
+            report.skills[0]
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &extra),
+            "must watch extra/ when leftover peeks `.` and extra/skills is a file: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra.join("skills")),
+            "watch_dirs must not list extra/skills when it is a file: {dirs:?}"
+        );
     }
 }
