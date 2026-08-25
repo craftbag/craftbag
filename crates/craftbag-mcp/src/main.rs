@@ -466,21 +466,23 @@ mod tests {
         let extra = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/corpus/incumbent/vercel-npx");
         let extra_s = extra.display().to_string();
-        let skills_s = extra.join("skills").display().to_string();
+        let skills = extra.join("skills");
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![extra_s.clone()],
+                paths: vec![extra_s],
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
             .expect("list")
         });
         assert!(
-            out.lines().any(|l| l == extra_s),
+            out.lines()
+                .any(|l| std::path::Path::new(l) == extra.as_path()),
             "must watch the extra-path collection root: {out}"
         );
         assert!(
-            out.lines().any(|l| l == skills_s),
+            out.lines()
+                .any(|l| std::path::Path::new(l) == skills.as_path()),
             "must watch extra/skills when discover walks it: {out}"
         );
         assert!(

@@ -1,6 +1,10 @@
 use assert_cmd::Command;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn stdout_has_path(stdout: &str, want: &Path) -> bool {
+    stdout.lines().any(|l| Path::new(l) == want)
+}
 
 fn bin() -> (tempfile::TempDir, Command) {
     let home = tempfile::tempdir().expect("home");
@@ -225,8 +229,6 @@ fn list_catalog_prints_markdown_names() {
 fn list_watch_dirs_lists_extra_collection() {
     let extra = corpus().join("incumbent/vercel-npx");
     let extra_skills = extra.join("skills");
-    let extra_s = extra.display().to_string();
-    let skills_s = extra_skills.display().to_string();
     let (_home, mut cmd) = bin();
     let out = cmd
         .arg("list")
@@ -243,11 +245,11 @@ fn list_watch_dirs_lists_extra_collection() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.lines().any(|l| l == extra_s),
+        stdout_has_path(&stdout, &extra),
         "must watch the extra-path collection root: {stdout}"
     );
     assert!(
-        stdout.lines().any(|l| l == skills_s),
+        stdout_has_path(&stdout, &extra_skills),
         "must watch extra/skills when discover walks it: {stdout}"
     );
     assert!(
@@ -259,7 +261,6 @@ fn list_watch_dirs_lists_extra_collection() {
 #[test]
 fn list_watch_dirs_omits_named_package_skills_subdir() {
     let pkg = corpus().join("agentskills/minimal-valid");
-    let pkg_s = pkg.display().to_string();
     let (_home, mut cmd) = bin();
     let out = cmd
         .arg("list")
@@ -276,7 +277,7 @@ fn list_watch_dirs_omits_named_package_skills_subdir() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.lines().any(|l| l == pkg_s),
+        stdout_has_path(&stdout, &pkg),
         "must watch the named extra-path package: {stdout}"
     );
     assert!(
