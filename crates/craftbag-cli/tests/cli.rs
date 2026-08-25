@@ -504,6 +504,40 @@ fn list_format_watch_lists_extra_collection() {
 }
 
 #[test]
+fn list_format_watch_dirs_matches_watch() {
+    let extra = corpus().join("incumbent/vercel-npx");
+    let extra_skills = extra.join("skills");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("watch-dirs")
+        .arg("--path")
+        .arg(&extra)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &extra),
+        "--format watch-dirs must list the extra-path collection root: {stdout}"
+    );
+    assert!(
+        stdout_has_path(&stdout, &extra_skills),
+        "--format watch-dirs must list extra/skills: {stdout}"
+    );
+    assert!(
+        !stdout.contains("deploy-hint") && !stdout.contains("## Skills"),
+        "--format watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
+#[test]
 fn list_format_uppercase_suggests_lowercase() {
     let (_home, mut cmd) = bin();
     let out = cmd

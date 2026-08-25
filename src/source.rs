@@ -86,7 +86,7 @@ impl SkillSource {
 
     /// Map a host list / TUI token onto a v1 variant.
     ///
-    /// Accepts `user`, `agents`, `extra` / `extraPath` / `config`,
+    /// Accepts `user`, `agents`, `extra` / `extraPath` / `extra_path` / `config`,
     /// and vendor tokens `bline` / `claude` / `cursor` / `grok`
     /// (a leading dot is the on-disk tree: `.claude` is `claude`).
     /// Vendor spellings match [`Self::parse_vendor_token`]: ASCII case
@@ -100,7 +100,7 @@ impl SkillSource {
         match token.trim() {
             "user" => Some(Self::User),
             "agents" => Some(Self::Agents),
-            "extra" | "extraPath" | "config" => Some(Self::ExtraPath),
+            "extra" | "extraPath" | "extra_path" | "config" => Some(Self::ExtraPath),
             _ => None,
         }
     }
@@ -257,6 +257,9 @@ mod tests {
         assert_eq!(vendor["source"], "claude", "{vendor}");
         let old_extra: Row = serde_json::from_str(r#"{"source":"extraPath"}"#).expect("old extra");
         assert_eq!(old_extra.source, SkillSource::ExtraPath);
+        let snake_extra: Row =
+            serde_json::from_str(r#"{"source":"extra_path"}"#).expect("snake extra");
+        assert_eq!(snake_extra.source, SkillSource::ExtraPath);
         let old_vendor: Row =
             serde_json::from_str(r#"{"source":{"vendor":{"name":"claude"}}}"#).expect("old vendor");
         assert_eq!(old_vendor.source.as_str(), "claude");
@@ -278,6 +281,10 @@ mod tests {
         );
         assert_eq!(
             SkillSource::from_host_token("extraPath"),
+            Some(SkillSource::ExtraPath)
+        );
+        assert_eq!(
+            SkillSource::from_host_token("extra_path"),
             Some(SkillSource::ExtraPath)
         );
         assert_eq!(

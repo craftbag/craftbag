@@ -46,7 +46,7 @@ and `WhyReport` if wire names stay aligned (`camelCase` structs,
 (`extra`, `claude`) so they match list XML/TSV. Use
 `SkillSource::wire_name()` for a stable display token
 and `SkillSource::from_host_token` to accept Bline list / TUI tokens
-(`user`, `agents`, `extra` / `extraPath` / `config`, plus vendor names
+(`user`, `agents`, `extra` / `extraPath` / `extra_path` / `config`, plus vendor names
 `bline` / `claude` / `cursor` / `grok`, or the on-disk form `.claude`).
 Vendor spellings match `parse_vendor_roots` (`.Claude` / `Claude` are
 `claude`). `project` and `community` have no v1 variant. The host keeps
@@ -57,8 +57,9 @@ CLI `--vendor` and MCP `vendor` reject unknown tokens
 catalog. `extra` is `--path` / `paths`, not a vendor name.
 
 CLI `list --format` uses the same tokens as MCP `skills_list`
-(`json`, `xml`, `catalog`, `watch`). The older `--json` / `--xml` /
-`--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml` /
+(`json`, `xml`, `catalog`, `watch`). `watch-dirs` and `watch_dirs`
+are the `--watch-dirs` flag name (same walk). The older `--json` /
+`--xml` / `--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml` /
 `list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
 `why` JSON `loaded` rows include
 `description` plus `user_invocable` and `disable_model_invocation` so
