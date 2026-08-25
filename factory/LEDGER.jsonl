@@ -195,3 +195,4 @@
 {"ts":"2026-08-25T22:25:00Z","job_id":"improve-mcp-vendor-enum-116","work_source":"improve","result":"landed","head":"6abab8b3ca906a486a9f9ac0b124e8dd7ca1afe8","pr":116,"tests":"tools_list_advertises_vendor_enum","noop":false}
 {"ts":"2026-08-25T22:32:00Z","job_id":"adversary-after-116-noop","work_source":"adversary","result":"noop","head":"6abab8b3ca906a486a9f9ac0b124e8dd7ca1afe8","pr":null,"tests":"116 schema-only","noop":true}
 {"ts":"2026-08-25T22:46:10Z","job_id":"improve-extra-path-single-read-117","work_source":"improve","result":"landed","head":"77250c347c191fe0b9dd505063ed604f71b4c4fd","pr":117,"tests":"extra_path_classify_named_package_prefetches_body","noop":false}
+{"ts":"2026-08-25T22:47:30Z","job_id":"adversary-after-117-noop","work_source":"adversary","result":"noop","head":"77250c347c191fe0b9dd505063ed604f71b4c4fd","pr":null,"tests":"leftover SKILL.md dir + extra/skills green","noop":true}
