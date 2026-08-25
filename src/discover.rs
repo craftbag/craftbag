@@ -543,7 +543,8 @@ fn extra_skills_subdir_is_collection(
 /// sibling package dirs. An escaped root SKILL.md is not peeked; `skills/`
 /// or a sibling package dir is enough to keep scanning that tree.
 /// A leftover that cannot be peeked (FIFO, socket, chmod, oversized, no
-/// frontmatter name, or a blank/whitespace peek) is the same for
+/// frontmatter name, a blank/whitespace peek, or an invalid peek that
+/// case-folds/trims to this extra-path dir) is the same for
 /// `extra/skills/` as a directory, and for `extra/skills` as any inode
 /// (file, FIFO, socket, dangling symlink). A non-directory `extra/skills`
 /// is not a usable collection; fall back to `extra/` so sibling packages
@@ -573,9 +574,17 @@ fn extra_path_is_loose_collection(dir: &Path, skill_file: &Path) -> bool {
     // `.` / `..` (including NFKC compatibility forms) never match a
     // package dir after lexical collapse, and they are not skill names.
     // Stay a package so nested SKILL.md is not scanned.
-    if crate::parse::is_path_component_skill_name(&name)
-        || skill_name_matches_directory(skill_file, &name)
-    {
+    if crate::parse::is_path_component_skill_name(&name) {
+        return false;
+    }
+    // parse_frontmatter also accepts invalid names (`DEMO`, `name: "demo "`).
+    // skill_name_matches_directory case-folds and trims, so those look like
+    // this extra-path package. They cannot load. Same extra/skills signal
+    // as a missing peek. Do not use siblings: nested SKILL.md would load.
+    if skill_name_matches_directory(skill_file, &name) {
+        if crate::parse::validate_skill_name(&name).is_err() {
+            return extra_path_has_skills_entry(dir);
+        }
         return false;
     }
     dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir)
@@ -5402,5 +5411,116 @@ mod tests {
             watch_paths_contain(&dirs, &extra.path().join("skills")),
             "watch_dirs must list extra/skills when discover walks that collection: {dirs:?}"
         );
+    }
+
+    #[test]
+    fn leftover_invalid_matching_peek_and_skills_dir_still_loads_collection() {
+        // parse_frontmatter accepts `DEMO` / `name: "demo "`. Those peek
+        // as this extra-path dir after case fold / trim, but cannot load.
+        for peeked in ["DEMO", "\"demo \""] {
+            let cwd = tempfile::tempdir().expect("cwd");
+            let extra_root = tempfile::tempdir().expect("extra-root");
+            let extra = extra_root.path().join("demo");
+            fs::create_dir_all(&extra).expect("mkdir extra");
+            fs::write(
+                extra.join("SKILL.md"),
+                format!("---\nname: {peeked}\ndescription: leftover invalid name\n---\nloose\n"),
+            )
+            .expect("write");
+            write_skill(&extra.join("skills").join("public"), "public", "ok");
+            let opts = DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(cwd.path(), &opts);
+            assert_eq!(
+                report
+                    .skills
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["public"],
+                "skills/public must still load when leftover extra/SKILL.md peeks `{peeked}` matching extra dir: skills={:?} skips={:?}",
+                report.skills,
+                report.skips
+            );
+            assert!(
+                report
+                    .skips
+                    .iter()
+                    .any(|s| { s.kind == SkipKind::RootFile && s.path.ends_with("SKILL.md") }),
+                "invalid-matching leftover extra/SKILL.md must stay a skip for `{peeked}`: {:?}",
+                report.skips
+            );
+            let why = crate::why(&report, Some("public"), None, None);
+            assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+            assert!(why.unknown_skill_message().is_none());
+            let home = tempfile::tempdir().expect("home");
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                watch_paths_contain(&dirs, &extra),
+                "must watch extra/ for an invalid-matching leftover collection (`{peeked}`): {dirs:?}"
+            );
+            assert!(
+                watch_paths_contain(&dirs, &extra.join("skills")),
+                "watch_dirs must list extra/skills when leftover peeks `{peeked}` matching extra dir: {dirs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn leftover_invalid_matching_peek_does_not_scan_nested_sibling() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra_root = tempfile::tempdir().expect("extra-root");
+        let extra = extra_root.path().join("demo");
+        fs::create_dir_all(&extra).expect("mkdir extra");
+        fs::write(
+            extra.join("SKILL.md"),
+            "---\nname: DEMO\ndescription: leftover invalid name\n---\nloose\n",
+        )
+        .expect("write");
+        write_skill(&extra.join("evil"), "evil", "NESTED_SECRET");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "invalid matching peek must not prove a sibling collection: {:?}",
+            report
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::ParseError && s.path.ends_with("demo/SKILL.md") }),
+            "leftover DEMO extra/SKILL.md must stay a parse_error package skip: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "demo/SKILL.md with name DEMO must not become a root_file skip: {:?}",
+            report.skips
+        );
+        assert!(find_skill_by_name(&report.skills, "evil").is_none());
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert!(
+            msg.contains("skipped skill: demo") || msg.contains("skipped skill: DEMO"),
+            "package dir remains the identity: {msg}"
+        );
+        assert!(!msg.contains("unknown skill"), "msg={msg}");
     }
 }
