@@ -235,6 +235,10 @@ pub fn truncate_skill_body_for_budget(content: &str, token_budget: usize) -> Str
 }
 
 /// Build a cheap catalog fragment: name + description only.
+///
+/// Each skill is one markdown list item. Literal `|` / folded `>`
+/// descriptions can contain newlines; those become spaces so
+/// `list --catalog` and MCP `format=catalog` stay one item per skill.
 pub fn format_catalog(
     skills: &[Skill],
     context: &str,
@@ -257,7 +261,11 @@ pub fn format_catalog(
     let ranked_len = ranked.len();
 
     for skill in &ranked {
-        let line = format!("- **{}**: {}\n", skill.name, skill.description);
+        let line = format!(
+            "- **{}**: {}\n",
+            catalog_one_line(&skill.name),
+            catalog_one_line(&skill.description)
+        );
         if shown >= budgets.catalog_max_entries {
             omitted = omitted.saturating_add(1);
             continue;
@@ -401,6 +409,12 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     }
     out.push_str("</available_skills>\n");
     out
+}
+
+/// One catalog list-item field: collapse Unicode whitespace (including
+/// newlines from a literal `|` description) to a single space.
+fn catalog_one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn xml_escape(s: &str) -> String {
@@ -785,6 +799,30 @@ mod tests {
                 "case-only hint must name the same token parse accepts"
             );
         }
+    }
+
+    #[test]
+    fn format_catalog_flattens_multiline_description() {
+        let mut skill = make_skill("lit-skill", &[], 10);
+        skill.description = "line one\nline two\r\nline three".to_owned();
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&[skill], "", budgets, FormatOptions::default());
+        let item = cat
+            .lines()
+            .find(|l| l.contains("lit-skill"))
+            .unwrap_or_else(|| panic!("catalog must list the skill: {cat}"));
+        assert_eq!(
+            item, "- **lit-skill**: line one line two line three",
+            "list --catalog / MCP catalog must keep one markdown item: {cat}"
+        );
+        assert!(
+            !cat.contains("line one\nline two"),
+            "literal `|` description must not split the catalog list: {cat}"
+        );
     }
 
     #[test]

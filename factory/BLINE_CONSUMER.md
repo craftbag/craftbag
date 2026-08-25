@@ -64,7 +64,9 @@ are the `--watch-dirs` flag name (same walk). The older `--json` /
 `why` JSON `loaded` rows include
 `description` plus `user_invocable` and `disable_model_invocation` so
 a host can build a slash palette or prompt catalog without re-parsing
-SKILL.md. List XML also emits `<source>` (`agents`, `user`, `extra`,
+SKILL.md. Catalog markdown is one list item per skill: newlines in a
+literal `|` or folded `>` description become spaces (JSON and XML keep
+the raw description). List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serde. Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`
