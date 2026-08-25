@@ -377,6 +377,102 @@ fn list_watch_dirs_conflicts_with_json() {
 }
 
 #[test]
+fn list_format_json_matches_json_flag() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("json")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("minimal-valid"), "{stdout}");
+    assert!(
+        stdout.contains("\"source\": \"extra\""),
+        "--format json must match --json extra source: {stdout}"
+    );
+}
+
+#[test]
+fn list_format_watch_lists_extra_collection() {
+    let extra = corpus().join("incumbent/vercel-npx");
+    let extra_skills = extra.join("skills");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("watch")
+        .arg("--path")
+        .arg(&extra)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &extra),
+        "--format watch must list the extra-path collection root: {stdout}"
+    );
+    assert!(
+        stdout_has_path(&stdout, &extra_skills),
+        "--format watch must list extra/skills: {stdout}"
+    );
+    assert!(
+        !stdout.contains("deploy-hint") && !stdout.contains("## Skills"),
+        "--format watch must not load SKILL.md: {stdout}"
+    );
+}
+
+#[test]
+fn list_format_unknown_names_valid_tokens() {
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--format")
+        .arg("yaml")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "unknown format must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown format: yaml"),
+        "must name the bad token: {stderr}"
+    );
+    assert!(
+        stderr.contains("json")
+            && stderr.contains("xml")
+            && stderr.contains("catalog")
+            && stderr.contains("watch"),
+        "must name MCP-matching tokens: {stderr}"
+    );
+}
+
+#[test]
+fn list_format_conflicts_with_json() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--format")
+        .arg("json")
+        .arg("--json")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("cannot be used with"));
+}
+
+#[test]
 fn list_xml_includes_invocation_flags() {
     let extra = tempfile::tempdir().expect("extra");
     let hidden = extra.path().join("hidden-slash");
@@ -1448,6 +1544,8 @@ fn list_help_names_vendor_path_examples() {
         .stdout(predicates::str::contains("--vendor"))
         .stdout(predicates::str::contains("claude"))
         .stdout(predicates::str::contains("--path"))
+        .stdout(predicates::str::contains("--format"))
+        .stdout(predicates::str::contains("json, xml, catalog, watch"))
         .stdout(predicates::str::contains("Example:"));
 }
 

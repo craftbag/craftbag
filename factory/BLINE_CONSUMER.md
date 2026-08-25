@@ -56,8 +56,11 @@ CLI `--vendor` and MCP `vendor` reject unknown tokens
 (`SkillSource::parse_vendor_roots`). A typo is an error, not an empty
 catalog. `extra` is `--path` / `paths`, not a vendor name.
 
-CLI `list --json` / `list --xml` / `list --catalog`, MCP `skills_list`
-(json, xml, or catalog), and `why` JSON `loaded` rows include
+CLI `list --format` uses the same tokens as MCP `skills_list`
+(`json`, `xml`, `catalog`, `watch`). The older `--json` / `--xml` /
+`--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml` /
+`list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
+`why` JSON `loaded` rows include
 `description` plus `user_invocable` and `disable_model_invocation` so
 a host can build a slash palette or prompt catalog without re-parsing
 SKILL.md. List XML also emits `<source>` (`agents`, `user`, `extra`,

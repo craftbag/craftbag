@@ -33,6 +33,9 @@ enum Cmd {
         /// Print notify-watch roots (same walk as discover). Does not load SKILL.md.
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
+        /// Same tokens as MCP skills_list format: json, xml, catalog, watch.
+        #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
+        format: Option<String>,
         /// Extra package or collection root (not a project walk). Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
@@ -115,12 +118,14 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             xml,
             catalog,
             watch_dirs: watch,
+            format,
             paths,
             vendor,
             user_dir,
             ascii_names,
         } => {
-            if watch {
+            let mode = list_output_mode(json, xml, catalog, watch, format)?;
+            if matches!(mode, ListOutput::Watch) {
                 let (cwd, opts) = discovery_opts(&paths, &vendor, user_dir, ascii_names)?;
                 for dir in watch_dirs(&cwd, &opts) {
                     println!("{}", dir.display());
@@ -128,7 +133,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 return Ok(ExitCode::SUCCESS);
             }
             let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
-            if catalog {
+            if matches!(mode, ListOutput::Catalog) {
                 print!(
                     "{}",
                     format_catalog(
@@ -138,9 +143,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                         FormatOptions::default(),
                     )
                 );
-            } else if xml {
+            } else if matches!(mode, ListOutput::Xml) {
                 print!("{}", format_available_skills_xml(&report.skills));
-            } else if json {
+            } else if matches!(mode, ListOutput::Json) {
                 let v = serde_json::json!({
                     "skills": report.skills.iter().map(skill_json).collect::<Vec<_>>(),
                     "skips": report.skips,
@@ -265,6 +270,47 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
         }
     }
+}
+
+enum ListOutput {
+    Tsv,
+    Json,
+    Xml,
+    Catalog,
+    Watch,
+}
+
+fn list_output_mode(
+    json: bool,
+    xml: bool,
+    catalog: bool,
+    watch: bool,
+    format: Option<String>,
+) -> Result<ListOutput, String> {
+    if let Some(format) = format {
+        return match format.as_str() {
+            "json" => Ok(ListOutput::Json),
+            "xml" => Ok(ListOutput::Xml),
+            "catalog" => Ok(ListOutput::Catalog),
+            "watch" => Ok(ListOutput::Watch),
+            other => Err(format!(
+                "unknown format: {other} (use json, xml, catalog, or watch)"
+            )),
+        };
+    }
+    if watch {
+        return Ok(ListOutput::Watch);
+    }
+    if catalog {
+        return Ok(ListOutput::Catalog);
+    }
+    if xml {
+        return Ok(ListOutput::Xml);
+    }
+    if json {
+        return Ok(ListOutput::Json);
+    }
+    Ok(ListOutput::Tsv)
 }
 
 fn discovery_opts(
