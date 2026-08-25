@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use craftbag::{
     DiscoveryOptions, FormatOptions, SkillSource, discover, find_skill_by_name,
     format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_or_skipped_skill_message, watch_dirs, why,
+    unknown_list_format, unknown_or_skipped_skill_message, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -110,16 +110,6 @@ fn opts_from(
         ascii_names,
         ..DiscoveryOptions::default()
     })
-}
-
-fn unknown_list_format(format: &str) -> String {
-    let lower = format.to_ascii_lowercase();
-    match lower.as_str() {
-        "json" | "xml" | "catalog" | "watch" => {
-            format!("unknown format: {format} (did you mean {lower}?)")
-        }
-        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
-    }
 }
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {

@@ -8,7 +8,8 @@ use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, Skill, SkillSource, discover, find_skill_by_name,
     format_available_skills_xml, format_catalog, format_load_message, progressive_budgets,
-    unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs, why,
+    unknown_list_format, unknown_or_skipped_skill_message, validate_path_with_options, watch_dirs,
+    why,
 };
 
 #[derive(Parser)]
@@ -309,16 +310,6 @@ fn list_output_mode(
         return Ok(ListOutput::Json);
     }
     Ok(ListOutput::Tsv)
-}
-
-fn unknown_list_format(format: &str) -> String {
-    let lower = format.to_ascii_lowercase();
-    match lower.as_str() {
-        "json" | "xml" | "catalog" | "watch" => {
-            format!("unknown format: {format} (did you mean {lower}?)")
-        }
-        _ => format!("unknown format: {format} (use json, xml, catalog, or watch)"),
-    }
 }
 
 fn discovery_opts(
