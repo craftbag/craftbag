@@ -401,11 +401,12 @@ fn load_extra_path(
         }
     }
     let skills_subdir = expanded.join("skills");
-    // Stay-under before treating extra/skills/ as the collection root.
-    // An escaped skills/ symlink is not a collection; fall back to extra/
-    // so sibling packages still load. Record leftover extra/SKILL.md only
-    // when the scan target is extra/skills/ (that walk never sees it).
-    let scan = if skills_subdir.is_dir() && !skip_if_dir_escapes(&skills_subdir, &expanded, skips) {
+    // Stay-under and readable before treating extra/skills/ as the
+    // collection root. An escaped or unreadable skills/ is not a usable
+    // collection; fall back to extra/ so sibling packages still load.
+    // Record leftover extra/SKILL.md only when the scan target is
+    // extra/skills/ (that walk never sees it).
+    let scan = if extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips) {
         if let Some(skill_file) = package_md.as_ref() {
             skip_loose_extra_path_root_skill_md(skill_file, &expanded, ignore, skips);
         }
@@ -439,6 +440,36 @@ fn dir_has_child_skill_packages(dir: &Path) -> bool {
 
 fn extra_path_has_skills_subdir(dir: &Path) -> bool {
     dir.join("skills").is_dir()
+}
+
+/// True when `extra/skills/` is a readable collection that stays under
+/// `extra/`. Escape and permission failures fall back to scanning
+/// `extra/` so sibling packages next to `skills/` still load.
+fn extra_skills_subdir_is_collection(
+    skills_subdir: &Path,
+    confine: &Path,
+    skips: &mut Vec<SkillSkip>,
+) -> bool {
+    if !skills_subdir.is_dir() {
+        return false;
+    }
+    if skip_if_dir_escapes(skills_subdir, confine, skips) {
+        return false;
+    }
+    match std::fs::read_dir(skills_subdir) {
+        Ok(_) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => {
+            skips.push(SkillSkip {
+                path: skills_subdir.to_path_buf(),
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail: e.to_string(),
+                winner_path: None,
+            });
+            false
+        }
+    }
 }
 
 /// True when this extra-path SKILL.md is a leftover collection root.
@@ -3746,6 +3777,68 @@ mod tests {
         assert!(why_loose.loaded.is_empty());
         assert_eq!(why_loose.skips[0].kind, SkipKind::RootFile);
         assert!(why_loose.unknown_skill_message().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_unreadable_skills_subdir_does_not_hide_sibling() {
+        use std::os::unix::fs::PermissionsExt;
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let skills = extra.path().join("skills");
+        fs::create_dir_all(&skills).expect("mkdir");
+        write_skill(&skills.join("hidden"), "hidden", "locked");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let original = fs::metadata(&skills).expect("meta").permissions();
+        struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = fs::set_permissions(self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(&skills, original.clone());
+        let mut locked = original.clone();
+        locked.set_mode(0o000);
+        fs::set_permissions(&skills, locked).expect("chmod");
+        if fs::read_dir(&skills).is_ok() {
+            return;
+        }
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load when extra/skills/ is unreadable: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skills.iter().all(|s| s.name != "hidden"),
+            "must not load packages inside unreadable extra/skills/: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::Unreadable && s.path == skills),
+            "unreadable extra/skills/ must be a skip row: {:?}",
+            report.skips
+        );
+        let loaded = find_skill_by_name(&report.skills, "public").expect("public");
+        assert_eq!(loaded.content.trim(), "from-sibling");
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
     }
 
     #[test]

@@ -673,6 +673,64 @@ fn load_escaped_extra_path_skills_does_not_hide_sibling() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_unreadable_extra_path_skills_does_not_hide_sibling() {
+    use std::os::unix::fs::PermissionsExt;
+    let extra = tempfile::tempdir().expect("extra");
+    let skills = extra.path().join("skills");
+    fs::create_dir_all(skills.join("hidden")).expect("mkdir");
+    fs::write(
+        skills.join("hidden").join("SKILL.md"),
+        "---\nname: hidden\ndescription: locked\n---\nlocked\n",
+    )
+    .expect("write");
+    let pkg = extra.path().join("public");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: public\ndescription: sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let original = fs::metadata(&skills).expect("meta").permissions();
+    struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, self.1.clone());
+        }
+    }
+    let _restore = Restore(&skills, original.clone());
+    let mut locked = original.clone();
+    locked.set_mode(0o000);
+    fs::set_permissions(&skills, locked).expect("chmod");
+    if fs::read_dir(&skills).is_ok() {
+        return;
+    }
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("public")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: public]"),
+        "sibling public must load when extra/skills/ is unreadable: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load the sibling package, not the locked skills/ tree: {stdout}"
+    );
+}
+
 #[test]
 fn load_minimal_valid() {
     let pkg = corpus().join("agentskills/minimal-valid");
