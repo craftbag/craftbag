@@ -226,6 +226,7 @@ Bline: `discover_skills_for_cwd_report` (the doctor skip source).
 | `incumbent/claude-user` | `HOME` + `--vendor claude` | load `home-note` from `~/.claude/skills` | load `home-note` | expected (source wire: vendor vs Claude) |
 | `incumbent/vercel-npx` | extra path | load `deploy-hint` via `skills/` | load `deploy-hint` via `skills/` | match |
 | `incumbent/vercel-npx/skills` | extra path is the `skills/` collection | load `deploy-hint` | load `deploy-hint` | match |
+| `incumbent/cursor-project` | cwd + `--vendor cursor` | load `create-rule` source vendor cursor | not compared | craftbag prove |
 
 `--path` on a project root (`lowercase-skill-md`) does not walk
 `.agents/skills` (extra-path package/collection rules). Bline cwd
