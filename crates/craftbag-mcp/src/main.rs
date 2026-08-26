@@ -1471,6 +1471,49 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_present_null_user_invocable_peels_parse_error() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let pkg = tmp.path().join("demo");
+            std::fs::create_dir_all(&pkg).expect("mkdir");
+            std::fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: demo\ndescription: d\nuser_invocable: null\n---\nbody\n",
+            )
+            .expect("write");
+            let parent = tmp.path().to_string_lossy().into_owned();
+            let resp = call(
+                88,
+                "skills_load",
+                json!({"name": "demo", "paths": [parent]}),
+            );
+            assert_eq!(resp["result"]["isError"], true);
+            assert_eq!(
+                resp["result"]["error_kind"], "parse_error",
+                "present-null bool must reuse parse_error, not unknown_skill: {resp}"
+            );
+            let text = call_text(&resp);
+            assert_eq!(
+                resp["result"]["error"], text,
+                "present-null must peel SkillMiss.error: {resp}"
+            );
+            assert!(
+                text.contains("skipped skill: demo") && text.contains("parse_error"),
+                "load must name the skipped package: {text}"
+            );
+            assert!(
+                !text.contains("unknown skill"),
+                "present-null must not look missing: {text}"
+            );
+            let path = resp["result"]["path"].as_str().expect("path");
+            assert!(
+                path.ends_with("demo/SKILL.md") || path.ends_with("demo\\SKILL.md"),
+                "MCP load skip must peel SkillMiss.path: {resp}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_load_parse_skip_without_frontmatter_name_is_not_unknown() {
         empty_home(|| {
             let tmp = tempfile::tempdir().expect("tmp");
