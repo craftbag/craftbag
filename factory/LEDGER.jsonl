@@ -334,3 +334,4 @@
 {"ts": "2026-08-26T14:28:10Z", "job_id": "adversary-after-189-catalog-fuzz-green", "work_source": "adversary", "result": "noop", "head": "6de0a195d31912a639fa4ee1466e5d2722da98bc", "pr": null, "tests": "xml_catalog already exists", "noop": true}
 {"ts": "2026-08-26T14:38:40Z", "job_id": "improve-mpi28-contrib-gate-tools", "work_source": "improve", "result": "landed", "head": "fbf2c62075802a124fa730b25ac959eb61786c9e", "pr": 190, "tests": "msrv 5 passed", "noop": false}
 {"ts": "2026-08-26T14:39:10Z", "job_id": "adversary-after-190-gate-tools-green", "work_source": "adversary", "result": "noop", "head": "fbf2c62075802a124fa730b25ac959eb61786c9e", "pr": null, "tests": "no second AGENTS souvenir", "noop": true}
+{"ts": "2026-08-26T14:50:00Z", "job_id": "improve-mpi28-obs-winner-path", "work_source": "improve", "result": "landed", "head": "7a2911bdd7408813d0864273e706e2d4e2c78cf9", "pr": 191, "tests": "winner_path peel", "noop": false}
