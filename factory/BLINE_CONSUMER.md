@@ -108,7 +108,8 @@ newlines in a literal `|` or folded `>` description or
 `when-to-use` become spaces (JSON and XML keep the raw text). When `when-to-use` is set, the catalog line appends
 `Use when: …`. List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
-not Skill's camelCase serde. Omitted flags on old why JSON keep the
+not Skill's camelCase serialize. Skill deserialize also accepts those
+snake_case keys so a list/why row is not silently defaulted. Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`
 false). `filter_skills` / `why.activation` still use only
 `disable_model_invocation` for auto-inject.
