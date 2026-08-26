@@ -3797,6 +3797,13 @@ mod tests {
         );
         assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
         assert_eq!(report.skills[0].name, "public");
+        assert!(
+            report.skips.iter().all(|s| {
+                s.name.as_deref() != Some("secret") && !s.path.ends_with("secret/SKILL.md")
+            }),
+            "ignore is silent (no Ignored skip row): {:?}",
+            report.skips
+        );
     }
 
     fn project_with_secret_and_public() -> tempfile::TempDir {
@@ -3822,6 +3829,13 @@ mod tests {
         );
         assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
         assert_eq!(report.skills[0].name, "public");
+        assert!(
+            report.skips.iter().all(|s| {
+                s.name.as_deref() != Some("secret") && !s.path.ends_with("secret/SKILL.md")
+            }),
+            "ignore is silent (no Ignored skip row): {:?}",
+            report.skips
+        );
     }
 
     #[test]

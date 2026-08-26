@@ -6,12 +6,11 @@ fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
     match craftbag::parse_list_format(&text) {
         Ok(_) => {
+            let token = text.trim();
             assert!(
-                matches!(
-                    text.trim(),
-                    "json" | "xml" | "catalog" | "watch" | "watch-dirs" | "watch_dirs"
-                ),
-                "only lowercase tokens parse: {text:?}"
+                craftbag::ListFormat::CANONICAL_TOKENS.contains(&token)
+                    || craftbag::ListFormat::ALIAS_TOKENS.contains(&token),
+                "only table tokens parse: {text:?}"
             );
         }
         Err(msg) => {

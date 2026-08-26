@@ -2216,6 +2216,12 @@ fn list_help_format_names_json_skills_skips() {
         format_help.contains("<available_skills>"),
         "list --format must name xml <available_skills> like MCP skills_list format: {format_help}"
     );
+    for token in craftbag::ListFormat::CANONICAL_TOKENS {
+        assert!(
+            format_help.contains(token),
+            "list --format help must name canonical token {token}: {format_help}"
+        );
+    }
 }
 
 #[test]
