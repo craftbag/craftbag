@@ -46,7 +46,10 @@ pub struct Skill {
     #[serde(deserialize_with = "SkillSource::deserialize_host")]
     pub source: SkillSource,
     /// Path to the SKILL.md file (set during discovery, None for in-memory skills).
-    #[serde(skip)]
+    ///
+    /// Serialize stays omitted. Deserialize accepts list/why `path` so a
+    /// host row is not silently path-less.
+    #[serde(default, skip_serializing, alias = "path")]
     pub source_path: Option<PathBuf>,
     /// agentskills optional: license name or license file reference.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -311,6 +314,38 @@ mod tests {
         assert!(
             !out.contains("\"source\":\"claude\""),
             "Skill serialize must not switch vendor to the list/why string: {out}"
+        );
+    }
+
+    #[test]
+    fn serde_accepts_list_why_path() {
+        // List / why JSON uses `path`. Skill `source_path` is omitted on
+        // serialize. A host that feeds a list/why row back into Skill
+        // must not stay path-less (PR 203 leftover on `path`).
+        let json = r#"{
+            "name": "x",
+            "description": "y",
+            "content": "z",
+            "source": "extra",
+            "path": "/tmp/x/SKILL.md"
+        }"#;
+        let skill: Skill = serde_json::from_str(json).expect("list/why path");
+        assert_eq!(
+            skill.source_path.as_deref(),
+            Some(std::path::Path::new("/tmp/x/SKILL.md")),
+            "list/why path must populate source_path, not stay skipped None"
+        );
+        assert_eq!(
+            skill.package_root(),
+            Some(std::path::Path::new("/tmp/x")),
+            "list/why path must keep package_root for the load envelope"
+        );
+        let out = serde_json::to_string(&skill).expect("ser");
+        assert!(
+            !out.contains("sourcePath")
+                && !out.contains("source_path")
+                && !out.contains("\"path\""),
+            "Skill serialize must still omit source_path: {out}"
         );
     }
 }
