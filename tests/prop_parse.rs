@@ -1,4 +1,5 @@
-//! Property tests for `parse_skill` (name charset, description length, missing ---).
+//! Property tests for `parse_skill` (name charset, description length, missing ---,
+//! present-null invocation flags).
 
 use craftbag::{
     ParseError, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS,
@@ -13,6 +14,24 @@ fn valid_name() -> impl Strategy<Value = String> {
             let n = s.chars().count();
             (1..=64).contains(&n)
         })
+}
+
+/// Scalars that `parse_bool_yaml` must not accept.
+///
+/// Unit fixtures lock `null` / `~` / empty / `maybe`. This generator
+/// also covers other words and digits so a silent omitted default
+/// cannot return for an unlisted token. Snake keys only; hyphen
+/// aliases stay in the unit table.
+fn non_bool_yaml_scalar() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(String::new()),
+        Just("~".to_owned()),
+        Just("null".to_owned()),
+        "[2-9]{1,6}",
+        "[a-z]{2,12}".prop_filter("not a yaml bool word", |s| {
+            !matches!(s.as_str(), "true" | "false" | "yes" | "no" | "on" | "off")
+        }),
+    ]
 }
 
 proptest! {
@@ -112,6 +131,24 @@ proptest! {
         prop_assert!(validate_skill_name(&name).is_err());
         let md = format!("---\nname: {name}\ndescription: d\n---\n");
         prop_assert!(parse_skill(&md).is_err());
+    }
+
+    #[test]
+    fn present_non_bool_invocation_flag_is_error(
+        raw in non_bool_yaml_scalar(),
+        user_invocable in any::<bool>(),
+    ) {
+        let key = if user_invocable {
+            "user_invocable"
+        } else {
+            "disable_model_invocation"
+        };
+        let md = format!("---\nname: ok-name\ndescription: d\n{key}: {raw}\n---\nbody\n");
+        let err = parse_skill(&md).unwrap_err();
+        prop_assert!(
+            matches!(err, ParseError::InvalidYaml(ref m) if m.contains(key)),
+            "{key}: {raw:?} -> {err}"
+        );
     }
 }
 
