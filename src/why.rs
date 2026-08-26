@@ -90,6 +90,24 @@ pub struct SkillSummary {
     /// Same snake_case key as list JSON / list XML (not Skill camelCase).
     #[serde(rename = "disable_model_invocation", default)]
     pub disable_model_invocation: bool,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    /// Omitted on cached pre-this-PR why JSON (`None`).
+    #[serde(rename = "argument_hint", default)]
+    pub argument_hint: Option<String>,
+}
+
+impl From<&Skill> for SkillSummary {
+    fn from(skill: &Skill) -> Self {
+        Self {
+            name: skill.name.clone(),
+            description: skill.description.clone(),
+            source: skill.source.clone(),
+            path: skill.source_path.clone(),
+            user_invocable: skill.user_invocable,
+            disable_model_invocation: skill.disable_model_invocation,
+            argument_hint: skill.argument_hint.clone(),
+        }
+    }
 }
 
 fn default_user_invocable() -> bool {
@@ -111,11 +129,15 @@ impl WhyReport {
     /// Message when a name query matched neither a loaded skill nor a skip.
     ///
     /// Omitted name is not a query. Whitespace-only name is a query and
-    /// is unknown.
+    /// is unknown. The echoed name uses [`crate::sanitize_error_token`]
+    /// so CLI/MCP stderr stays one line, same as load.
     pub fn unknown_skill_message(&self) -> Option<String> {
         let want = self.query.as_deref()?;
         if self.loaded.is_empty() && self.skips.is_empty() {
-            Some(format!("unknown skill: {want}"))
+            Some(format!(
+                "unknown skill: {}",
+                crate::sanitize_error_token(want)
+            ))
         } else {
             None
         }
@@ -124,8 +146,9 @@ impl WhyReport {
 
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
-/// Loaded rows include `description`, `user_invocable`, and
-/// `disable_model_invocation` (same keys as list JSON / list XML).
+/// Loaded rows include `description`, `user_invocable`,
+/// `disable_model_invocation`, and `argument_hint` (same keys as list
+/// JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -141,14 +164,7 @@ pub fn why(
         .skills
         .iter()
         .filter(|s| name_matches(q, &s.name))
-        .map(|s| SkillSummary {
-            name: s.name.clone(),
-            description: s.description.clone(),
-            source: s.source.clone(),
-            path: s.source_path.clone(),
-            user_invocable: s.user_invocable,
-            disable_model_invocation: s.disable_model_invocation,
-        })
+        .map(SkillSummary::from)
         .collect();
     let skips: Vec<SkillSkip> = report
         .skips
@@ -397,6 +413,25 @@ mod tests {
     }
 
     #[test]
+    fn why_unknown_skill_message_stays_one_line() {
+        let report = DiscoveryReport::default();
+        let why = why(&report, Some("no\nsuch"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(
+            msg, "unknown skill: no?such",
+            "why must sanitize like load so CLI/MCP stderr stays one line"
+        );
+        assert_eq!(msg.lines().count(), 1, "msg={msg:?}");
+        let why = super::why(&report, Some("no\u{2028}such"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(msg, "unknown skill: no?such", "msg={msg:?}");
+        assert!(!msg.contains('\u{2028}'), "msg={msg:?}");
+        let why = super::why(&report, Some("no\u{2029}such"), None, None);
+        let msg = why.unknown_skill_message().expect("unknown");
+        assert_eq!(msg, "unknown skill: no?such", "msg={msg:?}");
+    }
+
+    #[test]
     fn why_unicode_query_matches_nfkc_loaded_name() {
         let skill = Skill::new("перевод", "d", "body");
         let report = DiscoveryReport {
@@ -599,6 +634,32 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_argument_hint() {
+        let mut hinted = Skill::new("slash-hint", "d", "body");
+        hinted.argument_hint = Some("[name]".to_owned());
+        let bare = Skill::new("no-hint", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["argument_hint"], "[name]",
+            "why JSON must carry argument_hint like list JSON/XML: {json}"
+        );
+        assert!(
+            v["loaded"][1]["argument_hint"].is_null(),
+            "omitted argument_hint is null, not a camelCase key: {json}"
+        );
+        assert!(
+            v["loaded"][0].get("argumentHint").is_none(),
+            "why JSON argument_hint must match list snake_case, not Skill camelCase: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -619,6 +680,10 @@ mod tests {
         assert!(
             report.loaded[0].description.is_empty(),
             "omitted description must stay empty: {json}"
+        );
+        assert!(
+            report.loaded[0].argument_hint.is_none(),
+            "omitted argument_hint must stay None: {json}"
         );
     }
 

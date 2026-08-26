@@ -62,9 +62,19 @@ are the `--watch-dirs` flag name (same walk). The older `--json` /
 `--xml` / `--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml` /
 `list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
 `why` JSON `loaded` rows include
-`description` plus `user_invocable` and `disable_model_invocation` so
-a host can build a slash palette or prompt catalog without re-parsing
-SKILL.md. List XML also emits `<source>` (`agents`, `user`, `extra`,
+`description` plus `user_invocable`, `disable_model_invocation`, and
+`argument_hint` so a host can build a slash palette or prompt catalog
+without re-parsing SKILL.md. Omitted `argument_hint` is JSON `null`
+and an empty `<argument_hint>` tag. List and why JSON both serialize
+`SkillSummary` so those keys cannot drift. CLI `load` and MCP
+`skills_load` print `Argument hint: …` in the envelope when
+frontmatter `argument-hint` is set (same text as list/why JSON).
+Omitted hint is no line. Description, License, Compatibility,
+Argument hint, User arguments, and Activate hint fold Unicode
+whitespace to spaces so each stays one envelope line. The skill
+body after `---` keeps its newlines. Catalog markdown is one list item per skill: newlines in a
+literal `|` or folded `>` description become spaces (JSON and XML keep
+the raw description). List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serde. Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`

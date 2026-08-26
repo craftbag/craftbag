@@ -813,6 +813,19 @@ fn why_unknown_exits_1() {
         .output()
         .expect("run");
     assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill: no-such-skill"),
+        "why must name the miss like load: {stderr}"
+    );
+    assert_eq!(
+        stderr
+            .lines()
+            .filter(|l| l.contains("unknown skill"))
+            .count(),
+        1,
+        "why unknown must stay one stderr line: {stderr:?}"
+    );
 }
 
 #[test]
@@ -1544,6 +1557,95 @@ fn load_minimal_valid() {
 }
 
 #[test]
+fn load_includes_argument_hint() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("slash-hint");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-hint");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("slash-hint")
+        .arg("--args")
+        .arg("alice")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Argument hint: [name]"))
+        .stdout(predicates::str::contains("User arguments: alice"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("no-hint")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: no-hint]"),
+        "bare skill must still load: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Argument hint:"),
+        "omitted argument_hint must not add a load line: {stdout}"
+    );
+}
+
+#[test]
+fn load_flattens_multiline_description() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("lit-skill");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: lit-skill\ndescription: |\n  line one\n  line two\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("lit-skill")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let header = stdout.split("\n---\n").next().expect("header");
+    assert!(
+        header.contains("Description: line one line two\n"),
+        "load must fold a `|` description to one envelope line: {stdout}"
+    );
+    assert!(
+        !header.contains("line one\nline two"),
+        "raw `|` description must not split the envelope: {stdout}"
+    );
+}
+
+#[test]
 fn load_unicode_name_skips_with_ascii_names() {
     let extra = tempfile::tempdir().expect("extra");
     let pkg = extra.path().join("café");
@@ -1725,6 +1827,18 @@ fn list_help_names_vendor_path_examples() {
 }
 
 #[test]
+fn load_help_names_args_and_argument_hint() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--args"))
+        .stdout(predicates::str::contains("argument-hint"))
+        .stdout(predicates::str::contains("Example:"));
+}
+
+#[test]
 fn list_json_includes_invocation_flags() {
     let extra = tempfile::tempdir().expect("extra");
     let hidden = extra.path().join("hidden-slash");
@@ -1773,6 +1887,99 @@ fn list_json_includes_invocation_flags() {
         .expect("slash-only");
     assert_eq!(slash_row["user_invocable"], true, "{stdout}");
     assert_eq!(slash_row["disable_model_invocation"], true, "{stdout}");
+}
+
+#[test]
+fn list_json_includes_argument_hint() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("slash-hint");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-hint");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let hinted_row = skills
+        .iter()
+        .find(|s| s["name"] == "slash-hint")
+        .expect("slash-hint");
+    assert_eq!(
+        hinted_row["argument_hint"], "[name]",
+        "list JSON must carry argument_hint for slash palettes: {stdout}"
+    );
+    assert!(
+        hinted_row.get("argumentHint").is_none(),
+        "list JSON argument_hint must stay snake_case: {stdout}"
+    );
+    let bare_row = skills
+        .iter()
+        .find(|s| s["name"] == "no-hint")
+        .expect("no-hint");
+    assert!(
+        bare_row["argument_hint"].is_null(),
+        "omitted argument_hint is null on list JSON: {stdout}"
+    );
+}
+
+#[test]
+fn why_json_includes_argument_hint() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("slash-hint");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: slash-hint\ndescription: hinted\nargument_hint: [name]\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let hinted_row = loaded
+        .iter()
+        .find(|s| s["name"] == "slash-hint")
+        .expect("slash-hint");
+    assert_eq!(
+        hinted_row["argument_hint"], "[name]",
+        "why JSON must carry argument_hint like list JSON/XML: {stdout}"
+    );
 }
 
 #[test]

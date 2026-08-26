@@ -235,6 +235,10 @@ pub fn truncate_skill_body_for_budget(content: &str, token_budget: usize) -> Str
 }
 
 /// Build a cheap catalog fragment: name + description only.
+///
+/// Each skill is one markdown list item. Literal `|` / folded `>`
+/// descriptions can contain newlines; those become spaces so
+/// `list --catalog` and MCP `format=catalog` stay one item per skill.
 pub fn format_catalog(
     skills: &[Skill],
     context: &str,
@@ -257,7 +261,11 @@ pub fn format_catalog(
     let ranked_len = ranked.len();
 
     for skill in &ranked {
-        let line = format!("- **{}**: {}\n", skill.name, skill.description);
+        let line = format!(
+            "- **{}**: {}\n",
+            catalog_one_line(&skill.name),
+            catalog_one_line(&skill.description)
+        );
         if shown >= budgets.catalog_max_entries {
             omitted = omitted.saturating_add(1);
             continue;
@@ -360,8 +368,9 @@ pub fn unknown_list_format(format: &str) -> String {
 
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
-/// Also emits `user_invocable` and `disable_model_invocation` so a host
-/// that lists via XML can build a slash palette without re-parsing.
+/// Also emits `user_invocable`, `disable_model_invocation`, and
+/// `argument_hint` so a host that lists via XML can build a slash
+/// palette without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -397,10 +406,21 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             "false"
         });
         out.push_str("</disable_model_invocation>\n");
+        out.push_str("<argument_hint>");
+        if let Some(hint) = skill.argument_hint.as_deref() {
+            out.push_str(&xml_escape(hint));
+        }
+        out.push_str("</argument_hint>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
     out
+}
+
+/// One catalog list-item field: collapse Unicode whitespace (including
+/// newlines from a literal `|` description) to a single space.
+fn catalog_one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn xml_escape(s: &str) -> String {
@@ -522,31 +542,45 @@ pub fn format_body_header(skill: &Skill) -> String {
     out
 }
 
+/// Fold a load-envelope field to one line (same whitespace rule as catalog).
+///
+/// Empty or whitespace-only values omit the line so a `|` / `>` scalar
+/// cannot split the header the way catalog list items used to.
+fn push_envelope_line(out: &mut String, label: &str, value: &str) {
+    let value = catalog_one_line(value);
+    if value.is_empty() {
+        return;
+    }
+    out.push_str(label);
+    out.push_str(": ");
+    out.push_str(&value);
+    out.push('\n');
+}
+
 /// User-turn payload that asks the model to follow one skill fully.
 pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_>) -> String {
     let args = arguments.trim();
     let mut out = String::new();
     out.push_str(&format!("[Activated skill: {}]\n\n", skill.name));
     out.push_str("Follow this skill completely for the rest of this turn.\n");
-    if !skill.description.is_empty() {
-        out.push_str(&format!("Description: {}\n", skill.description));
-    }
+    push_envelope_line(&mut out, "Description", &skill.description);
     if let Some(lic) = &skill.license {
-        out.push_str(&format!("License: {lic}\n"));
+        push_envelope_line(&mut out, "License", lic);
     }
     if let Some(compat) = &skill.compatibility {
-        out.push_str(&format!("Compatibility: {compat}\n"));
+        push_envelope_line(&mut out, "Compatibility", compat);
     }
-    if !args.is_empty() {
-        out.push_str(&format!("User arguments: {args}\n"));
+    if let Some(hint) = skill.argument_hint.as_deref() {
+        push_envelope_line(&mut out, "Argument hint", hint);
     }
+    push_envelope_line(&mut out, "User arguments", args);
     let body_lines = skill.content.lines().count();
     if body_lines > SKILL_BODY_LINE_SOFT_WARN {
         out.push_str(&format!(
             "Note: this SKILL.md has {body_lines} lines (agentskills recommends ~500). Prefer splitting detail into references/ under the skill package root.\n"
         ));
     }
-    out.push_str(&format!("Activate hint: {}\n", fmt.activate_hint));
+    push_envelope_line(&mut out, "Activate hint", fmt.activate_hint);
     out.push('\n');
     out.push_str(&format_package_envelope(skill));
     out.push('\n');
@@ -788,6 +822,30 @@ mod tests {
     }
 
     #[test]
+    fn format_catalog_flattens_multiline_description() {
+        let mut skill = make_skill("lit-skill", &[], 10);
+        skill.description = "line one\nline two\r\nline three".to_owned();
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&[skill], "", budgets, FormatOptions::default());
+        let item = cat
+            .lines()
+            .find(|l| l.contains("lit-skill"))
+            .unwrap_or_else(|| panic!("catalog must list the skill: {cat}"));
+        assert_eq!(
+            item, "- **lit-skill**: line one line two line three",
+            "list --catalog / MCP catalog must keep one markdown item: {cat}"
+        );
+        assert!(
+            !cat.contains("line one\nline two"),
+            "literal `|` description must not split the catalog list: {cat}"
+        );
+    }
+
+    #[test]
     fn format_catalog_uses_host_hint_not_bline_slash() {
         let skills = vec![
             make_skill("git-workflow", &["git"], 10),
@@ -863,6 +921,30 @@ mod tests {
     }
 
     #[test]
+    fn format_available_skills_xml_includes_argument_hint() {
+        let mut hinted = make_skill("slash-hint", &[], 10);
+        hinted.argument_hint = Some("name & id".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/slash-hint/SKILL.md"));
+        let mut bare = make_skill("no-hint", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-hint/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<argument_hint>name &amp; id</argument_hint>"),
+            "list XML must carry escaped argument_hint for slash palettes: {xml}"
+        );
+        assert!(xml.contains("<name>no-hint</name>\n<description>"), "{xml}");
+        let after_bare = xml
+            .split("<name>no-hint</name>")
+            .nth(1)
+            .expect("no-hint skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<argument_hint></argument_hint>"),
+            "omitted argument_hint must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
     fn format_available_skills_xml_strips_invalid_xml_chars() {
         let mut skill = make_skill("ctrl", &[], 10);
         skill.name = "n\u{0000}ame".to_owned();
@@ -921,5 +1003,87 @@ mod tests {
         let env = format_package_envelope(&skill);
         assert!(env.contains("unknown"));
         assert!(!env.contains('\u{2014}'));
+    }
+
+    #[test]
+    fn format_load_message_includes_argument_hint() {
+        let mut hinted = Skill::new("slash-hint", "hinted", "body");
+        hinted.argument_hint = Some("name &\nid".to_owned());
+        let load = format_load_message(&hinted, "--fix", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Argument hint: name & id\n"),
+            "load must carry flattened argument_hint like list JSON/XML: {load}"
+        );
+        assert!(
+            header.contains("User arguments: --fix\n"),
+            "args still follow the hint: {load}"
+        );
+        assert!(
+            !header.contains("name &\nid"),
+            "folded argument_hint must stay one envelope line: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-hint", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Argument hint:"),
+            "omitted argument_hint must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
+    fn format_load_message_flattens_multiline_envelope_fields() {
+        let mut skill = Skill::new(
+            "lit-skill",
+            "line one\nline two\r\nline three",
+            "body\nstill here",
+        );
+        skill.license = Some("Apache\n2.0".to_owned());
+        skill.compatibility = Some("rust\ncargo".to_owned());
+        skill.argument_hint = Some("[name]\n[id]".to_owned());
+        let load = format_load_message(
+            &skill,
+            "--fix\n--dry-run",
+            FormatOptions {
+                activate_hint: "Use host\nactivate",
+            },
+        );
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Description: line one line two line three\n"),
+            "literal `|` description must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("License: Apache 2.0\n"),
+            "license block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Compatibility: rust cargo\n"),
+            "compatibility block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Argument hint: [name] [id]\n"),
+            "argument_hint block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("User arguments: --fix --dry-run\n"),
+            "host args with newlines must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Activate hint: Use host activate\n"),
+            "host activate hint must stay one envelope line: {load}"
+        );
+        assert!(
+            !header.contains("line one\nline two"),
+            "raw description must not split the envelope: {load}"
+        );
+        assert!(
+            load.contains("body\nstill here"),
+            "skill body after --- must keep newlines: {load}"
+        );
     }
 }

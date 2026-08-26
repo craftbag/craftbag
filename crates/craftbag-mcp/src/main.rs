@@ -8,9 +8,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, discover, find_skill_by_name,
-    format_available_skills_xml, format_catalog, format_load_message, parse_list_format,
-    progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
+    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
+    find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -138,14 +138,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         ));
     }
     serde_json::to_string_pretty(&json!({
-        "skills": report.skills.iter().map(|s| json!({
-            "name": s.name,
-            "description": s.description,
-            "source": s.source.as_str(),
-            "path": s.source_path,
-            "user_invocable": s.user_invocable,
-            "disable_model_invocation": s.disable_model_invocation,
-        })).collect::<Vec<_>>(),
+        "skills": report.skills.iter().map(SkillSummary::from).collect::<Vec<_>>(),
         "skips": report.skips,
     }))
     .map_err(|e| e.to_string())
@@ -210,8 +203,10 @@ fn tools() -> Value {
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
-    load_props["args"] =
-        json!({"type": "string", "description": "Optional arguments passed into the envelope."});
+    load_props["args"] = json!({
+        "type": "string",
+        "description": "Optional arguments copied into the envelope as User arguments. Matches SKILL.md argument-hint when set."
+    });
     let mut why_props = discover_properties();
     why_props["name"] = json!({"type": "string", "description": "Optional skill name filter."});
     why_props["context"] = json!({"type": "string", "description": "Activation context text."});
@@ -225,7 +220,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope. Does not dump scripts/ or references/ file bodies.",
+            "description": "Load one skill body and package envelope (includes argument-hint when set). Does not dump scripts/ or references/ file bodies.",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -701,6 +696,141 @@ mod tests {
             "why JSON must carry description like list JSON/XML: {why_text}"
         );
         assert_eq!(slash_row["description"], "user only", "{why_text}");
+    }
+
+    #[test]
+    fn list_json_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-hint");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hinted_row = skills
+            .iter()
+            .find(|s| s["name"] == "slash-hint")
+            .expect("slash-hint");
+        assert_eq!(
+            hinted_row["argument_hint"], "[name]",
+            "MCP list must carry argument_hint for slash palettes: {out}"
+        );
+        assert!(
+            hinted_row.get("argumentHint").is_none(),
+            "list JSON argument_hint must stay snake_case: {out}"
+        );
+        let bare_row = skills
+            .iter()
+            .find(|s| s["name"] == "no-hint")
+            .expect("no-hint");
+        assert!(
+            bare_row["argument_hint"].is_null(),
+            "omitted argument_hint is null on MCP list JSON: {out}"
+        );
+    }
+
+    #[test]
+    fn why_json_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument_hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(41, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hinted_row = loaded
+            .iter()
+            .find(|s| s["name"] == "slash-hint")
+            .expect("slash-hint");
+        assert_eq!(
+            hinted_row["argument_hint"], "[name]",
+            "MCP why must carry argument_hint like list JSON/XML: {why_text}"
+        );
+    }
+
+    #[test]
+    fn skills_load_includes_argument_hint() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-hint");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-hint\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                50,
+                "skills_load",
+                json!({"name": "slash-hint", "args": "alice", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("Argument hint: [name]"),
+                "MCP load must carry argument_hint like list JSON/XML: {hinted_text}"
+            );
+            assert!(
+                hinted_text.contains("User arguments: alice"),
+                "args still follow the hint: {hinted_text}"
+            );
+            let bare_load = call(
+                51,
+                "skills_load",
+                json!({"name": "no-hint", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("Argument hint:"),
+                "omitted argument_hint must not add a load line: {bare_text}"
+            );
+        });
     }
 
     #[test]
