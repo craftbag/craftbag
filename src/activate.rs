@@ -327,16 +327,57 @@ pub enum ListFormat {
     Watch,
 }
 
-/// Canonical tokens plus `--watch-dirs` aliases. One table so parse
-/// and the case-only hint cannot drift.
-fn list_format_from_token(token: &str) -> Option<ListFormat> {
-    match token {
-        "json" => Some(ListFormat::Json),
-        "xml" => Some(ListFormat::Xml),
-        "catalog" => Some(ListFormat::Catalog),
-        "watch" | "watch-dirs" | "watch_dirs" => Some(ListFormat::Watch),
-        _ => None,
+impl ListFormat {
+    /// Canonical tokens (`list --format` / MCP `format` enum).
+    ///
+    /// `--watch-dirs` aliases live in [`Self::ALIAS_TOKENS`], not here.
+    /// MCP `inputSchema` and unknown-format help share this table.
+    pub const CANONICAL_TOKENS: &'static [&'static str] = &["json", "xml", "catalog", "watch"];
+
+    /// CLI `--watch-dirs` flag name. Same walk as [`Self::Watch`].
+    pub const ALIAS_TOKENS: &'static [&'static str] = &["watch-dirs", "watch_dirs"];
+
+    /// Frozen v1 set, in declaration order.
+    pub const fn all() -> [Self; 4] {
+        [Self::Json, Self::Xml, Self::Catalog, Self::Watch]
     }
+
+    /// Canonical token (`json`, `xml`, `catalog`, `watch`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Xml => "xml",
+            Self::Catalog => "catalog",
+            Self::Watch => "watch",
+        }
+    }
+
+    /// Help / error list (`json, xml, catalog, or watch`).
+    pub fn choice_list() -> String {
+        match Self::CANONICAL_TOKENS {
+            [] => String::new(),
+            [one] => (*one).to_owned(),
+            [a, b] => format!("{a} or {b}"),
+            tokens => {
+                let (last, rest) = tokens.split_last().expect("CANONICAL_TOKENS len>=3");
+                format!("{}, or {last}", rest.join(", "))
+            }
+        }
+    }
+}
+
+/// Canonical tokens plus `--watch-dirs` aliases. One table so parse,
+/// the case-only hint, and MCP schema cannot drift.
+fn list_format_from_token(token: &str) -> Option<ListFormat> {
+    for kind in ListFormat::all() {
+        if token == kind.as_str() {
+            return Some(kind);
+        }
+    }
+    if ListFormat::ALIAS_TOKENS.contains(&token) {
+        return Some(ListFormat::Watch);
+    }
+    None
 }
 
 /// Parse a format token. Surrounding whitespace is ignored.
@@ -352,15 +393,16 @@ pub fn parse_list_format(format: &str) -> Result<ListFormat, String> {
 /// Tokens are lowercase. A case-only miss names the matching token.
 pub fn unknown_list_format(format: &str) -> String {
     let trimmed = format.trim();
+    let listed = ListFormat::choice_list();
     if trimmed.is_empty() {
-        return "unknown format: empty (use json, xml, catalog, or watch)".to_owned();
+        return format!("unknown format: empty (use {listed})");
     }
     let shown = crate::sanitize_error_token(trimmed);
     let lower = trimmed.to_ascii_lowercase();
     if list_format_from_token(&lower).is_some() {
         format!("unknown format: {shown} (did you mean {lower}?)")
     } else {
-        format!("unknown format: {shown} (use json, xml, catalog, or watch)")
+        format!("unknown format: {shown} (use {listed})")
     }
 }
 
@@ -838,14 +880,9 @@ mod tests {
 
     #[test]
     fn list_format_case_only_hint_covers_every_parse_token() {
-        for token in [
-            "json",
-            "xml",
-            "catalog",
-            "watch",
-            "watch-dirs",
-            "watch_dirs",
-        ] {
+        let mut tokens = ListFormat::CANONICAL_TOKENS.to_vec();
+        tokens.extend_from_slice(ListFormat::ALIAS_TOKENS);
+        for token in tokens {
             assert!(
                 parse_list_format(token).is_ok(),
                 "canonical token must parse: {token}"
@@ -857,6 +894,42 @@ mod tests {
                 "case-only hint must name the same token parse accepts"
             );
         }
+    }
+
+    #[test]
+    fn list_format_canonical_tokens_match_all_and_choice_list() {
+        let kinds = ListFormat::all();
+        assert_eq!(kinds.len(), 4);
+        assert_eq!(kinds.len(), ListFormat::CANONICAL_TOKENS.len());
+        for (kind, token) in kinds.iter().zip(ListFormat::CANONICAL_TOKENS) {
+            assert_eq!(kind.as_str(), *token);
+            assert_eq!(parse_list_format(token), Ok(*kind));
+        }
+        // Exhaustive match is the freeze: a new variant fails to compile.
+        for kind in kinds {
+            match kind {
+                ListFormat::Json | ListFormat::Xml | ListFormat::Catalog | ListFormat::Watch => {}
+            }
+        }
+        let listed = ListFormat::choice_list();
+        assert_eq!(listed, "json, xml, catalog, or watch");
+        for token in ListFormat::CANONICAL_TOKENS {
+            assert!(
+                listed.contains(token),
+                "choice_list must name {token}: {listed}"
+            );
+        }
+        for alias in ListFormat::ALIAS_TOKENS {
+            assert!(
+                !ListFormat::CANONICAL_TOKENS.contains(alias),
+                "alias {alias} must not appear in the MCP schema table"
+            );
+            assert_eq!(parse_list_format(alias), Ok(ListFormat::Watch));
+        }
+        assert!(
+            unknown_list_format("yaml").contains(&listed),
+            "unknown-format help must use choice_list"
+        );
     }
 
     #[test]

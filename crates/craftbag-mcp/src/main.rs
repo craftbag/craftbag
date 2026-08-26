@@ -299,8 +299,11 @@ fn tools() -> Value {
     let mut list_props = discover_properties();
     list_props["format"] = json!({
         "type": "string",
-        "enum": ["json", "xml", "catalog", "watch"],
-        "description": "json (default `{ skills, skips }`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). watch-dirs and watch_dirs are the same walk as watch."
+        "enum": ListFormat::CANONICAL_TOKENS,
+        "description": format!(
+            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). {} are the same walk as watch.",
+            ListFormat::ALIAS_TOKENS.join(" and ")
+        )
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -2663,9 +2666,15 @@ mod tests {
             .collect();
         assert_eq!(
             tokens,
-            ["json", "xml", "catalog", "watch"],
-            "skills_list format enum must match CLI --format tokens: {format}"
+            craftbag::ListFormat::CANONICAL_TOKENS,
+            "skills_list format enum must match ListFormat::CANONICAL_TOKENS: {format}"
         );
+        for alias in craftbag::ListFormat::ALIAS_TOKENS {
+            assert!(
+                !tokens.contains(alias),
+                "schema enum is canonical tokens only; {alias} stays a parse alias: {format}"
+            );
+        }
     }
 
     #[test]

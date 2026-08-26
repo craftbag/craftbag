@@ -10,8 +10,9 @@ use crate::skill::Skill;
 /// Why a candidate `SKILL.md` was not loaded.
 ///
 /// v1 set is frozen. Additions are a new versioned variant plus a corpus
-/// fixture. Do not add `BudgetOmitted`, `Disabled`, `VendorDenylist`, or
-/// `InvocationOff` until they are real skip rows with fixtures.
+/// fixture. Do not add `BudgetOmitted`, `Disabled`, `Ignored`,
+/// `VendorDenylist`, or `InvocationOff` until they are real skip rows
+/// with fixtures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SkipKind {
@@ -217,6 +218,7 @@ mod tests {
         for wire in [
             "budget_omitted",
             "disabled",
+            "ignored",
             "vendor_denylist",
             "invocation_off",
         ] {
