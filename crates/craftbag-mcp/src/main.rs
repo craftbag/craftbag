@@ -263,12 +263,16 @@ fn merge_skill_miss(result: &mut Value, miss: &SkillMiss) {
 }
 
 fn discover_properties() -> Value {
+    let vendor_tokens = SkillSource::VENDOR_TOKENS;
+    let vendor_listed = vendor_tokens.join(", ");
     json!({
         "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
-            "items": {"type": "string", "enum": ["bline", "claude", "cursor", "grok"]},
-            "description": "Opt-in vendor trees: bline, claude, cursor, grok. Example: [\"claude\"] or [\".claude\"]."
+            "items": {"type": "string", "enum": vendor_tokens},
+            "description": format!(
+                "Opt-in vendor trees: {vendor_listed}. A leading dot is the on-disk tree (same as CLI --vendor). Example: [\"claude\"]."
+            )
         },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
@@ -2670,11 +2674,37 @@ mod tests {
                 .collect();
             assert_eq!(
                 tokens,
-                ["bline", "claude", "cursor", "grok"],
-                "{} vendor enum must match CLI --vendor tokens: {vendor}",
+                craftbag::SkillSource::VENDOR_TOKENS,
+                "{} vendor enum must match SkillSource::VENDOR_TOKENS: {vendor}",
                 tool["name"]
             );
+            let desc = vendor["description"].as_str().unwrap_or("");
+            for example in json_array_examples(desc) {
+                assert!(
+                    tokens.contains(&example.as_str()),
+                    "{} vendor description example {example:?} must be a schema enum token ({tokens:?}): {desc}",
+                    tool["name"]
+                );
+            }
         }
+    }
+
+    /// JSON string arrays in help text (`["claude"]`). Prose aliases stay out.
+    fn json_array_examples(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut rest = text;
+        while let Some(start) = rest.find('[') {
+            let after = &rest[start..];
+            let Some(end) = after.find(']') else {
+                break;
+            };
+            let slice = &after[..=end];
+            if let Ok(arr) = serde_json::from_str::<Vec<String>>(slice) {
+                out.extend(arr);
+            }
+            rest = &after[end + 1..];
+        }
+        out
     }
 
     #[test]

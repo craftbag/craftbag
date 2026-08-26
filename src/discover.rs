@@ -104,7 +104,7 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     if opts.implicit_roots {
         for dir in walk_cwd_to_git_root(&cwd) {
             push_watch_confined_dir(&mut out, dir.join(".agents").join("skills"), &dir);
-            for name in ["bline", "claude", "cursor", "grok"] {
+            for name in SkillSource::VENDOR_TOKENS.iter().copied() {
                 if vendor_enabled(opts, name) {
                     push_watch_confined_dir(
                         &mut out,
@@ -129,7 +129,7 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     if opts.implicit_roots {
         if let Some(home) = home_dir() {
             push_watch_confined_dir(&mut out, home.join(".agents").join("skills"), &home);
-            for name in ["bline", "claude", "cursor", "grok"] {
+            for name in SkillSource::VENDOR_TOKENS.iter().copied() {
                 if vendor_enabled(opts, name) {
                     push_watch_confined_dir(
                         &mut out,
@@ -524,7 +524,7 @@ fn load_vendor_tree(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
-    for name in ["bline", "claude", "cursor", "grok"] {
+    for name in SkillSource::VENDOR_TOKENS.iter().copied() {
         if !vendor_enabled(opts, name) {
             continue;
         }

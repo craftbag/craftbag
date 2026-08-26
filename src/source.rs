@@ -108,6 +108,19 @@ impl SkillSource {
     /// Frozen v1 vendor tokens (`bline`, `claude`, `cursor`, `grok`).
     pub const VENDOR_TOKENS: &'static [&'static str] = &["bline", "claude", "cursor", "grok"];
 
+    /// Help / error list (`bline, claude, cursor, or grok`).
+    pub fn vendor_choice_list() -> String {
+        match Self::VENDOR_TOKENS {
+            [] => String::new(),
+            [one] => (*one).to_owned(),
+            [a, b] => format!("{a} or {b}"),
+            tokens => {
+                let (last, rest) = tokens.split_last().expect("VENDOR_TOKENS len>=3");
+                format!("{}, or {last}", rest.join(", "))
+            }
+        }
+    }
+
     /// Parse one `--vendor` / MCP `vendor` token.
     ///
     /// Empty or whitespace is omitted (same as empty `--path` items).
@@ -124,8 +137,9 @@ impl SkillSource {
             return Ok(Some(lower));
         }
         Err(format!(
-            "unknown vendor: {} (use bline, claude, cursor, or grok)",
-            crate::sanitize_error_token(trimmed)
+            "unknown vendor: {} (use {})",
+            crate::sanitize_error_token(trimmed),
+            Self::vendor_choice_list()
         ))
     }
 
@@ -361,7 +375,17 @@ mod tests {
         );
         let err = SkillSource::parse_vendor_roots(["nope"]).expect_err("unknown");
         assert!(err.contains("unknown vendor: nope"), "{err}");
-        assert!(err.contains("claude"), "{err}");
+        let listed = SkillSource::vendor_choice_list();
+        assert!(
+            err.contains(&listed),
+            "unknown-vendor error must name vendor_choice_list: {err}"
+        );
+        for token in SkillSource::VENDOR_TOKENS {
+            assert!(
+                listed.contains(token),
+                "vendor_choice_list must name {token}: {listed}"
+            );
+        }
         let extra = SkillSource::parse_vendor_roots(["extra"]).expect_err("extra");
         assert!(
             extra.contains("unknown vendor: extra"),
