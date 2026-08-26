@@ -45,3 +45,10 @@ path = "fuzz_targets/catalog_format.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "vendor_token"
+path = "fuzz_targets/vendor_token.rs"
+test = false
+doc = false
+bench = false
