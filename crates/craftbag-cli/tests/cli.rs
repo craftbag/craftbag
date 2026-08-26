@@ -251,6 +251,60 @@ fn list_extra_path_json() {
 }
 
 #[test]
+fn list_leftover_empty_nested_skills_names_wanted() {
+    // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
+    // on the CLI door. Default vendor stays off. Empty extra/skills
+    // must not hide extra/wanted.
+    let extra = corpus().join("leftover/empty-nested-skills");
+    let skill = extra.join("wanted/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed leftover empty extra/skills fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "wanted"),
+        "extra",
+        "empty extra/skills must not hide leftover sibling wanted: {stdout}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "empty extra/skills must not hide leftover sibling packages: {stdout}"
+    );
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "empty extra/skills is not a skip: {stdout}"
+    );
+}
+
+#[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
     let pkg = home.path().join("myskills").join("mine");
