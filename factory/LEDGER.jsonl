@@ -389,3 +389,4 @@
 {"ts": "2026-08-26T20:34:00Z", "job_id": "improve-mpi30-arch-noop", "work_source": "improve", "result": "noop", "head": "110ba11020a25e629cbe56060eb490f37d73135e", "pr": null, "tests": "zero diff after 6m", "noop": true}
 {"ts": "2026-08-26T20:44:00Z", "job_id": "improve-mpi30-contrib-noop", "work_source": "improve", "result": "noop", "head": "110ba11020a25e629cbe56060eb490f37d73135e", "pr": null, "tests": "zero diff", "noop": true}
 {"ts": "2026-08-26T20:51:00Z", "job_id": "improve-mpi30-obs-noop", "work_source": "improve", "result": "noop", "head": "110ba11020a25e629cbe56060eb490f37d73135e", "pr": null, "tests": "zero diff after 6m", "noop": true}
+{"ts": "2026-08-26T20:52:00Z", "job_id": "adversary-after-214-skip-snake-green", "work_source": "adversary", "result": "noop", "head": "110ba11020a25e629cbe56060eb490f37d73135e", "pr": null, "tests": "skip fields already match", "noop": true}
