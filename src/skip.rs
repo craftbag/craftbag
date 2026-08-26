@@ -158,6 +158,8 @@ pub struct DiscoveryReport {
 mod tests {
     use std::path::PathBuf;
 
+    use proptest::prelude::*;
+
     use super::{DiscoveryReport, SkillSkip, SkipKind};
 
     #[test]
@@ -254,6 +256,54 @@ mod tests {
             !out.contains("winner_path"),
             "SkillSkip serialize must not switch to snake winner_path: {out}"
         );
+    }
+
+    /// SkillMiss `winner_path` must populate SkillSkip for any host string,
+    /// not only `/a/foo/SKILL.md`. A path segment named `winner_path` would
+    /// false-fail a `contains("winner_path")` serialize check.
+    fn host_winner_path() -> impl Strategy<Value = String> {
+        prop_oneof![
+            Just(String::new()),
+            Just("/a/foo/SKILL.md".to_owned()),
+            Just("/tmp/winner_path/source_path/SKILL.md".to_owned()),
+            Just("/home/user/.agents/skills/foo/SKILL.md".to_owned()),
+            Just("/tmp/ünicode dir/技能/SKILL.md".to_owned()),
+            Just(r"C:\Users\foo\SKILL.md".to_owned()),
+            ".{1,64}",
+            prop::collection::vec("[A-Za-z0-9._-]{1,10}", 1usize..5)
+                .prop_map(|parts| format!("/{}/SKILL.md", parts.join("/"))),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn serde_snake_winner_path_for_any_host_path(
+            winner in host_winner_path(),
+            skip_path in host_winner_path(),
+        ) {
+            let json = serde_json::json!({
+                "path": skip_path,
+                "kind": "name_collision",
+                "detail": "d",
+                "winner_path": winner,
+            })
+            .to_string();
+            let skip: SkillSkip = serde_json::from_str(&json).expect("snake winner_path");
+            prop_assert_eq!(
+                skip.winner_path.as_deref(),
+                Some(std::path::Path::new(&winner))
+            );
+            prop_assert_eq!(skip.path.as_path(), std::path::Path::new(&skip_path));
+            let out = serde_json::to_value(&skip).expect("ser");
+            prop_assert_eq!(
+                out.get("winnerPath").and_then(|v| v.as_str()),
+                Some(winner.as_str())
+            );
+            prop_assert!(
+                out.get("winner_path").is_none(),
+                "SkillSkip serialize must still emit winnerPath: {out}"
+            );
+        }
     }
 
     #[test]
