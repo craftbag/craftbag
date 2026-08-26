@@ -22,10 +22,12 @@ fuzz_target!(|data: &[u8]| {
     skill.source_path = Some(PathBuf::from(text.as_ref()));
     skill.user_invocable = data.first().is_some_and(|b| b & 1 == 0);
     skill.disable_model_invocation = data.get(1).is_some_and(|b| b & 1 == 1);
+    skill.argument_hint = Some(text.as_ref().to_owned());
+    skill.when_to_use = Some(text.as_ref().to_owned());
     let xml = craftbag::format_available_skills_xml(&[skill]);
     assert!(
         xml.chars().all(is_xml10_char),
-        "catalog XML must stay XML 1.0 after arbitrary name/description/path"
+        "catalog XML must stay XML 1.0 after arbitrary name/description/path/hints"
     );
     assert!(
         xml.starts_with("<available_skills>\n") && xml.ends_with("</available_skills>\n"),
