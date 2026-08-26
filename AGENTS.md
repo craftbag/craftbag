@@ -8,7 +8,7 @@ Use prebuilt binaries. Do not `cargo install` those two on rustc 1.85
 (they need a newer compiler than this crate's MSRV).
 
 - nextest: https://nexte.st/docs/installation/pre-built-binaries/
-- cargo-deny: https://github.com/EmbarkStudios/cargo-deny#install
+- cargo-deny: https://embarkstudios.github.io/cargo-deny/cli/index.html#install-from-binaries
 - gh: https://cli.github.com/
 
 Hosted CI also runs fuzz-smoke, gitleaks, actionlint, and zizmor.

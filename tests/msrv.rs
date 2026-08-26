@@ -80,6 +80,21 @@ fn local_gate_names_extra_tools() {
             && !agents.contains("cargo install cargo-deny"),
         "AGENTS.md must not cargo-install nextest/deny on this crate's rustc 1.85"
     );
+    // README #install is `cargo install --locked cargo-deny`. That fails
+    // (or needs a newer rustc) on this crate's MSRV 1.85.
+    assert!(
+        !agents.contains("github.com/EmbarkStudios/cargo-deny#install"),
+        "AGENTS.md cargo-deny must not link README #install (that is cargo install)"
+    );
+    assert!(
+        agents.contains("nexte.st/docs/installation/pre-built-binaries"),
+        "AGENTS.md nextest must link prebuilt binaries"
+    );
+    assert!(
+        agents.contains("embarkstudios.github.io/cargo-deny/cli")
+            || agents.contains("github.com/EmbarkStudios/cargo-deny/releases"),
+        "AGENTS.md must send cargo-deny to prebuilt binaries, not cargo install"
+    );
 }
 
 /// Bline host notes must name the SkillMiss peel that landed in #132-#134.
