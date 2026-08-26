@@ -9,8 +9,10 @@
 //! [`SkillMiss`] peels `error_kind`, `error`, and `path` so a leftover-only
 //! host can branch without scraping Display. `unknown_skill` omits `path`.
 //!
-//! List JSON, why JSON, and list XML share [`SkillSummary`]. A new
-//! field on that type must land in all three wires
+//! List JSON, why JSON, and list XML share [`SkillSummary`]
+//! (`description`, invocation flags, `argument_hint`, `when_to_use`,
+//! `triggers`, `allowed_tools`, `license`, `compatibility`, `metadata`).
+//! A new field on that type must land in all three wires
 //! (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap.
 //! [`format_load_message`] is the text envelope.
 

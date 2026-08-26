@@ -1,5 +1,6 @@
 //! Doctor: why a skill loaded, skipped, or did not auto-inject.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,11 @@ pub struct SkillSummary {
     /// why JSON (`None`).
     #[serde(default)]
     pub compatibility: Option<String>,
+    /// Same snake_case key as list JSON / list XML. Official agentskills
+    /// `metadata` map. Empty object `{}` is always serialized (not omitted).
+    /// Empty on cached pre-this-PR why JSON.
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
 }
 
 impl From<&Skill> for SkillSummary {
@@ -136,6 +142,7 @@ impl From<&Skill> for SkillSummary {
             allowed_tools: skill.allowed_tools.clone(),
             license: skill.license.clone(),
             compatibility: skill.compatibility.clone(),
+            metadata: skill.metadata.clone(),
         }
     }
 }
@@ -180,8 +187,8 @@ impl WhyReport {
 ///
 /// Loaded rows include `description`, `user_invocable`,
 /// `disable_model_invocation`, `argument_hint`, `when_to_use`,
-/// `triggers`, `allowed_tools`, `license`, and `compatibility`
-/// (same keys as list JSON / list XML).
+/// `triggers`, `allowed_tools`, `license`, `compatibility`, and
+/// `metadata` (same keys as list JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -825,6 +832,35 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_metadata() {
+        let mut hinted = Skill::new("annotated", "d", "body");
+        hinted
+            .metadata
+            .insert("author".to_owned(), "A & B".to_owned());
+        hinted
+            .metadata
+            .insert("version".to_owned(), "1.0".to_owned());
+        let bare = Skill::new("no-metadata", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["metadata"],
+            serde_json::json!({"author": "A & B", "version": "1.0"}),
+            "why JSON must carry metadata like list JSON/XML: {json}"
+        );
+        assert_eq!(
+            v["loaded"][1]["metadata"],
+            serde_json::json!({}),
+            "empty metadata is {{}} on why JSON, not omitted: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -862,6 +898,10 @@ mod tests {
             report.loaded[0].triggers.is_empty(),
             "omitted triggers must stay empty: {json}"
         );
+        assert!(
+            report.loaded[0].metadata.is_empty(),
+            "omitted metadata must stay empty: {json}"
+        );
     }
 
     #[test]
@@ -895,7 +935,7 @@ mod tests {
         // Machine-readable list/why JSON and list XML must share these
         // keys. path is location in official skills-ref XML. Catalog and
         // load stay text envelopes (when_to_use / allowed_tools /
-        // argument_hint / license / compatibility / triggers).
+        // argument_hint / license / compatibility / triggers / metadata).
         const FIELDS: &[(&str, &str)] = &[
             ("name", "name"),
             ("description", "description"),
@@ -909,6 +949,7 @@ mod tests {
             ("allowed_tools", "allowed_tools"),
             ("license", "license"),
             ("compatibility", "compatibility"),
+            ("metadata", "metadata"),
         ];
 
         let mut skill = Skill::new("slash-ok", "palette", "body");
@@ -922,6 +963,12 @@ mod tests {
         skill.allowed_tools = Some("Read Bash".to_owned());
         skill.license = Some("MIT".to_owned());
         skill.compatibility = Some("rust".to_owned());
+        skill
+            .metadata
+            .insert("author".to_owned(), "A & B".to_owned());
+        skill
+            .metadata
+            .insert("version".to_owned(), "1.0".to_owned());
 
         let summary = SkillSummary::from(&skill);
         let json = serde_json::to_value(&summary).expect("summary serde");
@@ -950,6 +997,15 @@ mod tests {
         assert!(
             xml.contains("<triggers>git, A &amp; B</triggers>"),
             "list XML must emit populated triggers, not an empty tag: {xml}"
+        );
+        assert_eq!(
+            json["metadata"],
+            serde_json::json!({"author": "A & B", "version": "1.0"}),
+            "populated SkillSummary.metadata must copy from Skill (empty {{}} is a vacuous pass): {json}"
+        );
+        assert!(
+            xml.contains("<metadata>author=A &amp; B, version=1.0</metadata>"),
+            "list XML must emit populated metadata, not an empty tag: {xml}"
         );
         assert!(
             json.get("argumentHint").is_none() && json.get("allowedTools").is_none(),

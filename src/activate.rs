@@ -1,5 +1,6 @@
 //! Activation selector: budgets, trigger filter, catalog, and package envelope.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::skill::{SKILL_BODY_LINE_SOFT_WARN, Skill};
@@ -410,9 +411,9 @@ pub fn unknown_list_format(format: &str) -> String {
 ///
 /// Also emits `user_invocable`, `disable_model_invocation`,
 /// `argument_hint`, `when_to_use`, `triggers`, `allowed_tools`,
-/// `license`, and `compatibility` so a host that lists via XML can
-/// build a slash palette, preview activation triggers, apply
-/// pre-approved tools, or check license / environment without
+/// `license`, `compatibility`, and `metadata` so a host that lists via
+/// XML can build a slash palette, preview activation triggers, apply
+/// pre-approved tools, or check license / environment / metadata without
 /// re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
@@ -477,6 +478,9 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             out.push_str(&xml_escape(compat));
         }
         out.push_str("</compatibility>\n");
+        out.push_str("<metadata>");
+        out.push_str(&xml_escape(&join_metadata_pairs(&skill.metadata)));
+        out.push_str("</metadata>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -504,6 +508,15 @@ fn catalog_skill_line(skill: &Skill) -> String {
         }
         None => format!("- **{name}**: {desc}\n"),
     }
+}
+
+/// Join official agentskills `metadata` as `k=v` pairs in BTreeMap order.
+fn join_metadata_pairs(metadata: &BTreeMap<String, String>) -> String {
+    metadata
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn xml_escape(s: &str) -> String {
@@ -664,6 +677,9 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     }
     if let Some(compat) = &skill.compatibility {
         push_envelope_line(&mut out, "Compatibility", compat);
+    }
+    if !skill.metadata.is_empty() {
+        push_envelope_line(&mut out, "Metadata", &join_metadata_pairs(&skill.metadata));
     }
     if let Some(tools) = skill.allowed_tools.as_deref() {
         push_envelope_line(&mut out, "Allowed tools", tools);
@@ -954,6 +970,9 @@ mod tests {
     fn format_catalog_includes_when_to_use() {
         let mut skill = make_skill("git-workflow", &["git"], 10);
         skill.when_to_use = Some("rebasing\na branch".to_owned());
+        skill
+            .metadata
+            .insert("author".to_owned(), "craftbag".to_owned());
         let budgets = ProgressiveBudgets {
             catalog_max_entries: 8,
             catalog_max_chars: 4_000,
@@ -981,6 +1000,10 @@ mod tests {
         assert!(
             !cat.contains("Triggers:"),
             "catalog must stay cheap (no trigger dump): {cat}"
+        );
+        assert!(
+            !cat.contains("Metadata:"),
+            "catalog must stay cheap (no metadata dump): {cat}"
         );
     }
 
@@ -1223,6 +1246,34 @@ mod tests {
     }
 
     #[test]
+    fn format_available_skills_xml_includes_metadata() {
+        let mut hinted = make_skill("annotated", &[], 10);
+        hinted
+            .metadata
+            .insert("author".to_owned(), "A & B".to_owned());
+        hinted
+            .metadata
+            .insert("version".to_owned(), "1.0".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/annotated/SKILL.md"));
+        let mut bare = make_skill("no-metadata", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-metadata/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<metadata>author=A &amp; B, version=1.0</metadata>"),
+            "list XML must carry escaped metadata: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-metadata</name>")
+            .nth(1)
+            .expect("no-metadata skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<metadata></metadata>"),
+            "empty metadata must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
     fn format_available_skills_xml_strips_invalid_xml_chars() {
         let mut skill = make_skill("ctrl", &[], 10);
         skill.name = "n\u{0000}ame".to_owned();
@@ -1405,6 +1456,37 @@ mod tests {
     }
 
     #[test]
+    fn format_load_message_includes_metadata() {
+        let mut hinted = Skill::new("annotated", "hinted", "body");
+        hinted
+            .metadata
+            .insert("author".to_owned(), "craftbag".to_owned());
+        hinted
+            .metadata
+            .insert("version".to_owned(), "1.0".to_owned());
+        let load = format_load_message(&hinted, "", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Metadata: author=craftbag, version=1.0\n"),
+            "load must carry flattened metadata like list JSON/XML: {load}"
+        );
+        assert!(
+            header.contains("Description: hinted\n"),
+            "metadata follows description: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-metadata", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Metadata:"),
+            "empty metadata must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
     fn format_load_message_includes_argument_hint() {
         let mut hinted = Skill::new("slash-hint", "hinted", "body");
         hinted.argument_hint = Some("name &\nid".to_owned());
@@ -1473,6 +1555,9 @@ mod tests {
         skill.argument_hint = Some("[name]\n[id]".to_owned());
         skill.when_to_use = Some("after\nrebase".to_owned());
         skill.triggers = vec!["git".to_owned(), "A &\nB".to_owned()];
+        skill
+            .metadata
+            .insert("author".to_owned(), "A &\nB".to_owned());
         let load = format_load_message(
             &skill,
             "--fix\n--dry-run",
@@ -1504,6 +1589,10 @@ mod tests {
         assert!(
             header.contains("Triggers: git, A & B\n"),
             "triggers list must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Metadata: author=A & B\n"),
+            "metadata value with a newline must stay one envelope line: {load}"
         );
         assert!(
             header.contains("Argument hint: [name] [id]\n"),
