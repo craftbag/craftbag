@@ -6,33 +6,34 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "24d6faa5f6481e83c913033c85e9c3507ec7f95a",
+  "ledger_sha": "9711cec8dea47908932f6feb7944ca37c1a5bc58",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b1623671d846d3003c3604bc73e053c9a56249a6",
   "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-3-incumbent-grok-project",
-    "work_source": "expand",
-    "started_at": "2026-08-26T22:16:30Z",
-    "finished_at": "2026-08-26T22:21:53Z",
+    "id": "leftover-grok-project-cli-mcp",
+    "work_source": "improve",
+    "started_at": "2026-08-26T22:22:00Z",
+    "finished_at": "2026-08-26T22:35:21Z",
     "result": "landed",
-    "head": "0dce942f50bd06bb30136bbcdacec3028fb2bf24",
-    "pr": 219,
+    "head": "b0911f93652512af0313b46606b4e81741133354",
+    "pr": 220,
     "files": [
-      "src/discover.rs",
-      "tests/corpus/incumbent/grok-project/.grok/skills/project-grok/SKILL.md"
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/tests/mcp.rs",
+      "factory/BLINE_CONSUMER.md"
     ],
-    "tests": "incumbent_grok_vendor_layout_loads",
+    "tests": "list_vendor_grok_loads_project_layout,stdio_skills_list_vendor_grok_names_project_grok",
     "review": "0"
   },
-  "last_sha": "0dce942f50bd06bb30136bbcdacec3028fb2bf24",
+  "last_sha": "b0911f93652512af0313b46606b4e81741133354",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
-    "main": "in_progress",
+    "main": "success",
     "ready_pr": "merged",
-    "checked_at": "2026-08-26T22:21:53Z",
+    "checked_at": "2026-08-26T22:35:21Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -57,9 +58,10 @@
       "tests/corpus/incumbent/vercel-npx/skills (--path collection)",
       "tests/corpus/incumbent/cursor-project (cwd + --vendor cursor)",
       "tests/corpus/incumbent/cursor-user (HOME + --vendor cursor)",
-      "tests/corpus/incumbent/grok-user (HOME + --vendor grok)"
+      "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
+      "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "grok-user HOME + --vendor grok why names home-grok; vendor off is unknown_skill."
+    "last_why_summary": "grok-project cwd + --vendor grok list names project-grok; vendor off omits it."
   },
   "budgets": {
     "max_cycles": null,
