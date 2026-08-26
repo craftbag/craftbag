@@ -2823,6 +2823,19 @@ fn why_help_names_json_error_kind() {
 }
 
 #[test]
+fn why_help_names_json_winner_path() {
+    // SkillMiss.winner_path landed in #191. why --help must name the key so
+    // a leftover host does not scrape `lost to` from Display.
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("winner_path"))
+        .stdout(predicates::str::contains("name_collision"));
+}
+
+#[test]
 fn validate_help_names_json_error_kind() {
     let (_home, mut cmd) = bin();
     cmd.arg("validate")

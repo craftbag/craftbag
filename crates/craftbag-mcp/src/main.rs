@@ -264,9 +264,9 @@ fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
     (err.message, true, err.miss)
 }
 
-/// Copy `{ error_kind, error }` and optional `path` from [`SkillMiss`] so
-/// MCP cannot drop a peel key that CLI `why --json` / `validate --json`
-/// already serialize.
+/// Copy `{ error_kind, error }`, optional `path`, and `winner_path` on
+/// `name_collision` from [`SkillMiss`] so MCP cannot drop a peel key
+/// that CLI `why --json` / `validate --json` already serialize.
 fn merge_skill_miss(result: &mut Value, miss: &SkillMiss) {
     let peel = serde_json::to_value(miss).expect("SkillMiss serde");
     let obj = peel.as_object().expect("SkillMiss is a JSON object");
@@ -324,7 +324,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -333,7 +333,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error.",
+            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error, and winner_path on name_collision.",
             "inputSchema": {"type": "object", "properties": why_props}
         }
     ])
@@ -2843,6 +2843,10 @@ mod tests {
             assert!(
                 desc.contains("error_kind plus error"),
                 "{name} must name SkillMiss.error as its own key, not a substring of error_kind: {desc}"
+            );
+            assert!(
+                desc.contains("winner_path") && desc.contains("name_collision"),
+                "{name} must name SkillMiss.winner_path on name_collision so hosts do not scrape lost to: {desc}"
             );
         }
         let load = tools

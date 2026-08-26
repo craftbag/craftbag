@@ -8,6 +8,7 @@
 //!
 //! [`SkillMiss`] peels `error_kind`, `error`, and `path` so a leftover-only
 //! host can branch without scraping Display. `unknown_skill` omits `path`.
+//! A `name_collision` skip also peels `winner_path`. Other misses omit it.
 //!
 //! List JSON, why JSON, and list XML share [`SkillSummary`]
 //! (`description`, invocation flags, `argument_hint`, `when_to_use`,
@@ -137,6 +138,7 @@ mod tests {
     /// A leftover-only host should see [`super::SkillMiss`] on the crate
     /// root, not only in discover.rs. Branch on `error_kind` and `path`.
     /// Do not scrape Display. `unknown_skill` omits `path`.
+    /// `name_collision` also peels `winner_path`.
     #[test]
     fn crate_root_docs_name_skill_miss() {
         let docs: String = include_str!("lib.rs")
@@ -163,6 +165,10 @@ mod tests {
         assert!(
             docs.contains("unknown_skill") && docs.contains("omits `path`"),
             "crate-root rustdoc must say unknown_skill omits path (do not invent one): {docs}"
+        );
+        assert!(
+            docs.contains("winner_path") && docs.contains("name_collision"),
+            "crate-root rustdoc must name SkillMiss.winner_path on name_collision: {docs}"
         );
         let unknown = super::unknown_or_skipped_skill("no-such-skill", &[]);
         assert_eq!(unknown.error_kind, super::UNKNOWN_SKILL_KIND);
