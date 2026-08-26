@@ -220,7 +220,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint when set). Does not dump scripts/ or references/ file bodies.",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies.",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -797,6 +797,55 @@ mod tests {
     }
 
     #[test]
+    fn list_json_includes_allowed_tools() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("tools-ok");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: tools-ok\ndescription: hinted\nallowed-tools: Read Bash(git:*)\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-tools");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-tools\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hinted_row = skills
+            .iter()
+            .find(|s| s["name"] == "tools-ok")
+            .expect("tools-ok");
+        assert_eq!(
+            hinted_row["allowed_tools"], "Read Bash(git:*)",
+            "MCP list must carry allowed_tools: {out}"
+        );
+        assert!(
+            hinted_row.get("allowedTools").is_none(),
+            "list JSON allowed_tools must stay snake_case: {out}"
+        );
+        let bare_row = skills
+            .iter()
+            .find(|s| s["name"] == "no-tools")
+            .expect("no-tools");
+        assert!(
+            bare_row["allowed_tools"].is_null(),
+            "omitted allowed_tools is null on MCP list JSON: {out}"
+        );
+    }
+
+    #[test]
     fn why_json_includes_when_to_use() {
         let extra = tempfile::tempdir().expect("extra");
         let hinted = extra.path().join("ranked");
@@ -849,6 +898,34 @@ mod tests {
         assert_eq!(
             hinted_row["argument_hint"], "[name]",
             "MCP why must carry argument_hint like list JSON/XML: {why_text}"
+        );
+    }
+
+    #[test]
+    fn why_json_includes_allowed_tools() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("tools-ok");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: tools-ok\ndescription: hinted\nallowed_tools: Read Bash(git:*)\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(43, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hinted_row = loaded
+            .iter()
+            .find(|s| s["name"] == "tools-ok")
+            .expect("tools-ok");
+        assert_eq!(
+            hinted_row["allowed_tools"], "Read Bash(git:*)",
+            "MCP why must carry allowed_tools like list JSON/XML: {why_text}"
         );
     }
 
@@ -960,6 +1037,60 @@ mod tests {
             assert!(
                 !bare_text.contains("Argument hint:"),
                 "omitted argument_hint must not add a load line: {bare_text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_load_includes_allowed_tools() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("tools-ok");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: tools-ok\ndescription: hinted\nallowed-tools: Read Bash(git:*)\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-tools");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-tools\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                54,
+                "skills_load",
+                json!({"name": "tools-ok", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("Allowed tools: Read Bash(git:*)"),
+                "MCP load must carry allowed_tools like list JSON/XML: {hinted_text}"
+            );
+            let bare_load = call(
+                55,
+                "skills_load",
+                json!({"name": "no-tools", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("Allowed tools:"),
+                "omitted allowed_tools must not add a load line: {bare_text}"
             );
         });
     }

@@ -1699,6 +1699,56 @@ fn load_includes_argument_hint() {
 }
 
 #[test]
+fn load_includes_allowed_tools() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("tools-ok");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: tools-ok\ndescription: hinted\nallowed-tools: Read Bash(git:*)\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-tools");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-tools\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("tools-ok")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Allowed tools: Read Bash(git:*)"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("no-tools")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: no-tools]"),
+        "bare skill must still load: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Allowed tools:"),
+        "omitted allowed_tools must not add a load line: {stdout}"
+    );
+}
+
+#[test]
 fn load_flattens_multiline_description() {
     let extra = tempfile::tempdir().expect("extra");
     let pkg = extra.path().join("lit-skill");
@@ -1925,6 +1975,7 @@ fn load_help_names_args_and_argument_hint() {
         .stdout(predicates::str::contains("--args"))
         .stdout(predicates::str::contains("argument-hint"))
         .stdout(predicates::str::contains("when-to-use"))
+        .stdout(predicates::str::contains("allowed-tools"))
         .stdout(predicates::str::contains("Example:"));
 }
 
@@ -2092,6 +2143,62 @@ fn list_json_includes_when_to_use() {
 }
 
 #[test]
+fn list_json_includes_allowed_tools() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("tools-ok");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: tools-ok\ndescription: hinted\nallowed-tools: Read Bash(git:*)\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-tools");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-tools\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let hinted_row = skills
+        .iter()
+        .find(|s| s["name"] == "tools-ok")
+        .expect("tools-ok");
+    assert_eq!(
+        hinted_row["allowed_tools"], "Read Bash(git:*)",
+        "list JSON must carry allowed_tools: {stdout}"
+    );
+    assert!(
+        hinted_row.get("allowedTools").is_none(),
+        "list JSON allowed_tools must stay snake_case: {stdout}"
+    );
+    let bare_row = skills
+        .iter()
+        .find(|s| s["name"] == "no-tools")
+        .expect("no-tools");
+    assert!(
+        bare_row["allowed_tools"].is_null(),
+        "omitted allowed_tools is null on list JSON: {stdout}"
+    );
+}
+
+#[test]
 fn list_catalog_includes_when_to_use() {
     let extra = tempfile::tempdir().expect("extra");
     let hinted = extra.path().join("ranked");
@@ -2132,6 +2239,28 @@ fn list_xml_includes_when_to_use() {
         .success()
         .stdout(predicates::str::contains(
             "<when_to_use>A &amp; B</when_to_use>",
+        ));
+}
+
+#[test]
+fn list_xml_includes_allowed_tools() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("tools-ok");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: tools-ok\ndescription: hinted\nallowed-tools: Read & Bash\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--xml")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "<allowed_tools>Read &amp; Bash</allowed_tools>",
         ));
 }
 
@@ -2206,6 +2335,43 @@ fn why_json_includes_argument_hint() {
     assert_eq!(
         hinted_row["argument_hint"], "[name]",
         "why JSON must carry argument_hint like list JSON/XML: {stdout}"
+    );
+}
+
+#[test]
+fn why_json_includes_allowed_tools() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("tools-ok");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: tools-ok\ndescription: hinted\nallowed_tools: Read Bash(git:*)\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let hinted_row = loaded
+        .iter()
+        .find(|s| s["name"] == "tools-ok")
+        .expect("tools-ok");
+    assert_eq!(
+        hinted_row["allowed_tools"], "Read Bash(git:*)",
+        "why JSON must carry allowed_tools like list JSON/XML: {stdout}"
     );
 }
 

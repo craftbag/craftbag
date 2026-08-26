@@ -63,15 +63,17 @@ are the `--watch-dirs` flag name (same walk). The older `--json` /
 `list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
 `why` JSON `loaded` rows include
 `description` plus `user_invocable`, `disable_model_invocation`,
-`argument_hint`, and `when_to_use` so a host can build a slash palette
-or prompt catalog without re-parsing SKILL.md. Omitted `argument_hint`
-and `when_to_use` are JSON `null` and empty XML tags. List and why JSON
-both serialize `SkillSummary` so those keys cannot drift. CLI `load`
-and MCP `skills_load` print `Argument hint: …` and `When to use: …` in
-the envelope when those frontmatter fields are set (same text as
-list/why JSON). Omitted fields add no line. Description, When to use,
-License, Compatibility, Argument hint, User arguments, and Activate
-hint fold Unicode whitespace to spaces so each stays one envelope
+`argument_hint`, `when_to_use`, and `allowed_tools` so a host can
+build a slash palette, prompt catalog, or apply pre-approved tools
+without re-parsing SKILL.md. Omitted `argument_hint`, `when_to_use`,
+and `allowed_tools` are JSON `null` and empty XML tags. List and why
+JSON both serialize `SkillSummary` so those keys cannot drift. CLI
+`load` and MCP `skills_load` print `Argument hint: …`,
+`When to use: …`, and `Allowed tools: …` in the envelope when those
+frontmatter fields are set (same text as list/why JSON). Omitted
+fields add no line. Description, When to use, License, Compatibility,
+Allowed tools, Argument hint, User arguments, and Activate hint fold
+Unicode whitespace to spaces so each stays one envelope
 line. The skill body after `---` keeps its newlines. Catalog markdown
 is one list item per skill: newlines in a literal `|` or folded `>`
 description or `when-to-use` become spaces (JSON and XML keep the raw
