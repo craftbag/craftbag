@@ -363,3 +363,4 @@
 {"ts": "2026-08-26T18:21:00Z", "job_id": "improve-mpi29-arch-noop", "work_source": "improve", "result": "noop", "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75", "pr": null, "tests": "6min zero git diff", "noop": true}
 {"ts": "2026-08-26T18:24:40Z", "job_id": "expand-4-prove-grok-user", "work_source": "expand", "result": "landed", "head": "22394288cc62912532ac34e6bae09507701bb0c7", "pr": 204, "tests": "incumbent_grok_user_home_vendor_layout_loads", "noop": false}
 {"ts": "2026-08-26T18:28:30Z", "job_id": "adversary-after-204-grok-user-cli-mcp", "work_source": "adversary", "result": "landed", "head": "6b508816a62941eab5299784f2833830279669f4", "pr": 205, "tests": "CLI+MCP grok-user", "noop": false}
+{"ts": "2026-08-26T18:28:50Z", "job_id": "adversary-after-205-grok-user-family-green", "work_source": "adversary", "result": "noop", "head": "6b508816a62941eab5299784f2833830279669f4", "pr": null, "tests": "grok-user family closed", "noop": true}
