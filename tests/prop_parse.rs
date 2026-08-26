@@ -27,7 +27,9 @@ proptest! {
 
     #[test]
     fn missing_frontmatter_is_error(body in ".{0,80}") {
-        prop_assume!(!body.trim_start().starts_with("---"));
+        prop_assume!(!body
+            .trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+            .starts_with("---"));
         let err = parse_skill(&body).unwrap_err();
         prop_assert_eq!(err, ParseError::MissingFrontmatter);
     }

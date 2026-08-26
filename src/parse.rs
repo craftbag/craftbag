@@ -77,7 +77,8 @@ pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
 /// Split `--- yaml --- body`. Parse, peek, and unknown-key scan share
 /// this so a delimiter change cannot drift across those paths.
 fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
-    let trimmed = content.trim_start();
+    // U+FEFF is not White_Space, so trim_start leaves a leading BOM.
+    let trimmed = content.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
     if !trimmed.starts_with("---") {
         return None;
     }
@@ -1038,6 +1039,35 @@ Should fail parse.
             unknown_frontmatter_keys("---\nname: demo\ndescription: d\nhost-only: x\n---\n")
                 .contains(&"host-only".to_owned())
         );
+    }
+
+    #[test]
+    fn split_frontmatter_strips_utf8_bom() {
+        let input = "\u{feff}---\nname: demo\ndescription: d\n---\nhello\n";
+        let (yaml, body) = split_frontmatter(input).expect("bom open");
+        assert_eq!(yaml, "name: demo\ndescription: d");
+        assert_eq!(body, "hello\n");
+        let skill = parse_skill(input).expect("parse bom");
+        assert_eq!(skill.name, "demo");
+        assert_eq!(skill.content, "hello\n");
+        assert_eq!(
+            peek_frontmatter_name(input).as_deref(),
+            Some("demo"),
+            "peek must share the BOM strip"
+        );
+        assert!(
+            unknown_frontmatter_keys(
+                "\u{feff}---\nname: demo\ndescription: d\nhost-only: x\n---\n"
+            )
+            .contains(&"host-only".to_owned())
+        );
+        let spaced = "  \u{feff}---\nname: demo\ndescription: d\n---\nhello\n";
+        assert!(
+            split_frontmatter(spaced).is_some(),
+            "BOM after leading spaces is still an open"
+        );
+        assert!(split_frontmatter("\u{feff}no delimiters").is_none());
+        assert!(split_frontmatter("\u{feff}---\nname: demo\n").is_none());
     }
 
     #[test]
