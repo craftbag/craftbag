@@ -208,3 +208,75 @@ fn stdio_skills_why_vendor_cursor_names_create_rule() {
         "create-rule is a loaded vendor skill, not a skip: {text}"
     );
 }
+
+#[test]
+fn stdio_skills_list_vendor_cursor_names_create_rule() {
+    let cwd = corpus_cursor_project();
+    let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Cursor project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let off = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], false,
+        "list without vendor is not a miss: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    let off_v: serde_json::Value = serde_json::from_str(off_text).expect("list json");
+    let off_skills = off_v["skills"].as_array().expect("skills");
+    assert!(
+        off_skills.iter().all(|s| s["name"] != "create-rule"),
+        "cursor vendor is opt-in: {off_text}"
+    );
+
+    let on = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {"vendor": ["cursor"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let row = skills
+        .iter()
+        .find(|s| s["name"] == "create-rule")
+        .unwrap_or_else(|| panic!("list must name create-rule: {text}"));
+    assert_eq!(
+        row["source"], "cursor",
+        "list JSON source must be the wire token: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize list path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "list path must be the fixture SKILL.md: {text}");
+}
