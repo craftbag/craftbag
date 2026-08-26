@@ -388,10 +388,10 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     in_metadata = true;
                 }
                 "user-invocable" | "user_invocable" => {
-                    user_invocable = parse_bool_yaml(value).unwrap_or(true);
+                    user_invocable = require_bool_yaml(key, value)?;
                 }
                 "disable-model-invocation" | "disable_model_invocation" => {
-                    disable_model_invocation = parse_bool_yaml(value).unwrap_or(false);
+                    disable_model_invocation = require_bool_yaml(key, value)?;
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
                     argument_hint = Some(value.to_owned());
@@ -509,6 +509,19 @@ fn parse_bool_yaml(value: &str) -> Option<bool> {
         "false" | "no" | "off" | "0" => Some(false),
         _ => None,
     }
+}
+
+/// Present bool key with empty / null / garbage is an error, not the
+/// omitted default. Same rule as MCP present-null.
+fn require_bool_yaml(key: &str, value: &str) -> Result<bool, ParseError> {
+    parse_bool_yaml(value).ok_or_else(|| {
+        let shown = crate::sanitize_error_token(value);
+        if shown.trim().is_empty() {
+            ParseError::InvalidYaml(format!("{key} value is empty"))
+        } else {
+            ParseError::InvalidYaml(format!("{key} must be a boolean, got: {shown}"))
+        }
+    })
 }
 
 fn strip_yaml_inline_comment(raw: &str) -> &str {
@@ -998,5 +1011,67 @@ Should fail parse.
             Path::new("/tmp/other/wanted/../SKILL.md"),
             "wanted"
         ));
+    }
+
+    #[test]
+    fn parse_skill_present_null_user_invocable_is_error_not_default() {
+        // Same present-null rule as MCP: a typed boolean that is present
+        // as YAML null / empty / garbage must not stay the omitted default.
+        for (key, raw, needle) in [
+            ("user_invocable", "null", "boolean"),
+            ("user-invocable", "~", "boolean"),
+            ("user_invocable", "", "empty"),
+            ("user_invocable", "maybe", "boolean"),
+            ("user_invocable", "yes\u{2028}no", "boolean"),
+        ] {
+            let input = format!("---\nname: demo\ndescription: d\n{key}: {raw}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                matches!(err, ParseError::InvalidYaml(_)) && msg.contains(needle),
+                "present {key}: {raw:?} must not silently default true: {err}"
+            );
+            assert_eq!(
+                msg.lines().count(),
+                1,
+                "parse error must stay one line: {msg:?}"
+            );
+            assert!(
+                !msg.contains('\u{2028}'),
+                "hostile bool value must be sanitized: {msg:?}"
+            );
+        }
+        let ok = parse_skill("---\nname: demo\ndescription: d\nuser_invocable: false\n---\nbody\n")
+            .expect("false must still load");
+        assert!(
+            !ok.user_invocable,
+            "valid false must not become the omitted default"
+        );
+        let omitted = parse_skill("---\nname: demo\ndescription: d\n---\nbody\n").expect("omit");
+        assert!(
+            omitted.user_invocable,
+            "omitted user_invocable still defaults true"
+        );
+    }
+
+    #[test]
+    fn parse_skill_present_null_disable_model_invocation_is_error_not_default() {
+        for (key, raw) in [
+            ("disable_model_invocation", "null"),
+            ("disable-model-invocation", ""),
+            ("disable_model_invocation", "garbage"),
+        ] {
+            let input = format!("---\nname: demo\ndescription: d\n{key}: {raw}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            assert!(
+                matches!(err, ParseError::InvalidYaml(_)),
+                "present {key}: {raw:?} must not silently default false: {err}"
+            );
+        }
+        let ok = parse_skill(
+            "---\nname: demo\ndescription: d\ndisable-model-invocation: true\n---\nbody\n",
+        )
+        .expect("true must still load");
+        assert!(ok.disable_model_invocation);
     }
 }
