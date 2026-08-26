@@ -628,14 +628,20 @@ fn extra_skills_subdir_is_collection(
     }
 }
 
-/// One read of extra-path SKILL.md. Named packages reuse the body;
-/// leftover collection roots do not load it as a package.
+/// One read of extra-path SKILL.md. Named packages reuse the body
+/// and a successful [`parse_skill`]; leftover collection roots do
+/// not load it as a package.
 #[derive(Debug)]
 enum ExtraPathMd {
     /// Leftover collection root. Scan siblings / extra/skills.
     Collection,
     /// Stay this extra-path package. Prefetched SKILL.md body.
+    /// Load still parses (name did not match this dir, or peek
+    /// failed after a leftover that is not a collection).
     Package(String),
+    /// Stay this extra-path package. [`parse_skill`] already
+    /// succeeded on the prefetched body.
+    Parsed(Skill),
     /// Stay this extra-path package. SKILL.md could not be read
     /// (FIFO, chmod, directory leftover without siblings).
     Unreadable(String),
@@ -728,10 +734,10 @@ fn classify_extra_path_md(dir: &Path, skill_file: &Path, ascii_names: bool) -> E
         if ascii_names && !crate::parse::skill_name_is_ascii_policy(&name) {
             return extra_path_collection_signal_or_package(dir, content);
         }
-        if parse_skill(&content).is_err() {
-            return extra_path_collection_signal_or_package(dir, content);
+        match parse_skill(&content) {
+            Ok(skill) => return ExtraPathMd::Parsed(skill),
+            Err(_) => return extra_path_collection_signal_or_package(dir, content),
         }
-        return ExtraPathMd::Package(content);
     }
     if dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir) {
         ExtraPathMd::Collection
@@ -749,7 +755,8 @@ fn extra_path_collection_signal_or_package(dir: &Path, content: String) -> Extra
 }
 
 /// Load a classified named extra-path package without a second
-/// [`read_skill_md`]. Collection is handled by the caller.
+/// [`read_skill_md`]. An [`ExtraPathMd::Parsed`] classify also skips
+/// a second [`parse_skill`]. Collection is handled by the caller.
 fn load_classified_extra_path_package(
     skill_file: &Path,
     classified: ExtraPathMd,
@@ -769,6 +776,20 @@ fn load_classified_extra_path_package(
             finish_load_skill_file(
                 skill_file,
                 &content,
+                &SkillSource::ExtraPath,
+                opts,
+                &[],
+                skills,
+                skips,
+            );
+        }
+        ExtraPathMd::Parsed(skill) => {
+            if path_is_ignored(skill_file, ignore) {
+                return;
+            }
+            finish_load_parsed_skill(
+                skill_file,
+                skill,
                 &SkillSource::ExtraPath,
                 opts,
                 &[],
@@ -1187,66 +1208,8 @@ fn finish_load_skill_file(
     skips: &mut Vec<SkillSkip>,
 ) {
     match parse_skill(content) {
-        Ok(mut skill) => {
-            if opts.ascii_names && !crate::parse::skill_name_is_ascii_policy(&skill.name) {
-                skips.push(SkillSkip {
-                    path: skill_file.to_path_buf(),
-                    name: Some(skill.name.clone()),
-                    kind: SkipKind::ParseError,
-                    detail: ParseError::InvalidYaml(
-                        "name must be lowercase alphanumeric and hyphens only".to_owned(),
-                    )
-                    .to_string(),
-                    winner_path: None,
-                });
-                return;
-            }
-            if opts
-                .disabled
-                .iter()
-                .any(|d| crate::parse::skill_names_equal(d, &skill.name))
-            {
-                return;
-            }
-            if denylist
-                .iter()
-                .any(|d| crate::parse::skill_names_equal(d, &skill.name))
-            {
-                return;
-            }
-            if !skill_name_matches_directory(skill_file, &skill.name) {
-                skips.push(SkillSkip {
-                    path: skill_file.to_path_buf(),
-                    name: Some(skill.name.clone()),
-                    kind: SkipKind::NameDirectoryMismatch,
-                    detail: format!(
-                        "frontmatter name `{}` must match parent directory name",
-                        skill.name
-                    ),
-                    winner_path: None,
-                });
-                return;
-            }
-            if let Some(winner) = skills
-                .iter()
-                .find(|s| crate::parse::skill_names_equal(&s.name, &skill.name))
-            {
-                let winner_path = winner
-                    .source_path
-                    .clone()
-                    .unwrap_or_else(|| PathBuf::from("<already-loaded>"));
-                skips.push(SkillSkip {
-                    path: skill_file.to_path_buf(),
-                    name: Some(skill.name.clone()),
-                    kind: SkipKind::NameCollision,
-                    detail: format!("lost to {}", winner_path.display()),
-                    winner_path: Some(winner_path),
-                });
-                return;
-            }
-            skill.source = source.clone();
-            skill.source_path = Some(skill_file.to_path_buf());
-            skills.push(skill);
+        Ok(skill) => {
+            finish_load_parsed_skill(skill_file, skill, source, opts, denylist, skills, skips);
         }
         Err(e) => {
             skips.push(SkillSkip {
@@ -1258,6 +1221,76 @@ fn finish_load_skill_file(
             });
         }
     }
+}
+
+fn finish_load_parsed_skill(
+    skill_file: &Path,
+    mut skill: Skill,
+    source: &SkillSource,
+    opts: &DiscoveryOptions,
+    denylist: &[&str],
+    skills: &mut Vec<Skill>,
+    skips: &mut Vec<SkillSkip>,
+) {
+    if opts.ascii_names && !crate::parse::skill_name_is_ascii_policy(&skill.name) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: Some(skill.name.clone()),
+            kind: SkipKind::ParseError,
+            detail: ParseError::InvalidYaml(
+                "name must be lowercase alphanumeric and hyphens only".to_owned(),
+            )
+            .to_string(),
+            winner_path: None,
+        });
+        return;
+    }
+    if opts
+        .disabled
+        .iter()
+        .any(|d| crate::parse::skill_names_equal(d, &skill.name))
+    {
+        return;
+    }
+    if denylist
+        .iter()
+        .any(|d| crate::parse::skill_names_equal(d, &skill.name))
+    {
+        return;
+    }
+    if !skill_name_matches_directory(skill_file, &skill.name) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: Some(skill.name.clone()),
+            kind: SkipKind::NameDirectoryMismatch,
+            detail: format!(
+                "frontmatter name `{}` must match parent directory name",
+                skill.name
+            ),
+            winner_path: None,
+        });
+        return;
+    }
+    if let Some(winner) = skills
+        .iter()
+        .find(|s| crate::parse::skill_names_equal(&s.name, &skill.name))
+    {
+        let winner_path = winner
+            .source_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("<already-loaded>"));
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: Some(skill.name.clone()),
+            kind: SkipKind::NameCollision,
+            detail: format!("lost to {}", winner_path.display()),
+            winner_path: Some(winner_path),
+        });
+        return;
+    }
+    skill.source = source.clone();
+    skill.source_path = Some(skill_file.to_path_buf());
+    skills.push(skill);
 }
 
 fn is_skill_md_filename(path: &Path) -> bool {
@@ -1334,9 +1367,9 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
-        extra_path_is_loose_collection, find_skill_by_name, unknown_or_skipped_skill_message,
-        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-        with_home_override,
+        extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
+        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+        walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -2266,22 +2299,43 @@ mod tests {
         write_skill(&pkg, "demo", "PREFETCH_BODY");
         let skill_file = pkg.join("SKILL.md");
         match classify_extra_path_md(&pkg, &skill_file, false) {
-            ExtraPathMd::Package(content) => {
-                assert!(
-                    content.contains("PREFETCH_BODY"),
-                    "named extra-path package must keep the SKILL.md body: {content}"
-                );
-                assert!(
-                    content.contains("name: demo"),
-                    "prefetched body must include frontmatter: {content}"
-                );
+            ExtraPathMd::Parsed(skill) => {
+                assert_eq!(skill.name, "demo");
+                assert_eq!(skill.content.trim(), "PREFETCH_BODY");
             }
-            other => panic!("named extra-path package must be Package, got {other:?}"),
+            other => panic!("named extra-path package must be Parsed, got {other:?}"),
         }
         assert!(
             !extra_path_is_loose_collection(&pkg, &skill_file, false),
             "named extra-path package is not a leftover collection"
         );
+    }
+
+    #[test]
+    fn extra_path_load_reuses_classified_parse() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        write_skill(&pkg, "demo", "DISK_BODY");
+        let skill_file = pkg.join("SKILL.md");
+        let skill = crate::Skill::new("demo", "preparsed", "PREPARSED_BODY");
+        let mut skills = Vec::new();
+        let mut skips = Vec::new();
+        load_classified_extra_path_package(
+            &skill_file,
+            ExtraPathMd::Parsed(skill),
+            &[],
+            &DiscoveryOptions::default(),
+            &mut skills,
+            &mut skips,
+        );
+        assert!(skips.is_empty(), "skips={skips:?}");
+        assert_eq!(skills.len(), 1, "skills={skills:?}");
+        assert_eq!(skills[0].name, "demo");
+        assert_eq!(
+            skills[0].content, "PREPARSED_BODY",
+            "load must keep the classified parse, not re-read or re-parse disk"
+        );
+        assert_eq!(skills[0].source, SkillSource::ExtraPath);
     }
 
     #[test]
