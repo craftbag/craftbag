@@ -288,7 +288,7 @@ fn is_vendor_compat(source: &SkillSource) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ActivationReason, WhyReport, why};
+    use super::{ActivationReason, SkillSummary, WhyReport, why};
     use crate::skill::Skill;
     use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
     use crate::source::SkillSource;
@@ -795,5 +795,58 @@ mod tests {
         )
         .expect("old extraPath");
         assert_eq!(old.loaded[0].source, SkillSource::ExtraPath);
+    }
+
+    #[test]
+    fn skill_summary_json_keys_have_list_xml_siblings() {
+        use crate::activate::format_available_skills_xml;
+
+        // Machine-readable list/why JSON and list XML must share these
+        // keys. path is location in official skills-ref XML. Catalog and
+        // load stay text envelopes (when_to_use / allowed_tools / argument_hint).
+        const FIELDS: &[(&str, &str)] = &[
+            ("name", "name"),
+            ("description", "description"),
+            ("source", "source"),
+            ("path", "location"),
+            ("user_invocable", "user_invocable"),
+            ("disable_model_invocation", "disable_model_invocation"),
+            ("argument_hint", "argument_hint"),
+            ("when_to_use", "when_to_use"),
+            ("allowed_tools", "allowed_tools"),
+        ];
+
+        let mut skill = Skill::new("slash-ok", "palette", "body");
+        skill.source = SkillSource::ExtraPath;
+        skill.source_path = Some(PathBuf::from("/tmp/slash-ok/SKILL.md"));
+        skill.user_invocable = false;
+        skill.disable_model_invocation = true;
+        skill.argument_hint = Some("[name]".to_owned());
+        skill.when_to_use = Some("after rebase".to_owned());
+        skill.allowed_tools = Some("Read Bash".to_owned());
+
+        let summary = SkillSummary::from(&skill);
+        let json = serde_json::to_value(&summary).expect("summary serde");
+        let xml = format_available_skills_xml(std::slice::from_ref(&skill));
+        for (json_key, xml_tag) in FIELDS {
+            assert!(
+                json.get(*json_key).is_some(),
+                "SkillSummary JSON must keep {json_key}: {json}"
+            );
+            assert!(
+                json.get(*json_key)
+                    .is_some_and(|v| !v.is_null() || *json_key == "path"),
+                "populated SkillSummary.{json_key} must not be omitted: {json}"
+            );
+            let open = format!("<{xml_tag}>");
+            assert!(
+                xml.contains(&open),
+                "list XML must emit <{xml_tag}> for SkillSummary.{json_key}: {xml}"
+            );
+        }
+        assert!(
+            json.get("argumentHint").is_none() && json.get("allowedTools").is_none(),
+            "SkillSummary keys stay snake_case, not Skill camelCase: {json}"
+        );
     }
 }
