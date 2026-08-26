@@ -140,6 +140,11 @@ fn validate_json_name_mismatch_exposes_error_kind() {
         v["error"].as_str().is_some_and(|e| e.contains("good-name")),
         "stdout={stdout}"
     );
+    assert_eq!(
+        v["path"].as_str().map(std::path::Path::new),
+        Some(path.as_path()),
+        "validate --json must keep the SKILL.md path: {stdout}"
+    );
 }
 
 #[test]

@@ -102,7 +102,7 @@ enum Cmd {
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
-        /// Same `{ error_kind, error }` peel as `why --json` on failure.
+        /// Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`.
         #[arg(long)]
         json: bool,
     },
