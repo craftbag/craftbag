@@ -262,3 +262,4 @@
 {"ts": "2026-08-26T06:26:56Z", "job_id": "adversary-after-151-noop", "work_source": "adversary", "result": "noop", "head": "a8195828f5ad38c8dcdcfb0d08dd5b3d48d03298", "pr": null, "tests": "killed at 6m zero git diff", "noop": true}
 {"ts": "2026-08-26T06:34:15Z", "job_id": "improve-mpi26-arch-noop", "work_source": "improve", "result": "noop", "head": "a8195828f5ad38c8dcdcfb0d08dd5b3d48d03298", "pr": null, "tests": "killed at 6m zero git diff", "noop": true}
 {"ts": "2026-08-26T06:45:05Z", "job_id": "improve-mpi26-contrib-implicit-docs", "work_source": "improve", "result": "landed", "head": "0c89297dd6d85e847530a576b87560a6e29b7567", "pr": 152, "tests": "3 passed crate-root implicit_roots docs", "noop": false}
+{"ts": "2026-08-26T06:56:20Z", "job_id": "adversary-after-152-implicit-walk-docs", "work_source": "adversary", "result": "landed", "head": "b957e5b6b3e88a435a5019cd7ab361680312485d", "pr": 153, "tests": "13 passed implicit_roots walk wording", "noop": false}
