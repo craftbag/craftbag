@@ -808,7 +808,9 @@ fn user_dir_skills_subdir_is_loose_collection(skills_subdir: &Path, ascii_names:
     match package_md.as_ref() {
         Some(skill_file) => match classify_extra_path_md(skills_subdir, skill_file, ascii_names) {
             ExtraPathMd::Collection { .. } | ExtraPathMd::Unreadable(_) => true,
-            ExtraPathMd::Package(_) | ExtraPathMd::Parsed(_) => false,
+            ExtraPathMd::Package(_) | ExtraPathMd::Parsed(_) | ExtraPathMd::ParseFailed { .. } => {
+                false
+            }
         },
         None => true,
     }
@@ -894,6 +896,13 @@ enum ExtraPathMd {
     /// Stay this extra-path package. [`parse_skill`] already
     /// succeeded on the prefetched body.
     Parsed(Skill),
+    /// Stay this extra-path package. [`parse_skill`] already
+    /// failed on the prefetched body (matching peek, no extra/skills
+    /// collection signal). Load must not parse again.
+    ParseFailed {
+        name: Option<String>,
+        detail: String,
+    },
     /// Stay this extra-path package. SKILL.md could not be read
     /// (FIFO, chmod, directory leftover without siblings).
     Unreadable(String),
@@ -997,7 +1006,18 @@ fn classify_extra_path_md(dir: &Path, skill_file: &Path, ascii_names: bool) -> E
         }
         match parse_skill(&content) {
             Ok(skill) => return ExtraPathMd::Parsed(skill),
-            Err(_) => return extra_path_collection_signal_or_package(dir, content, Some(name)),
+            Err(e) => {
+                if extra_path_has_skills_entry(dir) {
+                    return ExtraPathMd::Collection {
+                        peeked_name: Some(name),
+                        read_err: None,
+                    };
+                }
+                return ExtraPathMd::ParseFailed {
+                    name: Some(name),
+                    detail: e.to_string(),
+                };
+            }
         }
     }
     if dir_has_child_skill_packages(dir) || extra_path_has_skills_subdir(dir) {
@@ -1027,8 +1047,9 @@ fn extra_path_collection_signal_or_package(
 
 /// Load a classified named extra-path or user_dir/skills package
 /// without a second [`read_skill_md`]. An [`ExtraPathMd::Parsed`]
-/// classify also skips a second [`parse_skill`]. Collection is
-/// handled by the caller.
+/// classify also skips a second [`parse_skill`]. An
+/// [`ExtraPathMd::ParseFailed`] classify skips a second
+/// [`parse_skill`] the same way. Collection is handled by the caller.
 fn load_classified_extra_path_package(
     skill_file: &Path,
     classified: ExtraPathMd,
@@ -1053,6 +1074,18 @@ fn load_classified_extra_path_package(
                 return;
             }
             finish_load_parsed_skill(skill_file, skill, source, opts, &[], skills, skips);
+        }
+        ExtraPathMd::ParseFailed { name, detail } => {
+            if path_is_ignored(skill_file, ignore) {
+                return;
+            }
+            skips.push(SkillSkip {
+                path: skill_file.to_path_buf(),
+                name,
+                kind: SkipKind::ParseError,
+                detail,
+                winner_path: None,
+            });
         }
         ExtraPathMd::Unreadable(detail) => {
             if path_is_ignored(skill_file, ignore) {
@@ -3082,6 +3115,48 @@ mod tests {
             "load must keep the classified parse, not re-read or re-parse disk"
         );
         assert_eq!(skills[0].source, SkillSource::ExtraPath);
+    }
+
+    #[test]
+    fn extra_path_named_parse_fail_is_parsed_once() {
+        // name matches this extra-path dir, so classify calls parse_skill
+        // (missing description). extra/skills is absent, so this stays
+        // the package. load must reuse that error, not parse_skill again.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let skill_file = pkg.join("SKILL.md");
+        let body = "---\nname: demo\n---\nNO_DESC\n";
+        fs::write(&skill_file, body).expect("write");
+        let _ = crate::parse::take_parse_skill_contents();
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "missing description must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::ParseError
+                    && s.path == skill_file
+                    && s.name.as_deref() == Some("demo")
+            }),
+            "named extra-path parse fail must stay a parse_error skip: {:?}",
+            report.skips
+        );
+        let parses = crate::parse::take_parse_skill_contents();
+        let demo_parses = parses.iter().filter(|c| c.contains("NO_DESC")).count();
+        assert_eq!(
+            demo_parses, 1,
+            "classify parse_skill fail must not be parsed again in load: parses={parses:?}"
+        );
     }
 
     fn take_read_skill_md_paths() -> Vec<PathBuf> {

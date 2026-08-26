@@ -18,6 +18,18 @@ const HYPHEN_BOOL_KEYS: &[(&str, &str)] = &[
     ("disable-model-invocation", "disable_model_invocation"),
 ];
 
+#[cfg(test)]
+thread_local! {
+    static PARSE_SKILL_CONTENTS: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Drain [`parse_skill`] bodies recorded in this test thread.
+#[cfg(test)]
+pub(crate) fn take_parse_skill_contents() -> Vec<String> {
+    PARSE_SKILL_CONTENTS.with(|c| std::mem::take(&mut *c.borrow_mut()))
+}
+
 /// Official agentskills fields plus host extensions this crate parses.
 pub(crate) fn is_known_frontmatter_key(key: &str) -> bool {
     matches!(
@@ -102,6 +114,8 @@ fn frontmatter_yaml(content: &str) -> Option<&str> {
 /// `source` defaults to [`crate::SkillSource::Agents`]; callers override it
 /// from the discovery root.
 pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
+    #[cfg(test)]
+    PARSE_SKILL_CONTENTS.with(|c| c.borrow_mut().push(content.to_owned()));
     let (yaml_block, body) = split_frontmatter(content).ok_or(ParseError::MissingFrontmatter)?;
 
     let mut skill = parse_frontmatter(yaml_block)?;
