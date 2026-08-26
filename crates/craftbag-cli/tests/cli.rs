@@ -2111,7 +2111,32 @@ fn list_help_names_vendor_path_examples() {
         .stdout(predicates::str::contains("--format"))
         .stdout(predicates::str::contains("json, xml, catalog, watch"))
         .stdout(predicates::str::contains("watch-dirs"))
+        .stdout(predicates::str::contains("watch_dirs"))
         .stdout(predicates::str::contains("Example:"));
+}
+
+#[test]
+fn why_help_names_json_error_kind() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--json"))
+        .stdout(predicates::str::contains("error_kind"))
+        .stdout(predicates::str::contains("{ error_kind, error }"));
+}
+
+#[test]
+fn validate_help_names_json_error_kind() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--json"))
+        .stdout(predicates::str::contains("error_kind"))
+        .stdout(predicates::str::contains("{ error_kind, error }"));
 }
 
 #[test]

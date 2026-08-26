@@ -58,3 +58,20 @@ fn local_gate_commands_run_in_ci() {
         );
     }
 }
+
+/// Bline host notes must name the SkillMiss peel that landed in #132-#134.
+#[test]
+fn bline_consumer_host_table_names_skill_miss() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    let ci = repo_file(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("- 'factory/BLINE_CONSUMER.md'"),
+        "rust path-filter must include factory/BLINE_CONSUMER.md so a host-table edit runs this test"
+    );
+    assert!(
+        notes
+            .lines()
+            .any(|l| l.contains('|') && l.contains("SkillMiss.error") && l.contains("error_kind")),
+        "BLINE_CONSUMER host table must name SkillMiss.error and error_kind"
+    );
+}
