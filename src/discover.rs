@@ -8059,4 +8059,48 @@ mod tests {
             report.skills
         );
     }
+
+    #[test]
+    fn watch_dirs_omits_ignored_user_dir() {
+        // cwd and HOME implicit roots are locked above. The leftover
+        // analog is host user_skills_dir.
+        let cwd = tempfile::tempdir().expect("cwd");
+        fs::create_dir_all(cwd.path().join(".git")).expect("git");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("wanted"), "wanted", "keep");
+        let user = tempfile::tempdir().expect("user");
+        write_skill(&user.path().join("userskill"), "userskill", "hide");
+        let home = tempfile::tempdir().expect("home");
+        let opts = DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            user_skills_dir: Some(user.path().to_path_buf()),
+            ignore: vec![user.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "watch_dirs must still list the extra path: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, user.path()),
+            "watch_dirs must omit an ignored user_dir: {dirs:?}"
+        );
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(cwd.path(), &opts).expect("discover")
+        });
+        assert!(
+            find_skill_by_name(&report.skills, "wanted").is_some(),
+            "discover must still load wanted: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "userskill").is_none(),
+            "discover must ignore user_dir userskill: {:?}",
+            report.skills
+        );
+    }
 }
