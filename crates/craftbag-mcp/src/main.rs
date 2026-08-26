@@ -480,6 +480,10 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/cursor-user")
     }
 
+    fn corpus_grok_user() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/grok-user")
+    }
+
     fn call(id: i64, name: &str, arguments: serde_json::Value) -> serde_json::Value {
         handle(RpcRequest {
             jsonrpc: Some("2.0".into()),
@@ -752,6 +756,48 @@ mod tests {
         assert!(
             on.contains("home-rule"),
             "MCP list must find HOME/.cursor/skills when vendor cursor is on: {on}"
+        );
+    }
+
+    #[test]
+    fn list_watch_vendor_grok_lists_user_home() {
+        let home = corpus_grok_user();
+        let want = home.join(".grok").join("skills");
+        let out = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["grok".to_owned()],
+                format: Some("watch".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == want.as_path()),
+            "must watch HOME/.grok/skills when vendor grok is on: {out}"
+        );
+    }
+
+    #[test]
+    fn list_json_vendor_grok_loads_user_home_layout() {
+        let home = corpus_grok_user();
+        let off = craftbag::with_home_override(Some(home.clone()), || {
+            list_json(DiscoverArgs::default()).expect("list")
+        });
+        assert!(
+            !off.contains("home-grok"),
+            "grok vendor is opt-in at HOME too: {off}"
+        );
+        let on = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["grok".to_owned()],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            on.contains("home-grok"),
+            "MCP list must find HOME/.grok/skills when vendor grok is on: {on}"
         );
     }
 
