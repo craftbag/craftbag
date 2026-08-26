@@ -1059,6 +1059,7 @@ Should fail parse.
     fn parse_skill_present_null_disable_model_invocation_is_error_not_default() {
         for (key, raw) in [
             ("disable_model_invocation", "null"),
+            ("disable-model-invocation", "~"),
             ("disable-model-invocation", ""),
             ("disable_model_invocation", "garbage"),
         ] {
