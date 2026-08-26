@@ -6,30 +6,30 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "58c7f3f2a08d113e01da1086810e6ee4501b9001",
+  "ledger_sha": "0dd6808dc0ecd0e34d6915af7be4ea95824ff74e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58",
   "expand_cursor": 0,
   "expand_noop_streak": 1,
   "last_job": {
-    "id": "expand-5-competitor-steal-list-noop",
-    "work_source": "expand",
-    "started_at": "2026-08-26T19:56:30Z",
-    "finished_at": "2026-08-26T19:56:50Z",
-    "result": "noop",
+    "id": "prove-grok-user-why-home-grok",
+    "work_source": "prove",
+    "started_at": "2026-08-26T19:56:50Z",
+    "finished_at": "2026-08-26T19:58:20Z",
+    "result": "ok",
     "head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58",
     "pr": null,
     "files": [],
-    "tests": "COMPETITOR-ANALYSIS 2d old; steal list XML/NFKC/strict/codes already shipped",
+    "tests": "why home-grok --vendor grok loads source grok",
     "review": "0"
   },
   "last_sha": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-26T19:56:50Z",
+    "checked_at": "2026-08-26T19:58:20Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -56,7 +56,7 @@
       "tests/corpus/incumbent/cursor-user (HOME + --vendor cursor)",
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)"
     ],
-    "last_why_summary": "grok-user HOME + --vendor grok loads home-grok; vendor off omits it."
+    "last_why_summary": "grok-user HOME + --vendor grok why names home-grok; vendor off is unknown_skill."
   },
   "budgets": {
     "max_cycles": null,
