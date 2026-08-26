@@ -3909,11 +3909,21 @@ mod tests {
                 name: "cursor".to_owned()
             }
         );
-        let want = cwd.join(".cursor/skills/create-rule/SKILL.md");
-        assert_eq!(
-            why.loaded[0].path.as_deref(),
-            Some(want.as_path()),
-            "why path must be the fixture SKILL.md"
+        let want = cwd
+            .join(".cursor")
+            .join("skills")
+            .join("create-rule")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the fixture SKILL.md: got={got:?} want={want:?}"
         );
         assert!(
             why.skips.is_empty(),
