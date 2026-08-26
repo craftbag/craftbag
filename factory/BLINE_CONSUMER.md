@@ -93,6 +93,8 @@ that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
 Project, home, vendor, and `user_dir` roots are listed only when they
 are directories. A FIFO, socket, device, or regular file at
 `.agents/skills` (or the matching vendor / user path) is omitted.
+An escaped project or home skills root (symlink out of that walk
+root) is omitted, same as discover.
 
 Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
@@ -101,8 +103,9 @@ paths that `discover` walks: a named extra-path package is the package
 dir only; a collection is `dir` plus `dir/skills`. An extra-path
 `SKILL.md` file is listed only when it is a regular file (or a symlink
 to one). A FIFO, socket, or device is omitted, same as discover.
-Escaped or unreadable extra `skills/` is omitted (discover falls back
-to `dir/`).
+Escaped project or home `.agents/skills` / `.{name}/skills` is omitted
+(discover does not walk that tree). Escaped or unreadable extra
+`skills/` is omitted (discover falls back to `dir/`).
 
 ## Compare on one tree
 
