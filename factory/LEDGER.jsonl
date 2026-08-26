@@ -340,3 +340,4 @@
 {"ts": "2026-08-26T15:01:30Z", "job_id": "adversary-after-192-cli-winner-path-green", "work_source": "adversary", "result": "noop", "head": "6d1643a95694a239ecd606b5cce6f666ab5d7348", "pr": null, "tests": "192 already locks CLI wires", "noop": true}
 {"ts": "2026-08-26T15:08:00Z", "job_id": "improve-mpi29-dev-noop", "work_source": "improve", "result": "noop", "head": "6d1643a95694a239ecd606b5cce6f666ab5d7348", "pr": null, "tests": "zero git diff", "noop": true}
 {"ts": "2026-08-26T16:24:40Z", "job_id": "improve-mpi29-user-winner-path-help", "work_source": "improve", "result": "landed", "head": "bcd789e23418907e7e77734867ffb80390d2a6c2", "pr": 193, "tests": "why --help + MCP names winner_path", "noop": false}
+{"ts": "2026-08-26T16:41:30Z", "job_id": "adversary-after-193-validate-help", "work_source": "adversary", "result": "landed", "head": "28d24583a90898630469ea574b21ada6c7f75e44", "pr": 194, "tests": "validate --help names winner_path", "noop": false}
