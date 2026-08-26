@@ -393,3 +393,4 @@
 {"ts": "2026-08-26T20:59:00Z", "job_id": "expand-0-corpus-nested-cursor-rejected", "work_source": "expand", "result": "noop", "head": "110ba11020a25e629cbe56060eb490f37d73135e", "pr": null, "tests": "zero diff; not Bline miss", "noop": true}
 {"ts": "2026-08-26T21:06:39Z", "job_id": "expand-1-serde-path-props", "work_source": "expand", "result": "landed", "head": "212f61e60d88e62b38d764d8ab337f3cd9172981", "pr": 215, "tests": "path and winner_path serde props", "noop": false}
 {"ts": "2026-08-26T21:08:00Z", "job_id": "adversary-after-215-props-green", "work_source": "adversary", "result": "noop", "head": "212f61e60d88e62b38d764d8ab337f3cd9172981", "pr": null, "tests": "props already vary", "noop": true}
+{"ts": "2026-08-26T21:15:00Z", "job_id": "improve-mpi31-qa-noop", "work_source": "improve", "result": "noop", "head": "212f61e60d88e62b38d764d8ab337f3cd9172981", "pr": null, "tests": "zero diff after 6m", "noop": true}
