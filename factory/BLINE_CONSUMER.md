@@ -103,7 +103,9 @@ JSON both serialize `SkillSummary` so those keys cannot drift. A new
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
 (name + description, plus `Use when:` when set). CLI `load` /
 MCP `skills_load` is the text envelope, not that JSON object. CLI
-`load` and MCP `skills_load` print `Argument hint: …`,
+`load --help` and MCP `skills_load` name `argument-hint`, `when-to-use`,
+`triggers`, `allowed-tools`, `license`, `compatibility`, and `metadata`.
+CLI `load` and MCP `skills_load` print `Argument hint: …`,
 `When to use: …`, `Triggers: …`, `Allowed tools: …`, `License: …`,
 `Compatibility: …`, and `Metadata: …` in the envelope when those frontmatter fields
 are set (same text as list/why JSON). Empty `triggers` add no line.
