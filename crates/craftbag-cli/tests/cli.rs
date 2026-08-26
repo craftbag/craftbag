@@ -2845,7 +2845,9 @@ fn validate_help_names_json_error_kind() {
         .stdout(predicates::str::contains("--json"))
         .stdout(predicates::str::contains("error_kind"))
         .stdout(predicates::str::contains("{ error_kind, error }"))
-        .stdout(predicates::str::contains("plus `path`"));
+        .stdout(predicates::str::contains("plus `path`"))
+        .stdout(predicates::str::contains("winner_path"))
+        .stdout(predicates::str::contains("name_collision"));
 }
 
 #[test]

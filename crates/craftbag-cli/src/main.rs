@@ -129,7 +129,7 @@ enum Cmd {
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
-        /// Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`.
+        /// Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
     },
