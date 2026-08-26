@@ -99,6 +99,11 @@ pub struct SkillSummary {
     /// Omitted on cached pre-this-PR why JSON (`None`).
     #[serde(rename = "when_to_use", default)]
     pub when_to_use: Option<String>,
+    /// Same snake_case key as list JSON / list XML. Host-extension trigger
+    /// phrases used by `filter_skills` / `why.activation`. Empty on cached
+    /// pre-this-PR why JSON.
+    #[serde(default)]
+    pub triggers: Vec<String>,
     /// Same snake_case key as list JSON / list XML (not Skill camelCase).
     /// Official agentskills `allowed-tools`. Omitted on cached pre-this-PR
     /// why JSON (`None`).
@@ -127,6 +132,7 @@ impl From<&Skill> for SkillSummary {
             disable_model_invocation: skill.disable_model_invocation,
             argument_hint: skill.argument_hint.clone(),
             when_to_use: skill.when_to_use.clone(),
+            triggers: skill.triggers.clone(),
             allowed_tools: skill.allowed_tools.clone(),
             license: skill.license.clone(),
             compatibility: skill.compatibility.clone(),
@@ -174,8 +180,8 @@ impl WhyReport {
 ///
 /// Loaded rows include `description`, `user_invocable`,
 /// `disable_model_invocation`, `argument_hint`, `when_to_use`,
-/// `allowed_tools`, `license`, and `compatibility` (same keys as
-/// list JSON / list XML).
+/// `triggers`, `allowed_tools`, `license`, and `compatibility`
+/// (same keys as list JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -795,6 +801,30 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_triggers() {
+        let mut hinted = Skill::new("fired", "d", "body");
+        hinted.triggers = vec!["git".to_owned(), "commit".to_owned()];
+        let bare = Skill::new("no-triggers", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["triggers"],
+            serde_json::json!(["git", "commit"]),
+            "why JSON must carry triggers like list JSON/XML: {json}"
+        );
+        assert_eq!(
+            v["loaded"][1]["triggers"],
+            serde_json::json!([]),
+            "empty triggers is [] on why JSON, not omitted: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -827,6 +857,10 @@ mod tests {
         assert!(
             report.loaded[0].allowed_tools.is_none(),
             "omitted allowed_tools must stay None: {json}"
+        );
+        assert!(
+            report.loaded[0].triggers.is_empty(),
+            "omitted triggers must stay empty: {json}"
         );
     }
 
@@ -861,7 +895,7 @@ mod tests {
         // Machine-readable list/why JSON and list XML must share these
         // keys. path is location in official skills-ref XML. Catalog and
         // load stay text envelopes (when_to_use / allowed_tools /
-        // argument_hint / license / compatibility).
+        // argument_hint / license / compatibility / triggers).
         const FIELDS: &[(&str, &str)] = &[
             ("name", "name"),
             ("description", "description"),
@@ -871,6 +905,7 @@ mod tests {
             ("disable_model_invocation", "disable_model_invocation"),
             ("argument_hint", "argument_hint"),
             ("when_to_use", "when_to_use"),
+            ("triggers", "triggers"),
             ("allowed_tools", "allowed_tools"),
             ("license", "license"),
             ("compatibility", "compatibility"),
@@ -883,6 +918,7 @@ mod tests {
         skill.disable_model_invocation = true;
         skill.argument_hint = Some("[name]".to_owned());
         skill.when_to_use = Some("after rebase".to_owned());
+        skill.triggers = vec!["git".to_owned(), "A & B".to_owned()];
         skill.allowed_tools = Some("Read Bash".to_owned());
         skill.license = Some("MIT".to_owned());
         skill.compatibility = Some("rust".to_owned());
@@ -906,6 +942,15 @@ mod tests {
                 "list XML must emit <{xml_tag}> for SkillSummary.{json_key}: {xml}"
             );
         }
+        assert_eq!(
+            json["triggers"],
+            serde_json::json!(["git", "A & B"]),
+            "populated SkillSummary.triggers must copy from Skill (empty [] is a vacuous pass): {json}"
+        );
+        assert!(
+            xml.contains("<triggers>git, A &amp; B</triggers>"),
+            "list XML must emit populated triggers, not an empty tag: {xml}"
+        );
         assert!(
             json.get("argumentHint").is_none() && json.get("allowedTools").is_none(),
             "SkillSummary keys stay snake_case, not Skill camelCase: {json}"
