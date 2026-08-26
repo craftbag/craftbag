@@ -172,7 +172,33 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
         .find(|s| crate::parse::skill_names_equal(&s.name, name))
 }
 
-/// Error text when `load` cannot return a skill.
+/// Wire name when `load` / `why` matched no skill and no skip.
+pub const UNKNOWN_SKILL_KIND: &str = "unknown_skill";
+
+/// Host-branchable load / why miss. Display is the one-line text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SkillMiss {
+    /// Stable token: [`UNKNOWN_SKILL_KIND`] or a skip [`SkipKind::as_str`].
+    #[serde(rename = "error_kind")]
+    pub error_kind: &'static str,
+    /// Same text as CLI stderr / MCP `content[0].text`.
+    pub error: String,
+}
+
+impl SkillMiss {
+    /// True when no matching skill or skip exists.
+    pub fn is_not_found(&self) -> bool {
+        self.error_kind == UNKNOWN_SKILL_KIND
+    }
+}
+
+impl std::fmt::Display for SkillMiss {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.error)
+    }
+}
+
+/// Classify a `load` miss so hosts can branch without scraping Display.
 ///
 /// A matching skip row (parse error, name/dir mismatch, unreadable
 /// package) is not "unknown". Blank peeked names and the `SKILL.md`
@@ -182,19 +208,33 @@ pub fn find_skill_by_name<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Ski
 /// path so extra-path `.` / `..` (joined to discover cwd) stay
 /// locatable. Name, path, and detail go through
 /// [`crate::sanitize_error_token`] so the line cannot split.
-pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
+pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
     let want = name.trim();
     let skip = skips.iter().find(|s| s.matches_requested_name(want));
     match skip {
-        Some(skip) => format!(
-            "skipped skill: {} ({}) at {}: {}",
-            crate::sanitize_error_token(skip_display_name(skip, want)),
-            skip.kind.as_str(),
-            crate::sanitize_error_token(&skip.path.display().to_string()),
-            crate::sanitize_error_token(&skip.detail)
-        ),
-        None => format!("unknown skill: {}", crate::sanitize_error_token(name)),
+        Some(skip) => SkillMiss {
+            error_kind: skip.kind.as_str(),
+            error: format!(
+                "skipped skill: {} ({}) at {}: {}",
+                crate::sanitize_error_token(skip_display_name(skip, want)),
+                skip.kind.as_str(),
+                crate::sanitize_error_token(&skip.path.display().to_string()),
+                crate::sanitize_error_token(&skip.detail)
+            ),
+        },
+        None => SkillMiss {
+            error_kind: UNKNOWN_SKILL_KIND,
+            error: format!("unknown skill: {}", crate::sanitize_error_token(name)),
+        },
     }
+}
+
+/// Error text when `load` cannot return a skill.
+///
+/// Same Display as [`unknown_or_skipped_skill`]. Prefer that when the
+/// host can read [`SkillMiss::error_kind`].
+pub fn unknown_or_skipped_skill_message(name: &str, skips: &[SkillSkip]) -> String {
+    unknown_or_skipped_skill(name, skips).error
 }
 
 fn skip_display_name<'a>(skip: &'a SkillSkip, want: &'a str) -> &'a str {
@@ -1368,8 +1408,8 @@ mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
         extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
-        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-        walk_cwd_to_git_root, watch_dirs, with_home_override,
+        unknown_or_skipped_skill, unknown_or_skipped_skill_message, validate_path,
+        validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -1426,6 +1466,57 @@ mod tests {
             unknown_or_skipped_skill_message("no\nsuch", &[]),
             "unknown skill: no?such"
         );
+    }
+
+    #[test]
+    fn load_miss_exposes_error_kind() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/Bad_Name/SKILL.md"),
+            name: Some("Bad_Name".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        let skipped = unknown_or_skipped_skill("bad_name", std::slice::from_ref(&skip));
+        assert_eq!(skipped.error_kind, "parse_error");
+        assert_eq!(
+            skipped.error,
+            unknown_or_skipped_skill_message("bad_name", std::slice::from_ref(&skip))
+        );
+        assert!(!skipped.is_not_found());
+        let json = serde_json::to_string(&skipped).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "parse_error", "json={json}");
+        assert_eq!(v["error"], skipped.error, "json={json}");
+        assert!(
+            v.get("errorKind").is_none(),
+            "error_kind must stay snake_case: {json}"
+        );
+
+        for kind in SkipKind::all() {
+            let row = SkillSkip {
+                path: PathBuf::from("/tmp/x/SKILL.md"),
+                name: Some("x".to_owned()),
+                kind,
+                detail: "d".to_owned(),
+                winner_path: None,
+            };
+            let miss = unknown_or_skipped_skill("x", &[row]);
+            assert_eq!(miss.error_kind, kind.as_str(), "kind={kind}");
+            assert!(!miss.is_not_found(), "kind={kind}");
+        }
+
+        let unknown = unknown_or_skipped_skill("no-such", &[]);
+        assert_eq!(unknown.error_kind, "unknown_skill");
+        assert_eq!(unknown.error, "unknown skill: no-such");
+        assert!(unknown.is_not_found());
+        let injected = unknown_or_skipped_skill("no\u{2014}such", &[]);
+        assert_eq!(injected.error_kind, "unknown_skill");
+        assert_eq!(injected.error, "unknown skill: no-such");
+        let json = serde_json::to_string(&unknown).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "unknown_skill", "json={json}");
+        assert_eq!(v["error"], "unknown skill: no-such", "json={json}");
     }
 
     #[test]

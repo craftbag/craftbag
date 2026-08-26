@@ -8,9 +8,9 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
+    DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    parse_list_format, progressive_budgets, unknown_or_skipped_skill_message, watch_dirs, why,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -144,7 +144,30 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     .map_err(|e| e.to_string())
 }
 
-fn load_text(args: LoadArgs) -> Result<String, String> {
+struct ToolError {
+    message: String,
+    error_kind: Option<&'static str>,
+}
+
+impl From<String> for ToolError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            error_kind: None,
+        }
+    }
+}
+
+impl From<SkillMiss> for ToolError {
+    fn from(miss: SkillMiss) -> Self {
+        Self {
+            message: miss.error,
+            error_kind: Some(miss.error_kind),
+        }
+    }
+}
+
+fn load_text(args: LoadArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(
         &cwd,
@@ -157,11 +180,11 @@ fn load_text(args: LoadArgs) -> Result<String, String> {
             args.args.as_deref().unwrap_or(""),
             FormatOptions::default(),
         )),
-        None => Err(unknown_or_skipped_skill_message(&args.name, &report.skips)),
+        None => Err(unknown_or_skipped_skill(&args.name, &report.skips).into()),
     }
 }
 
-fn why_json(args: WhyArgs) -> Result<String, String> {
+fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(
         &cwd,
@@ -175,10 +198,14 @@ fn why_json(args: WhyArgs) -> Result<String, String> {
         args.context.as_deref(),
         Some(budgets),
     );
-    if let Some(msg) = why.unknown_skill_message() {
-        return Err(msg);
+    if let Some(miss) = why.unknown_skill_miss() {
+        return Err(miss.into());
     }
-    serde_json::to_string_pretty(&why).map_err(|e| e.to_string())
+    Ok(serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)
+}
+
+fn tool_fail(err: ToolError) -> (String, bool, Option<&'static str>) {
+    (err.message, true, err.error_kind)
 }
 
 fn discover_properties() -> Value {
@@ -279,27 +306,27 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 Ok(p) => p,
                 Err(e) => return Some(err(id, -32602, &e.to_string())),
             };
-            let (text, is_err) = match params.name.as_str() {
+            let (text, is_err, error_kind) = match params.name.as_str() {
                 "skills_list" => match tool_args(params.arguments) {
                     Ok(args) => match list_json(args) {
-                        Ok(s) => (s, false),
-                        Err(e) => (e, true),
+                        Ok(s) => (s, false, None),
+                        Err(e) => tool_fail(e.into()),
                     },
-                    Err(e) => (e, true),
+                    Err(e) => tool_fail(e.into()),
                 },
                 "skills_load" => match serde_json::from_value::<LoadArgs>(params.arguments) {
                     Ok(args) => match load_text(args) {
-                        Ok(s) => (s, false),
-                        Err(e) => (e, true),
+                        Ok(s) => (s, false, None),
+                        Err(e) => tool_fail(e),
                     },
-                    Err(e) => (e.to_string(), true),
+                    Err(e) => tool_fail(e.to_string().into()),
                 },
                 "skills_why" => match tool_args(params.arguments) {
                     Ok(args) => match why_json(args) {
-                        Ok(s) => (s, false),
-                        Err(e) => (e, true),
+                        Ok(s) => (s, false, None),
+                        Err(e) => tool_fail(e),
                     },
-                    Err(e) => (e, true),
+                    Err(e) => tool_fail(e.into()),
                 },
                 other => {
                     return Some(err(
@@ -309,13 +336,14 @@ fn handle(req: RpcRequest) -> Option<Value> {
                     ));
                 }
             };
-            Some(ok(
-                id,
-                json!({
-                    "content": [{"type": "text", "text": text}],
-                    "isError": is_err
-                }),
-            ))
+            let mut result = json!({
+                "content": [{"type": "text", "text": text}],
+                "isError": is_err
+            });
+            if let Some(kind) = error_kind {
+                result["error_kind"] = json!(kind);
+            }
+            Some(ok(id, result))
         }
         other => Some(err(
             id,
@@ -1270,8 +1298,12 @@ mod tests {
         empty_home(|| {
             let resp = call(6, "skills_load", json!({"name": "no-such-skill"}));
             assert_eq!(resp["result"]["isError"], true);
+            assert_eq!(
+                resp["result"]["error_kind"], "unknown_skill",
+                "hosts must branch without scraping Display: {resp}"
+            );
             let text = call_text(&resp);
-            assert!(text.contains("unknown skill"), "{text}");
+            assert_eq!(text, "unknown skill: no-such-skill", "{text}");
             assert!(!text.contains("skipped skill"), "{text}");
         });
     }
@@ -1289,6 +1321,10 @@ mod tests {
                 json!({"name": "Bad_Name", "paths": [parent]}),
             );
             assert_eq!(resp["result"]["isError"], true);
+            assert_eq!(
+                resp["result"]["error_kind"], "parse_error",
+                "skipped load must reuse skip code, not Display: {resp}"
+            );
             let text = call_text(&resp);
             assert!(
                 text.contains("skipped skill: Bad_Name"),
@@ -1452,8 +1488,12 @@ mod tests {
         empty_home(|| {
             let resp = call(10, "skills_why", json!({"name": "no-such-skill"}));
             assert_eq!(resp["result"]["isError"], true);
+            assert_eq!(
+                resp["result"]["error_kind"], "unknown_skill",
+                "why miss must peel like load: {resp}"
+            );
             let text = call_text(&resp);
-            assert!(text.contains("unknown skill: no-such-skill"), "{text}");
+            assert_eq!(text, "unknown skill: no-such-skill", "{text}");
         });
     }
 

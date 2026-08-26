@@ -8,8 +8,8 @@ use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    parse_list_format, progressive_budgets, unknown_or_skipped_skill_message,
-    validate_path_with_options, watch_dirs, why,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill, validate_path_with_options,
+    watch_dirs, why,
 };
 
 #[derive(Parser)]
@@ -198,11 +198,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     Ok(ExitCode::SUCCESS)
                 }
                 None => {
-                    let _ = writeln!(
-                        io::stderr(),
-                        "{}",
-                        unknown_or_skipped_skill_message(&name, &report.skips)
-                    );
+                    let miss = unknown_or_skipped_skill(&name, &report.skips);
+                    let _ = writeln!(io::stderr(), "{miss}");
                     Ok(ExitCode::from(2))
                 }
             }
@@ -220,8 +217,14 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             let report = discover_cwd(&paths, &vendor, user_dir, ascii_names)?;
             let budgets = progressive_budgets(context_tokens);
             let why = why(&report, name.as_deref(), context.as_deref(), Some(budgets));
-            if let Some(msg) = why.unknown_skill_message() {
-                let _ = writeln!(io::stderr(), "{msg}");
+            if let Some(miss) = why.unknown_skill_miss() {
+                let _ = writeln!(io::stderr(), "{miss}");
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
+                    );
+                }
                 return Ok(ExitCode::from(1));
             }
             if json {
