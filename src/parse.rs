@@ -345,8 +345,9 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     continue;
                 }
                 if block.is_empty() {
+                    let shown = crate::sanitize_error_token(key);
                     return Err(ParseError::InvalidYaml(format!(
-                        "{key} block scalar is empty"
+                        "{shown} block scalar is empty"
                     )));
                 }
                 match key {
@@ -418,8 +419,9 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
             }
         } else {
+            let shown = crate::sanitize_error_token(trimmed);
             return Err(ParseError::InvalidYaml(format!(
-                "expected `key: value`, got: {trimmed}"
+                "expected `key: value`, got: {shown}"
             )));
         }
     }
@@ -1260,6 +1262,65 @@ Should fail parse.
         assert!(
             !prod.contains("require_bool_yaml(key"),
             "require_bool_yaml must receive the table snake name, not the raw YAML key"
+        );
+    }
+
+    #[test]
+    fn parse_skill_malformed_line_hostile_token_is_sanitized() {
+        // A YAML line with no colon is interpolated into InvalidYaml.
+        // U+2028 / U+2014 must not leak (PR 113/119 covered format tokens
+        // and later PRs covered hyphen bools, not this path).
+        let input = "---\nname: demo\ndescription: d\nfoo\u{2028}bar\u{2014}baz\n---\nbody\n";
+        let err = parse_skill(input).expect_err(input);
+        let msg = err.to_string();
+        assert!(
+            matches!(err, ParseError::InvalidYaml(_)) && msg.contains("expected `key: value`"),
+            "malformed line must stay InvalidYaml: {msg}"
+        );
+        assert_eq!(
+            msg.lines().count(),
+            1,
+            "malformed-line error must stay one line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2028}'),
+            "U+2028 must not leak from malformed line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2014}'),
+            "em dash must not leak from malformed line: {msg:?}"
+        );
+        assert!(
+            msg.contains("foo?bar-baz"),
+            "hostile token must be sanitized in place: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_skill_empty_block_hostile_key_is_sanitized() {
+        let input = "---\nname: demo\ndescription: d\nfoo\u{2028}bar\u{2014}: |\n---\nbody\n";
+        let err = parse_skill(input).expect_err(input);
+        let msg = err.to_string();
+        assert!(
+            matches!(err, ParseError::InvalidYaml(_)) && msg.contains("block scalar is empty"),
+            "empty block must stay InvalidYaml: {msg}"
+        );
+        assert_eq!(
+            msg.lines().count(),
+            1,
+            "empty-block error must stay one line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2028}'),
+            "U+2028 must not leak from empty-block key: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2014}'),
+            "em dash must not leak from empty-block key: {msg:?}"
+        );
+        assert!(
+            msg.contains("foo?bar-"),
+            "hostile key must be sanitized in place: {msg}"
         );
     }
 
