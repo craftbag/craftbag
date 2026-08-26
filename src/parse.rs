@@ -311,7 +311,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             let is_indented = line_is_yaml_indented(line);
             if is_indented {
                 if let Some((k, v)) = trimmed.split_once(':') {
-                    let k = k.trim();
+                    let k = k.trim().trim_matches(|c| c == '"' || c == '\'').trim();
                     let v = strip_yaml_inline_comment(v)
                         .trim_matches('"')
                         .trim_matches('\'');
@@ -1181,6 +1181,23 @@ BODY
             Some("A & B"),
             "quoted metadata key must peel quotes: {:?}",
             quoted_skill.metadata
+        );
+
+        let block_quoted = "\
+---
+name: annotated
+description: docs
+metadata:
+  \"author\": \"A & B\"
+---
+BODY
+";
+        let block_skill = parse_skill(block_quoted).expect("quoted block metadata keys must load");
+        assert_eq!(
+            block_skill.metadata.get("author").map(String::as_str),
+            Some("A & B"),
+            "quoted block metadata key must peel quotes: {:?}",
+            block_skill.metadata
         );
     }
 
