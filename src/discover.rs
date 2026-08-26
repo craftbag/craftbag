@@ -4425,6 +4425,34 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_grok_vendor_layout_loads() {
+        let cwd = corpus_dir().join("incumbent/grok-project");
+        let off = empty_home_discover(cwd.as_path(), &DiscoveryOptions::default());
+        assert!(
+            off.skills.iter().all(|s| s.name != "project-grok"),
+            "grok vendor is opt-in"
+        );
+        let on = empty_home_discover(
+            cwd.as_path(),
+            &DiscoveryOptions {
+                vendor_roots: vec!["grok".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "project-grok")
+            .expect("project-grok");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "grok".to_owned()
+            }
+        );
+    }
+
+    #[test]
     fn incumbent_claude_user_home_vendor_layout_loads() {
         let cwd = tempfile::tempdir().expect("cwd");
         let home = corpus_dir().join("incumbent/claude-user");
