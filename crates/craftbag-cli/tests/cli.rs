@@ -1171,6 +1171,106 @@ fn present_null_user_invocable_peels_parse_error_not_unknown() {
 }
 
 #[test]
+fn present_null_disable_model_invocation_peels_parse_error_not_unknown() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    let skill = pkg.join("SKILL.md");
+    fs::write(
+        &skill,
+        "---\nname: demo\ndescription: d\ndisable_model_invocation: null\n---\nbody\n",
+    )
+    .expect("write");
+
+    let (_home, mut load) = bin();
+    let load_out = load
+        .arg("load")
+        .arg("demo")
+        .arg("--path")
+        .arg(tmp.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        load_out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&load_out.stderr)
+    );
+    let load_err = String::from_utf8_lossy(&load_out.stderr);
+    assert!(
+        load_err.contains("skipped skill: demo"),
+        "load must name the skipped package: {load_err}"
+    );
+    assert!(
+        load_err.contains("parse_error"),
+        "load must include skip kind: {load_err}"
+    );
+    assert!(
+        !load_err.contains("unknown skill"),
+        "present-null must not look missing: {load_err}"
+    );
+
+    let (_home, mut why) = bin();
+    let why_out = why
+        .arg("why")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(tmp.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        why_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&why_out.stderr)
+    );
+    let why_stdout = String::from_utf8_lossy(&why_out.stdout);
+    let why_v: serde_json::Value = serde_json::from_str(&why_stdout).expect("why json");
+    assert_eq!(
+        why_v["skips"][0]["kind"], "parse_error",
+        "why JSON must keep parse_error: {why_stdout}"
+    );
+    assert_eq!(
+        why_v["skips"][0]["code"], "parse_error",
+        "why JSON must include machine code: {why_stdout}"
+    );
+    let skip_path = why_v["skips"][0]["path"].as_str().expect("skip path");
+    assert_eq!(
+        Path::new(skip_path),
+        skill.as_path(),
+        "why JSON must keep the SKILL.md path: {why_stdout}"
+    );
+    assert!(!String::from_utf8_lossy(&why_out.stderr).contains("unknown skill"));
+
+    let (_home, mut validate) = bin();
+    let val_out = validate
+        .arg("validate")
+        .arg("--json")
+        .arg(&skill)
+        .output()
+        .expect("run");
+    assert_eq!(val_out.status.code(), Some(1), "present-null must fail");
+    let val_stdout = String::from_utf8_lossy(&val_out.stdout);
+    let val_v: serde_json::Value = serde_json::from_str(&val_stdout).expect("validate json");
+    assert_eq!(
+        val_v["error_kind"], "parse_error",
+        "validate --json must peel parse_error: {val_stdout}"
+    );
+    assert_eq!(
+        val_v["path"].as_str().map(Path::new),
+        Some(skill.as_path()),
+        "validate --json must keep the SKILL.md path: {val_stdout}"
+    );
+    assert!(
+        val_v["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("disable_model_invocation") && e.contains("boolean")),
+        "validate peel must name the present-null bool: {val_stdout}"
+    );
+}
+
+#[test]
 fn load_named_root_file_skip_is_not_unknown() {
     let tmp = tempfile::tempdir().expect("tmp");
     let skills = tmp.path().join(".agents").join("skills");
