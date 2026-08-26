@@ -717,19 +717,27 @@ fn load_extra_path(
     // Stay-under and readable before treating extra/skills/ as the
     // collection root. An escaped or unreadable skills/ is not a usable
     // collection; fall back to extra/ so sibling packages still load.
-    // Record leftover extra/SKILL.md only when the scan target is
-    // extra/skills/ (that walk never sees it). Reuse classify's read.
-    let scan = if extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips) {
-        if let Some((skill_file, peeked_name, read_err)) = leftover_root {
+    // Reuse classify's leftover SKILL.md read: extra/skills/ never
+    // sees extra/SKILL.md, and an extra/ sibling walk must not open
+    // a leftover file again. A leftover SKILL.md directory stays in
+    // the extra/ walk (it is a package dir, not a root file).
+    let handle_skills = extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips);
+    let skip_leftover = leftover_root.as_ref().and_then(|(p, name, err)| {
+        if handle_skills || !skill_md_is_dir(p) {
             skip_loose_extra_path_root_skill_md(
-                &skill_file,
+                p,
                 &expanded,
                 ignore,
-                peeked_name,
-                read_err,
+                name.clone(),
+                err.clone(),
                 skips,
             );
+            Some(p.as_path())
+        } else {
+            None
         }
+    });
+    let scan = if handle_skills {
         skills_subdir
     } else {
         expanded
@@ -737,7 +745,7 @@ fn load_extra_path(
     load_skills_from_dir(
         &scan,
         &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
-        None,
+        skip_leftover,
         skills,
         skips,
     );
@@ -1062,10 +1070,11 @@ fn load_classified_extra_path_package(
     }
 }
 
-/// Record a leftover extra-path root SKILL.md when the scan target is
-/// `extra/skills/` (that walk never sees `extra/SKILL.md`).
+/// Record a leftover extra-path root SKILL.md from classify's prefetch.
 ///
-/// Uses the classify prefetch. Do not open leftover SKILL.md again.
+/// Used when the scan target is `extra/skills/` (that walk never sees
+/// `extra/SKILL.md`) and when the extra/ sibling walk must skip the
+/// leftover file so it is not opened again.
 fn skip_loose_extra_path_root_skill_md(
     skill_file: &Path,
     confine: &Path,
@@ -3120,6 +3129,53 @@ mod tests {
         assert_eq!(
             leftover_opens, 1,
             "classify leftover extra/SKILL.md must not be opened again for the root_file skip: {reads:?}"
+        );
+    }
+
+    #[test]
+    fn leftover_extra_path_sibling_skill_md_is_opened_once() {
+        // Collection via sibling packages, not extra/skills/. classify
+        // already read leftover extra/SKILL.md. The extra/ walk must
+        // reuse that prefetch (PR 202 only reused extra/skills/).
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let leftover = extra.path().join("SKILL.md");
+        fs::write(
+            &leftover,
+            "---\nname: loose\ndescription: leftover root file\n---\nloose\n",
+        )
+        .expect("write leftover");
+        write_skill(&extra.path().join("public"), "public", "from-sibling");
+        let _ = take_read_skill_md_paths();
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "sibling public must still load: {report:?}"
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.path == leftover),
+            "leftover extra/SKILL.md must stay a skip: {:?}",
+            report.skips
+        );
+        let reads = take_read_skill_md_paths();
+        let leftover_opens = reads.iter().filter(|p| *p == &leftover).count();
+        assert_eq!(
+            leftover_opens, 1,
+            "classify leftover extra/SKILL.md plus sibling must not be opened again: {reads:?}"
         );
     }
 
