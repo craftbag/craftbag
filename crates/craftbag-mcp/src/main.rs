@@ -236,7 +236,7 @@ fn tools() -> Value {
     list_props["format"] = json!({
         "type": "string",
         "enum": ["json", "xml", "catalog", "watch"],
-        "description": "json (default), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). watch-dirs and watch_dirs are the same walk as watch."
+        "description": "json (default `{ skills, skips }`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). watch-dirs and watch_dirs are the same walk as watch."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -2509,6 +2509,29 @@ mod tests {
         assert!(
             desc.contains("watch-dirs") && desc.contains("watch_dirs"),
             "skills_list format must name live watch-dirs aliases: {desc}"
+        );
+    }
+
+    #[test]
+    fn tools_list_format_names_json_skills_skips() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(55)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let desc = list["inputSchema"]["properties"]["format"]["description"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            desc.contains("{ skills, skips }"),
+            "skills_list format json must name default keys like CLI list --json; xml already names <available_skills>: {desc}"
         );
     }
 
