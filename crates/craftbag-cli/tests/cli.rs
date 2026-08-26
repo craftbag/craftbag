@@ -2109,7 +2109,10 @@ fn list_help_names_vendor_path_examples() {
         .stdout(predicates::str::contains("claude"))
         .stdout(predicates::str::contains("--path"))
         .stdout(predicates::str::contains("--format"))
-        .stdout(predicates::str::contains("json, xml, catalog, watch"))
+        .stdout(predicates::str::contains("json"))
+        .stdout(predicates::str::contains("xml"))
+        .stdout(predicates::str::contains("catalog"))
+        .stdout(predicates::str::contains("watch"))
         .stdout(predicates::str::contains("watch-dirs"))
         .stdout(predicates::str::contains("watch_dirs"))
         .stdout(predicates::str::contains("Example:"));
@@ -2124,6 +2127,42 @@ fn list_help_names_json_skills_skips() {
         .success()
         .stdout(predicates::str::contains("--json"))
         .stdout(predicates::str::contains("{ skills, skips }"));
+}
+
+#[test]
+fn list_help_format_names_json_skills_skips() {
+    let (_home, mut cmd) = bin();
+    let stdout = String::from_utf8_lossy(
+        &cmd.arg("list")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let start = lines
+        .iter()
+        .position(|l| l.contains("--format"))
+        .expect("list --help must name --format");
+    let mut block = vec![lines[start]];
+    for line in &lines[start + 1..] {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("--") || trimmed.starts_with("-h") || trimmed.is_empty() {
+            break;
+        }
+        block.push(*line);
+    }
+    let format_help = block.join("\n");
+    assert!(
+        format_help.contains("{ skills, skips }"),
+        "list --format must name json keys like MCP skills_list format: {format_help}"
+    );
+    assert!(
+        format_help.contains("<available_skills>"),
+        "list --format must name xml <available_skills> like MCP skills_list format: {format_help}"
+    );
 }
 
 #[test]

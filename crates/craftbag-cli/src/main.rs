@@ -35,7 +35,7 @@ enum Cmd {
         /// Print notify-watch roots (same walk as discover). Does not load SKILL.md.
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
-        /// Same tokens as MCP skills_list format: json, xml, catalog, watch.
+        /// Same tokens as MCP skills_list format: json (`{ skills, skips }`), xml (`<available_skills>`), catalog, watch.
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,

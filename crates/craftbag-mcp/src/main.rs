@@ -252,7 +252,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "skills_list",
-            "description": "List discovered skills. format is json (default `{ skills, skips }`), xml, catalog, or watch.",
+            "description": "List discovered skills. format is json (default `{ skills, skips }`), xml (skills-ref <available_skills>), catalog, or watch.",
             "inputSchema": {"type": "object", "properties": list_props}
         },
         {
@@ -2509,6 +2509,27 @@ mod tests {
         assert!(
             desc.contains("watch-dirs") && desc.contains("watch_dirs"),
             "skills_list format must name live watch-dirs aliases: {desc}"
+        );
+    }
+
+    #[test]
+    fn tools_list_names_xml_available_skills() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(56)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let desc = list["description"].as_str().unwrap_or("");
+        assert!(
+            desc.contains("<available_skills>"),
+            "skills_list must name xml <available_skills> like json {{ skills, skips }}: {desc}"
         );
     }
 
