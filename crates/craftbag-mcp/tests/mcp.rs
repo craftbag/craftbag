@@ -356,3 +356,82 @@ fn stdio_skills_list_vendor_grok_names_project_grok() {
         .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
     assert_eq!(got, want, "list path must be the fixture SKILL.md: {text}");
 }
+
+#[test]
+fn stdio_skills_why_vendor_grok_names_project_grok() {
+    let cwd = corpus_grok_project();
+    let skill = cwd.join(".grok/skills/project-grok/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Grok project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let off = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "project-grok"}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], true,
+        "grok vendor is opt-in: {off}"
+    );
+    assert_eq!(
+        off["result"]["error_kind"], "unknown_skill",
+        "why without vendor grok must peel unknown_skill: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    assert!(
+        off_text.contains("unknown skill: project-grok"),
+        "why without vendor grok must not see project-grok: {off_text}"
+    );
+
+    let on = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "project-grok", "vendor": ["grok"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "project-grok")
+        .unwrap_or_else(|| panic!("why must name project-grok: {text}"));
+    assert_eq!(
+        row["source"], "grok",
+        "why JSON source must be the wire token: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "project-grok is a loaded vendor skill, not a skip: {text}"
+    );
+}
