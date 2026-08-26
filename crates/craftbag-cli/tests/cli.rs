@@ -113,6 +113,11 @@ fn validate_json_exposes_error_kind() {
     let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
     assert_eq!(v["error_kind"], "parse_error", "stdout={stdout}");
     assert_eq!(v["error"], stderr.trim(), "stdout={stdout} stderr={stderr}");
+    assert_eq!(
+        v["path"].as_str().map(std::path::Path::new),
+        Some(path.as_path()),
+        "validate --json must keep the SKILL.md path: {stdout}"
+    );
     assert!(
         v.get("errorKind").is_none(),
         "error_kind must stay snake_case: {stdout}"
@@ -207,6 +212,11 @@ fn validate_json_hostile_unknown_key_stays_one_line() {
     let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
     assert_eq!(v["error_kind"], "parse_error", "stdout={stdout}");
     assert_eq!(v["error"], stderr.trim(), "stdout={stdout} stderr={stderr}");
+    assert_eq!(
+        v["path"].as_str().map(std::path::Path::new),
+        Some(skill.as_path()),
+        "validate --json must keep the SKILL.md path: {stdout}"
+    );
     assert!(
         v["error"]
             .as_str()
@@ -949,16 +959,18 @@ fn why_parse_skip_without_frontmatter_name_is_not_unknown() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("\"kind\": \"parse_error\""),
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    assert_eq!(
+        v["skips"][0]["kind"], "parse_error",
         "why JSON must keep parse_error: {stdout}"
     );
-    assert!(
-        stdout.contains("\"code\": \"parse_error\""),
+    assert_eq!(
+        v["skips"][0]["code"], "parse_error",
         "why JSON must include machine code: {stdout}"
     );
+    let skip_path = v["skips"][0]["path"].as_str().expect("skip path");
     assert!(
-        stdout.contains("demo"),
+        skip_path.ends_with("demo/SKILL.md") || skip_path.ends_with("demo\\SKILL.md"),
         "why JSON must keep the package path: {stdout}"
     );
     assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
@@ -1018,6 +1030,13 @@ fn why_unknown_json_exposes_error_kind() {
     assert!(
         v.get("errorKind").is_none(),
         "error_kind must stay snake_case: {stdout}"
+    );
+    let mut keys: Vec<_> = v.as_object().expect("object").keys().cloned().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        ["error".to_owned(), "error_kind".to_owned()],
+        "why --json unknown peel is {{ error_kind, error }}; path is omitted: {stdout}"
     );
 }
 
@@ -2191,7 +2210,8 @@ fn validate_help_names_json_error_kind() {
         .success()
         .stdout(predicates::str::contains("--json"))
         .stdout(predicates::str::contains("error_kind"))
-        .stdout(predicates::str::contains("{ error_kind, error }"));
+        .stdout(predicates::str::contains("{ error_kind, error }"))
+        .stdout(predicates::str::contains("plus `path`"));
 }
 
 #[test]
