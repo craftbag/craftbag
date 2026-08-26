@@ -287,3 +287,4 @@
 {"ts": "2026-08-26T09:12:45Z", "job_id": "adversary-after-163-mcp-why-cursor", "work_source": "adversary", "result": "landed", "head": "6183acc17a32be9ee4b5aad459f3c7e8c7908c39", "pr": 164, "tests": "1 passed MCP skills_why vendor cursor", "noop": false}
 {"ts": "2026-08-26T09:12:45Z", "job_id": "adversary-after-164-noop", "work_source": "adversary", "result": "noop", "head": "6183acc17a32be9ee4b5aad459f3c7e8c7908c39", "pr": null, "tests": "CLI and MCP why both locked", "noop": true}
 {"ts": "2026-08-26T09:14:49Z", "job_id": "improve-mpi27-perf-noop", "work_source": "improve", "result": "noop", "head": "6183acc17a32be9ee4b5aad459f3c7e8c7908c39", "pr": null, "tests": "vendor walk already one-read", "noop": true}
+{"ts": "2026-08-26T09:16:37Z", "job_id": "improve-mpi27-compat-noop", "work_source": "improve", "result": "noop", "head": "6183acc17a32be9ee4b5aad459f3c7e8c7908c39", "pr": null, "tests": "compat defaults locked", "noop": true}
