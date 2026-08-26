@@ -16,9 +16,10 @@ pub use activate::{
     skill_relevance_score, trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
 };
 pub use discover::{
-    CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
-    unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-    walk_cwd_to_git_root, watch_dirs, with_home_override,
+    CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
+    discover, find_skill_by_name, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
+    validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
+    with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
 pub use parse::{

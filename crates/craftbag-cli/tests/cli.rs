@@ -868,6 +868,37 @@ fn why_unknown_exits_1() {
 }
 
 #[test]
+fn why_unknown_json_exposes_error_kind() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("why")
+        .arg("no-such-skill")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.trim(),
+        "unknown skill: no-such-skill",
+        "why --json must keep the human one-line: {stderr:?}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    assert_eq!(v["error_kind"], "unknown_skill", "stdout={stdout}");
+    assert_eq!(
+        v["error"], "unknown skill: no-such-skill",
+        "stdout={stdout}"
+    );
+    assert!(
+        v.get("errorKind").is_none(),
+        "error_kind must stay snake_case: {stdout}"
+    );
+}
+
+#[test]
 fn why_parse_error_name_is_not_unknown() {
     let parent = corpus().join("agentskills/invalid-name");
     let (_home, mut cmd) = bin();

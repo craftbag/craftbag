@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::activate::{ProgressiveBudgets, filter_skills, progressive_budgets, trigger_matches};
+use crate::discover::{SkillMiss, unknown_or_skipped_skill};
 use crate::skill::Skill;
 use crate::skip::{DiscoveryReport, SkillSkip};
 use crate::source::SkillSource;
@@ -143,12 +144,14 @@ impl WhyReport {
     /// is unknown. The echoed name uses [`crate::sanitize_error_token`]
     /// so CLI/MCP stderr stays one line, same as load.
     pub fn unknown_skill_message(&self) -> Option<String> {
+        self.unknown_skill_miss().map(|m| m.error)
+    }
+
+    /// Same miss as [`Self::unknown_skill_message`], with `error_kind`.
+    pub fn unknown_skill_miss(&self) -> Option<SkillMiss> {
         let want = self.query.as_deref()?;
         if self.loaded.is_empty() && self.skips.is_empty() {
-            Some(format!(
-                "unknown skill: {}",
-                crate::sanitize_error_token(want)
-            ))
+            Some(unknown_or_skipped_skill(want, &[]))
         } else {
             None
         }
@@ -420,6 +423,18 @@ mod tests {
         assert_eq!(
             why.unknown_skill_message().as_deref(),
             Some("unknown skill: no-such")
+        );
+        let miss = why.unknown_skill_miss().expect("unknown");
+        assert_eq!(miss.error_kind, "unknown_skill");
+        assert_eq!(miss.error, "unknown skill: no-such");
+        assert!(miss.is_not_found());
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "unknown_skill", "json={json}");
+        assert_eq!(v["error"], "unknown skill: no-such", "json={json}");
+        assert!(
+            v.get("errorKind").is_none(),
+            "error_kind must stay snake_case: {json}"
         );
     }
 

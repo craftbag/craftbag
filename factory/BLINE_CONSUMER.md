@@ -10,6 +10,16 @@ kinds on one tree, then (if wanted) re-export `Skill` / `SkipKind`.
 
 `load` and `why` already exist here (`craftbag` CLI and `craftbag-mcp`).
 
+`load` / `why` misses carry a stable `error_kind` so a host can branch
+without scraping Display. Unknown is `unknown_skill`. A matching skip
+reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json`
+prints `{ "error_kind", "error" }` on stdout and keeps the same one-line
+text on stderr. MCP `skills_load` / `skills_why` add `error_kind` next to
+`isError` and leave `content[0].text` unchanged. Call
+`unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
+`SkillMiss::is_not_found`) from a path-dep. Do not parse
+`unknown skill:` / `skipped skill:`.
+
 ## Path-dep (separate worktree)
 
 Use a Bline worktree that is not findbug and not the durable
