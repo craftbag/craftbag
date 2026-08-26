@@ -2557,6 +2557,58 @@ fn list_vendor_cursor_loads_project_layout() {
 }
 
 #[test]
+fn list_vendor_grok_loads_project_layout() {
+    let cwd = corpus().join("incumbent/grok-project");
+    let skill = cwd.join(".grok/skills/project-grok/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Grok project fixture must exist: {}",
+        skill.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_stdout = String::from_utf8_lossy(&off_out.stdout);
+    let off_v: serde_json::Value = serde_json::from_str(&off_stdout).expect("list json");
+    let off_skills = off_v["skills"].as_array().expect("skills");
+    assert!(
+        off_skills.iter().all(|s| s["name"] != "project-grok"),
+        "grok vendor is opt-in: {off_stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("grok")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "project-grok"),
+        "grok",
+        "vendor JSON source must be the wire token: {stdout}"
+    );
+}
+
+#[test]
 fn list_watch_dirs_vendor_cursor_lists_project_skills() {
     let cwd = corpus().join("incumbent/cursor-project");
     let want = cwd
