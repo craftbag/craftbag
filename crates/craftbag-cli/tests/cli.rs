@@ -2662,6 +2662,59 @@ fn list_watch_dirs_vendor_cursor_lists_project_skills() {
 }
 
 #[test]
+fn list_watch_dirs_vendor_grok_lists_project_skills() {
+    let cwd = corpus().join("incumbent/grok-project");
+    let want = cwd
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize grok-project: {e}"))
+        .join(".grok")
+        .join("skills");
+    assert!(
+        want.is_dir(),
+        "committed Grok project skills dir must exist: {}",
+        want.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--watch-dirs")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_stdout = String::from_utf8_lossy(&off_out.stdout);
+    assert!(
+        !stdout_has_path(&off_stdout, &want),
+        "watch-dirs without --vendor grok must not list .grok/skills: {off_stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--vendor")
+        .arg("grok")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &want),
+        "watch-dirs --vendor grok must list .grok/skills: {stdout}"
+    );
+}
+
+#[test]
 fn why_vendor_cursor_names_create_rule() {
     let cwd = corpus().join("incumbent/cursor-project");
     let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
@@ -2728,6 +2781,76 @@ fn why_vendor_cursor_names_create_rule() {
     assert!(
         skips.is_empty(),
         "create-rule is a loaded vendor skill, not a skip: {stdout}"
+    );
+}
+
+#[test]
+fn why_vendor_grok_names_project_grok() {
+    let cwd = corpus().join("incumbent/grok-project");
+    let skill = cwd.join(".grok/skills/project-grok/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Grok project fixture must exist: {}",
+        skill.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("project-grok")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(1),
+        "grok vendor is opt-in: stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_err = String::from_utf8_lossy(&off_out.stderr);
+    assert!(
+        off_err.contains("unknown skill: project-grok"),
+        "why without --vendor grok must not see project-grok: {off_err}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("project-grok")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("grok")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "project-grok")
+        .unwrap_or_else(|| panic!("why must name project-grok: {stdout}"));
+    assert_eq!(
+        row["source"], "grok",
+        "why JSON source must be the wire token: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "project-grok is a loaded vendor skill, not a skip: {stdout}"
     );
 }
 
