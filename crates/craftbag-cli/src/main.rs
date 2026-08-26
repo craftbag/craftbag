@@ -51,7 +51,7 @@ enum Cmd {
         #[arg(long = "ascii-names")]
         ascii_names: bool,
     },
-    /// Print one skill body plus package envelope (includes argument-hint).
+    /// Print one skill body plus package envelope (includes argument-hint and when-to-use).
     Load {
         name: String,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix

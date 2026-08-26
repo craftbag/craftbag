@@ -699,6 +699,55 @@ mod tests {
     }
 
     #[test]
+    fn list_json_includes_when_to_use() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("ranked");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: ranked\ndescription: hinted\nwhen-to-use: after rebase\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-when");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-when\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hinted_row = skills
+            .iter()
+            .find(|s| s["name"] == "ranked")
+            .expect("ranked");
+        assert_eq!(
+            hinted_row["when_to_use"], "after rebase",
+            "MCP list must carry when_to_use for catalogs: {out}"
+        );
+        assert!(
+            hinted_row.get("whenToUse").is_none(),
+            "list JSON when_to_use must stay snake_case: {out}"
+        );
+        let bare_row = skills
+            .iter()
+            .find(|s| s["name"] == "no-when")
+            .expect("no-when");
+        assert!(
+            bare_row["when_to_use"].is_null(),
+            "omitted when_to_use is null on MCP list JSON: {out}"
+        );
+    }
+
+    #[test]
     fn list_json_includes_argument_hint() {
         let extra = tempfile::tempdir().expect("extra");
         let hinted = extra.path().join("slash-hint");
@@ -748,6 +797,34 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_when_to_use() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("ranked");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: ranked\ndescription: hinted\nwhen_to_use: after rebase\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(42, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hinted_row = loaded
+            .iter()
+            .find(|s| s["name"] == "ranked")
+            .expect("ranked");
+        assert_eq!(
+            hinted_row["when_to_use"], "after rebase",
+            "MCP why must carry when_to_use like list JSON/XML: {why_text}"
+        );
+    }
+
+    #[test]
     fn why_json_includes_argument_hint() {
         let extra = tempfile::tempdir().expect("extra");
         let hinted = extra.path().join("slash-hint");
@@ -773,6 +850,60 @@ mod tests {
             hinted_row["argument_hint"], "[name]",
             "MCP why must carry argument_hint like list JSON/XML: {why_text}"
         );
+    }
+
+    #[test]
+    fn skills_load_includes_when_to_use() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("ranked");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: ranked\ndescription: hinted\nwhen-to-use: after rebase\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-when");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-when\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                52,
+                "skills_load",
+                json!({"name": "ranked", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("When to use: after rebase"),
+                "MCP load must carry when_to_use like list JSON/XML: {hinted_text}"
+            );
+            let bare_load = call(
+                53,
+                "skills_load",
+                json!({"name": "no-when", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("When to use:"),
+                "omitted when_to_use must not add a load line: {bare_text}"
+            );
+        });
     }
 
     #[test]

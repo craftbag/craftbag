@@ -94,6 +94,10 @@ pub struct SkillSummary {
     /// Omitted on cached pre-this-PR why JSON (`None`).
     #[serde(rename = "argument_hint", default)]
     pub argument_hint: Option<String>,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    /// Omitted on cached pre-this-PR why JSON (`None`).
+    #[serde(rename = "when_to_use", default)]
+    pub when_to_use: Option<String>,
 }
 
 impl From<&Skill> for SkillSummary {
@@ -106,6 +110,7 @@ impl From<&Skill> for SkillSummary {
             user_invocable: skill.user_invocable,
             disable_model_invocation: skill.disable_model_invocation,
             argument_hint: skill.argument_hint.clone(),
+            when_to_use: skill.when_to_use.clone(),
         }
     }
 }
@@ -147,8 +152,8 @@ impl WhyReport {
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
 /// Loaded rows include `description`, `user_invocable`,
-/// `disable_model_invocation`, and `argument_hint` (same keys as list
-/// JSON / list XML).
+/// `disable_model_invocation`, `argument_hint`, and `when_to_use`
+/// (same keys as list JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -660,6 +665,32 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_when_to_use() {
+        let mut hinted = Skill::new("ranked", "d", "body");
+        hinted.when_to_use = Some("after rebase".to_owned());
+        let bare = Skill::new("no-when", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["when_to_use"], "after rebase",
+            "why JSON must carry when_to_use like list JSON/XML: {json}"
+        );
+        assert!(
+            v["loaded"][1]["when_to_use"].is_null(),
+            "omitted when_to_use is null, not a camelCase key: {json}"
+        );
+        assert!(
+            v["loaded"][0].get("whenToUse").is_none(),
+            "why JSON when_to_use must match list snake_case, not Skill camelCase: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -684,6 +715,10 @@ mod tests {
         assert!(
             report.loaded[0].argument_hint.is_none(),
             "omitted argument_hint must stay None: {json}"
+        );
+        assert!(
+            report.loaded[0].when_to_use.is_none(),
+            "omitted when_to_use must stay None: {json}"
         );
     }
 

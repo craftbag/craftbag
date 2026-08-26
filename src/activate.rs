@@ -234,11 +234,13 @@ pub fn truncate_skill_body_for_budget(content: &str, token_budget: usize) -> Str
     out
 }
 
-/// Build a cheap catalog fragment: name + description only.
+/// Build a cheap catalog fragment: name + description, plus
+/// `when_to_use` when the author set it.
 ///
 /// Each skill is one markdown list item. Literal `|` / folded `>`
-/// descriptions can contain newlines; those become spaces so
-/// `list --catalog` and MCP `format=catalog` stay one item per skill.
+/// descriptions and when-to-use text can contain newlines; those
+/// become spaces so `list --catalog` and MCP `format=catalog` stay
+/// one item per skill.
 pub fn format_catalog(
     skills: &[Skill],
     context: &str,
@@ -261,11 +263,7 @@ pub fn format_catalog(
     let ranked_len = ranked.len();
 
     for skill in &ranked {
-        let line = format!(
-            "- **{}**: {}\n",
-            catalog_one_line(&skill.name),
-            catalog_one_line(&skill.description)
-        );
+        let line = catalog_skill_line(skill);
         if shown >= budgets.catalog_max_entries {
             omitted = omitted.saturating_add(1);
             continue;
@@ -368,9 +366,9 @@ pub fn unknown_list_format(format: &str) -> String {
 
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
-/// Also emits `user_invocable`, `disable_model_invocation`, and
-/// `argument_hint` so a host that lists via XML can build a slash
-/// palette without re-parsing.
+/// Also emits `user_invocable`, `disable_model_invocation`,
+/// `argument_hint`, and `when_to_use` so a host that lists via XML
+/// can build a slash palette or catalog without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -411,6 +409,11 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             out.push_str(&xml_escape(hint));
         }
         out.push_str("</argument_hint>\n");
+        out.push_str("<when_to_use>");
+        if let Some(when) = skill.when_to_use.as_deref() {
+            out.push_str(&xml_escape(when));
+        }
+        out.push_str("</when_to_use>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -421,6 +424,23 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
 /// newlines from a literal `|` description) to a single space.
 fn catalog_one_line(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// One markdown list item. Optional `when_to_use` stays on the same line.
+fn catalog_skill_line(skill: &Skill) -> String {
+    let name = catalog_one_line(&skill.name);
+    let desc = catalog_one_line(&skill.description);
+    match skill.when_to_use.as_deref() {
+        Some(when) => {
+            let when = catalog_one_line(when);
+            if when.is_empty() {
+                format!("- **{name}**: {desc}\n")
+            } else {
+                format!("- **{name}**: {desc} Use when: {when}\n")
+            }
+        }
+        None => format!("- **{name}**: {desc}\n"),
+    }
 }
 
 fn xml_escape(s: &str) -> String {
@@ -564,6 +584,9 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     out.push_str(&format!("[Activated skill: {}]\n\n", skill.name));
     out.push_str("Follow this skill completely for the rest of this turn.\n");
     push_envelope_line(&mut out, "Description", &skill.description);
+    if let Some(when) = skill.when_to_use.as_deref() {
+        push_envelope_line(&mut out, "When to use", when);
+    }
     if let Some(lic) = &skill.license {
         push_envelope_line(&mut out, "License", lic);
     }
@@ -822,6 +845,36 @@ mod tests {
     }
 
     #[test]
+    fn format_catalog_includes_when_to_use() {
+        let mut skill = make_skill("git-workflow", &["git"], 10);
+        skill.when_to_use = Some("rebasing\na branch".to_owned());
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&[skill], "", budgets, FormatOptions::default());
+        let item = cat
+            .lines()
+            .find(|l| l.contains("git-workflow"))
+            .unwrap_or_else(|| panic!("catalog must list the skill: {cat}"));
+        assert_eq!(
+            item, "- **git-workflow**: git-workflow description Use when: rebasing a branch",
+            "list --catalog must carry flattened when_to_use: {cat}"
+        );
+        let bare = format_catalog(
+            &[make_skill("no-when", &[], 10)],
+            "",
+            budgets,
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Use when:"),
+            "omitted when_to_use must keep the cheap name + description line: {bare}"
+        );
+    }
+
+    #[test]
     fn format_catalog_flattens_multiline_description() {
         let mut skill = make_skill("lit-skill", &[], 10);
         skill.description = "line one\nline two\r\nline three".to_owned();
@@ -921,6 +974,29 @@ mod tests {
     }
 
     #[test]
+    fn format_available_skills_xml_includes_when_to_use() {
+        let mut hinted = make_skill("ranked", &[], 10);
+        hinted.when_to_use = Some("A & B <tag>".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/ranked/SKILL.md"));
+        let mut bare = make_skill("no-when", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-when/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<when_to_use>A &amp; B &lt;tag&gt;</when_to_use>"),
+            "list XML must carry escaped when_to_use for catalogs: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-when</name>")
+            .nth(1)
+            .expect("no-when skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<when_to_use></when_to_use>"),
+            "omitted when_to_use must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
     fn format_available_skills_xml_includes_argument_hint() {
         let mut hinted = make_skill("slash-hint", &[], 10);
         hinted.argument_hint = Some("name & id".to_owned());
@@ -1006,6 +1082,36 @@ mod tests {
     }
 
     #[test]
+    fn format_load_message_includes_when_to_use() {
+        let mut hinted = Skill::new("ranked", "hinted", "body");
+        hinted.when_to_use = Some("after\nrebase".to_owned());
+        let load = format_load_message(&hinted, "", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("When to use: after rebase\n"),
+            "load must carry flattened when_to_use like list JSON/XML: {load}"
+        );
+        assert!(
+            header.contains("Description: hinted\n"),
+            "when_to_use follows description: {load}"
+        );
+        assert!(
+            !header.contains("after\nrebase"),
+            "folded when_to_use must stay one envelope line: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-when", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("When to use:"),
+            "omitted when_to_use must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
     fn format_load_message_includes_argument_hint() {
         let mut hinted = Skill::new("slash-hint", "hinted", "body");
         hinted.argument_hint = Some("name &\nid".to_owned());
@@ -1045,6 +1151,7 @@ mod tests {
         skill.license = Some("Apache\n2.0".to_owned());
         skill.compatibility = Some("rust\ncargo".to_owned());
         skill.argument_hint = Some("[name]\n[id]".to_owned());
+        skill.when_to_use = Some("after\nrebase".to_owned());
         let load = format_load_message(
             &skill,
             "--fix\n--dry-run",
@@ -1064,6 +1171,10 @@ mod tests {
         assert!(
             header.contains("Compatibility: rust cargo\n"),
             "compatibility block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("When to use: after rebase\n"),
+            "when_to_use block scalar must stay one envelope line: {load}"
         );
         assert!(
             header.contains("Argument hint: [name] [id]\n"),
