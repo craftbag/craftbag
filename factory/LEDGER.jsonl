@@ -402,3 +402,4 @@
 {"ts": "2026-08-26T22:03:00Z", "job_id": "expand-2-fuzz-vendor-token", "work_source": "expand", "result": "landed", "head": "b1623671d846d3003c3604bc73e053c9a56249a6", "pr": 218, "tests": "vendor_token fuzz smoke", "noop": false}
 {"ts": "2026-08-26T22:11:00Z", "job_id": "improve-mpi31-sec-noop", "work_source": "improve", "result": "noop", "head": "b1623671d846d3003c3604bc73e053c9a56249a6", "pr": null, "tests": "zero diff after 6m", "noop": true}
 {"ts": "2026-08-26T22:13:00Z", "job_id": "improve-mpi31-pm-noop", "work_source": "improve", "result": "noop", "head": "b1623671d846d3003c3604bc73e053c9a56249a6", "pr": null, "tests": "steal-list already landed", "noop": true}
+{"ts": "2026-08-26T22:16:00Z", "job_id": "improve-mpi31-spec-noop", "work_source": "improve", "result": "noop", "head": "b1623671d846d3003c3604bc73e053c9a56249a6", "pr": null, "tests": "token tables locked", "noop": true}
