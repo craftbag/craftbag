@@ -1325,6 +1325,34 @@ Should fail parse.
     }
 
     #[test]
+    fn parse_skill_empty_folded_block_hostile_key_is_sanitized() {
+        let input = "---\nname: demo\ndescription: d\nfoo\u{2028}bar\u{2014}: >\n---\nbody\n";
+        let err = parse_skill(input).expect_err(input);
+        let msg = err.to_string();
+        assert!(
+            matches!(err, ParseError::InvalidYaml(_)) && msg.contains("block scalar is empty"),
+            "empty folded block must stay InvalidYaml: {msg}"
+        );
+        assert_eq!(
+            msg.lines().count(),
+            1,
+            "empty folded-block error must stay one line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2028}'),
+            "U+2028 must not leak from empty folded-block key: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2014}'),
+            "em dash must not leak from empty folded-block key: {msg:?}"
+        );
+        assert!(
+            msg.contains("foo?bar-"),
+            "hostile folded-block key must be sanitized in place: {msg}"
+        );
+    }
+
+    #[test]
     fn hyphen_bool_block_scalar_hostile_value_is_sanitized() {
         // require_bool_yaml still sanitizes U+2028 / em dash after
         // HYPHEN_BOOL_KEYS (inline scalars already cover U+2028).

@@ -82,7 +82,9 @@ impl SkillSource {
                 self,
                 map: M,
             ) -> Result<SkillSource, M::Error> {
-                SkillSource::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+                SkillSource::deserialize(serde::de::value::MapAccessDeserializer::new(map)).map_err(
+                    |e| serde::de::Error::custom(crate::sanitize_error_token(&e.to_string())),
+                )
             }
         }
         deserializer.deserialize_any(HostVisitor)
@@ -434,6 +436,43 @@ mod tests {
         assert!(
             msg.contains("foo?bar-"),
             "hostile source token must be sanitized in place: {msg}"
+        );
+    }
+
+    #[test]
+    fn deserialize_host_unknown_source_map_token_is_sanitized() {
+        #[derive(Debug, serde::Deserialize)]
+        struct Row {
+            #[serde(deserialize_with = "SkillSource::deserialize_host")]
+            #[allow(dead_code)]
+            source: SkillSource,
+        }
+        let json = serde_json::json!({
+            "source": { "foo\u{2028}bar\u{2014}": { "name": "x" } }
+        })
+        .to_string();
+        let err = serde_json::from_str::<Row>(&json).expect_err("unknown source map");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unknown variant"),
+            "host source map errors must name the token: {msg}"
+        );
+        assert_eq!(
+            msg.lines().count(),
+            1,
+            "unknown source map token must stay one line: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2028}'),
+            "U+2028 must not leak from source map token: {msg:?}"
+        );
+        assert!(
+            !msg.contains('\u{2014}'),
+            "em dash must not leak from source map token: {msg:?}"
+        );
+        assert!(
+            msg.contains("foo?bar-"),
+            "hostile source map token must be sanitized in place: {msg}"
         );
     }
 }
