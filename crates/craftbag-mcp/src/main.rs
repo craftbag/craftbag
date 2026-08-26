@@ -333,7 +333,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error, and winner_path on name_collision.",
+            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
             "inputSchema": {"type": "object", "properties": why_props}
         }
     ])
@@ -2940,16 +2940,16 @@ mod tests {
                 desc.contains("winner_path") && desc.contains("name_collision"),
                 "{name} must name SkillMiss.winner_path on name_collision so hosts do not scrape lost to: {desc}"
             );
+            assert!(
+                desc.contains("path when a skip"),
+                "{name} must name SkillMiss.path when a skip is known like CLI why --json: {desc}"
+            );
         }
         let load = tools
             .iter()
             .find(|t| t["name"] == "skills_load")
             .expect("skills_load");
         let load_desc = load["description"].as_str().unwrap_or("");
-        assert!(
-            load_desc.contains("path when a skip"),
-            "skills_load must name SkillMiss.path like CLI validate --json: {load_desc}"
-        );
         for field in [
             "argument-hint",
             "when-to-use",

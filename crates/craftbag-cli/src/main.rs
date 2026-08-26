@@ -92,7 +92,7 @@ enum Cmd {
     /// Explain loaded, skipped, and activation decisions.
     Why {
         name: Option<String>,
-        /// Print `{ error_kind, error }` on a miss (same peel as `validate --json`). A `name_collision` skip also peels `winner_path`.
+        /// Print `{ error_kind, error }` on a miss (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
         /// Activation context text. Example: --context rebase
