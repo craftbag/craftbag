@@ -80,8 +80,9 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// (`notify` can hang on a FIFO; discover does not walk it). Empty
 /// `user_skills_dir` is omitted. `project` / `community` are not
 /// listed (host-only). When [`DiscoveryOptions::implicit_roots`] is
-/// true (the default), nearest git root first via
-/// [`walk_cwd_to_git_root`]. When it is false, cwd-to-git and `$HOME`
+/// true (the default), lists cwd-to-git `.agents` / vendor trees
+/// (nearest git root first via [`walk_cwd_to_git_root`]) and
+/// `$HOME/.agents` / vendor trees. When it is false, cwd-to-git and `$HOME`
 /// `.agents` / vendor trees are omitted (same as [`discover`]).
 /// Extra-path `dir/skills` is listed only when [`discover`] would walk
 /// that collection (leftover or Vercel-style). A named extra-path
@@ -7165,6 +7166,25 @@ mod tests {
         assert!(
             DiscoveryOptions::default().implicit_roots,
             "implicit_roots must default true so existing discover stays additive"
+        );
+    }
+
+    #[test]
+    fn watch_dirs_docs_attach_agents_to_cwd_to_git_when_implicit_on() {
+        let src = include_str!("discover.rs");
+        let fn_at = src.find("pub fn watch_dirs(").expect("watch_dirs fn");
+        let docs: String = src[..fn_at]
+            .lines()
+            .rev()
+            .take_while(|line| line.starts_with("///"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            docs.contains("cwd-to-git `.agents`"),
+            "watch_dirs rustdoc must attach .agents to the implicit cwd-to-git walk, not the whole tree: {docs}"
         );
     }
 
