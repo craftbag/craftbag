@@ -1,7 +1,8 @@
 //! Public types, SKILL.md parse, discovery, and activation selector.
 //!
 //! [`DiscoveryOptions::default`] sets `implicit_roots: true` so
-//! [`discover`] walks cwd-to-git and `$HOME` `.agents` / vendor trees.
+//! [`discover`] walks cwd-to-git `.agents` / vendor trees and
+//! `$HOME/.agents` / vendor trees.
 //! CLI `--no-implicit-roots` and MCP `implicit_roots: false` turn that
 //! walk off; extra `paths` and `user_skills_dir` still load.
 
@@ -53,6 +54,8 @@ mod tests {
 
     /// A host adding CLI `--no-implicit-roots` / MCP `implicit_roots`
     /// should see the default on the crate root, not only in discover.rs.
+    /// The walk is cwd-to-git `.agents` / `$HOME/.agents`, not the whole
+    /// cwd-to-git tree and not `user_skills_dir`.
     #[test]
     fn crate_root_docs_name_implicit_roots_default() {
         let docs: String = include_str!("lib.rs")
@@ -60,13 +63,31 @@ mod tests {
             .filter(|line| line.starts_with("//!"))
             .collect::<Vec<_>>()
             .join("\n");
+        // Substring `implicit_roots: true` is also in
+        // "does not set `implicit_roots: true`".
         assert!(
-            docs.contains("implicit_roots: true"),
-            "crate-root rustdoc must name DiscoveryOptions::default implicit_roots: true: {docs}"
+            docs.contains("[`DiscoveryOptions::default`] sets `implicit_roots: true`"),
+            "crate-root rustdoc must say Default sets implicit_roots: true (not an inverted sentence): {docs}"
+        );
+        assert!(
+            docs.contains("cwd-to-git `.agents`"),
+            "crate-root rustdoc must attach .agents to cwd-to-git, not walk the whole tree: {docs}"
+        );
+        assert!(
+            docs.contains("`$HOME/.agents`"),
+            "crate-root rustdoc must name implicit HOME .agents, not user_skills_dir: {docs}"
         );
         assert!(
             docs.contains("--no-implicit-roots"),
             "crate-root rustdoc must map CLI --no-implicit-roots to implicit_roots: {docs}"
+        );
+        assert!(
+            docs.contains("implicit_roots: false"),
+            "crate-root rustdoc must map MCP implicit_roots: false: {docs}"
+        );
+        assert!(
+            docs.contains("user_skills_dir"),
+            "crate-root rustdoc must say user_skills_dir still loads when implicit_roots is off: {docs}"
         );
         assert!(
             super::DiscoveryOptions::default().implicit_roots,

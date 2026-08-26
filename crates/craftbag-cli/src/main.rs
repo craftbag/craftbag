@@ -51,7 +51,7 @@ enum Cmd {
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
-        /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
+        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
         /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
@@ -79,7 +79,7 @@ enum Cmd {
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
-        /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
+        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
         /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
@@ -113,7 +113,7 @@ enum Cmd {
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
         #[arg(long = "ascii-names")]
         ascii_names: bool,
-        /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
+        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
         /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret

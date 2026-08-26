@@ -46,7 +46,7 @@ struct DiscoverArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
-    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
@@ -71,7 +71,7 @@ struct LoadArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
-    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
@@ -99,7 +99,7 @@ struct WhyArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
-    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
@@ -289,7 +289,7 @@ fn discover_properties() -> Value {
         },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
-        "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
+        "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
         "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd. Example: [\"./secret\"]."}
     })
@@ -2775,6 +2775,19 @@ mod tests {
             assert_eq!(
                 props["implicit_roots"]["type"], "boolean",
                 "{} implicit_roots type: {props}",
+                tool["name"]
+            );
+            let desc = props["implicit_roots"]["description"]
+                .as_str()
+                .unwrap_or("");
+            assert!(
+                desc.contains("Omitted is true"),
+                "{} implicit_roots schema must name omitted default true: {desc}",
+                tool["name"]
+            );
+            assert!(
+                desc.contains("cwd-to-git .agents"),
+                "{} implicit_roots schema must attach .agents to cwd-to-git: {desc}",
                 tool["name"]
             );
         }

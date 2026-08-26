@@ -2251,14 +2251,34 @@ fn validate_help_names_json_error_kind() {
 
 #[test]
 fn list_help_names_no_implicit_roots() {
-    let (_home, mut cmd) = bin();
-    cmd.arg("list")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("--no-implicit-roots"))
-        .stdout(predicates::str::contains("cwd-to-git"))
-        .stdout(predicates::str::contains("--path"));
+    for cmd_name in ["list", "load", "why"] {
+        let (_home, mut cmd) = bin();
+        let help = String::from_utf8_lossy(
+            &cmd.arg(cmd_name)
+                .arg("--help")
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        )
+        .into_owned();
+        assert!(
+            help.contains("--no-implicit-roots"),
+            "{cmd_name} --help must name --no-implicit-roots: {help}"
+        );
+        assert!(
+            help.contains("cwd-to-git .agents"),
+            "{cmd_name} --help must attach .agents to cwd-to-git, not walk the whole tree: {help}"
+        );
+        assert!(
+            help.contains("Default is on"),
+            "{cmd_name} --help must name implicit_roots default on: {help}"
+        );
+        assert!(
+            help.contains("--path") || help.contains("--user-dir"),
+            "{cmd_name} --help must say extra --path / --user-dir still load: {help}"
+        );
+    }
 }
 
 #[test]
