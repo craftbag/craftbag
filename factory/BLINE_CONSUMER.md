@@ -132,7 +132,11 @@ Set `DiscoveryOptions.disabled` (CLI `--disabled NAME`, MCP
 `disabled: ["NAME"]`) to hide skill names without a skip row.
 Identity is the same NFKC fold as load / why (`OFF` hides `off`).
 Omitted MCP `disabled` is empty. Present `null` is a type error.
-`watch_dirs` is unchanged (it does not load SKILL.md).
+
+Set `DiscoveryOptions.ignore` (CLI `--ignore PATH`, MCP
+`ignore: ["PATH"]`) to hide path prefixes without a skip row.
+`watch_dirs` omits the same prefixes (hosts must not notify-watch
+a tree discover will not load).
 
 Set `DiscoveryOptions.ignore` (CLI `--ignore PATH`, MCP
 `ignore: ["PATH"]`) to hide path prefixes without a skip row.

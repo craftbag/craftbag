@@ -90,11 +90,13 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// (symlink out of that walk root) is omitted, same as [`discover`].
 /// Host `user_skills_dir` is a skills root: leftover `SKILL.md` /
 /// `skill.md` must not hide `user_dir/skills` (same collection walk
-/// as extra-path leftover).
+/// as extra-path leftover). [`DiscoveryOptions::ignore`] prefixes are
+/// omitted (same as [`discover`]).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
         .unwrap_or_else(|_| lexical_normalize(cwd));
+    let ignore = expand_ignore_list(&cwd, &opts.ignore);
     let mut out = Vec::new();
     // Only existing directories. A notify watch on a missing
     // `.agents/skills` fails; hosts that want "create later" watch
@@ -103,39 +105,48 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
 
     if opts.implicit_roots {
         for dir in walk_cwd_to_git_root(&cwd) {
-            push_watch_confined_dir(&mut out, dir.join(".agents").join("skills"), &dir);
+            let agents = dir.join(".agents").join("skills");
+            if !path_is_ignored(&agents, &ignore) {
+                push_watch_confined_dir(&mut out, agents, &dir);
+            }
             for name in SkillSource::VENDOR_TOKENS.iter().copied() {
                 if vendor_enabled(opts, name) {
-                    push_watch_confined_dir(
-                        &mut out,
-                        dir.join(format!(".{name}")).join("skills"),
-                        &dir,
-                    );
+                    let vendor = dir.join(format!(".{name}")).join("skills");
+                    if !path_is_ignored(&vendor, &ignore) {
+                        push_watch_confined_dir(&mut out, vendor, &dir);
+                    }
                 }
             }
         }
     }
 
     if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        push_watch_dir(&mut out, user_dir.clone());
+        if !path_is_ignored(&user_dir, &ignore) {
+            push_watch_dir(&mut out, user_dir.clone());
+        }
         // user_dir is always a skills root. leftover SKILL.md is a
         // root_file skip, not a named package. Watch user/skills when
         // discover would walk that collection.
-        if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names) {
-            push_watch_dir(&mut out, user_dir.join("skills"));
+        let user_skills = user_dir.join("skills");
+        if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names)
+            && !path_is_ignored(&user_skills, &ignore)
+        {
+            push_watch_dir(&mut out, user_skills);
         }
     }
 
     if opts.implicit_roots {
         if let Some(home) = home_dir() {
-            push_watch_confined_dir(&mut out, home.join(".agents").join("skills"), &home);
+            let agents = home.join(".agents").join("skills");
+            if !path_is_ignored(&agents, &ignore) {
+                push_watch_confined_dir(&mut out, agents, &home);
+            }
             for name in SkillSource::VENDOR_TOKENS.iter().copied() {
                 if vendor_enabled(opts, name) {
-                    push_watch_confined_dir(
-                        &mut out,
-                        home.join(format!(".{name}")).join("skills"),
-                        &home,
-                    );
+                    let vendor = home.join(format!(".{name}")).join("skills");
+                    if !path_is_ignored(&vendor, &ignore) {
+                        push_watch_confined_dir(&mut out, vendor, &home);
+                    }
                 }
             }
         }
@@ -145,6 +156,9 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         let Some(expanded) = expand_extra_path_arg(raw, &cwd) else {
             continue;
         };
+        if path_is_ignored(&expanded, &ignore) {
+            continue;
+        }
         if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir()
         {
             // Discover loads a regular file (or symlink to one). A FIFO /
@@ -156,8 +170,11 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
             continue;
         }
         push_watch_dir(&mut out, expanded.clone());
-        if extra_should_watch_skills_subdir(&expanded, opts.ascii_names) {
-            push_watch_dir(&mut out, expanded.join("skills"));
+        let skills_subdir = expanded.join("skills");
+        if extra_should_watch_skills_subdir(&expanded, opts.ascii_names)
+            && !path_is_ignored(&skills_subdir, &ignore)
+        {
+            push_watch_dir(&mut out, skills_subdir);
         }
     }
 
@@ -7325,6 +7342,49 @@ mod tests {
         assert!(
             find_skill_by_name(&report.skills, "leaked").is_none(),
             "implicit roots stay off for leftover extra collections: {:?}",
+            report.skills
+        );
+    }
+
+    #[test]
+    fn watch_dirs_omits_ignored_extra_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let wanted = tempfile::tempdir().expect("wanted");
+        write_skill(&wanted.path().join("wanted"), "wanted", "keep");
+        let secret = tempfile::tempdir().expect("secret");
+        write_skill(&secret.path().join("secret"), "secret", "hide");
+        let home = tempfile::tempdir().expect("home");
+        let opts = DiscoveryOptions {
+            paths: vec![
+                wanted.path().display().to_string(),
+                secret.path().display().to_string(),
+            ],
+            ignore: vec![secret.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, wanted.path()),
+            "watch_dirs must still list the kept extra path: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, secret.path()),
+            "watch_dirs must omit an ignored extra path: {dirs:?}"
+        );
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(cwd.path(), &opts).expect("discover")
+        });
+        assert!(
+            find_skill_by_name(&report.skills, "wanted").is_some(),
+            "discover must still load wanted: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "secret").is_none(),
+            "discover must ignore secret: {:?}",
             report.skills
         );
     }
