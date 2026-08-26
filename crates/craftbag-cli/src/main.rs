@@ -54,6 +54,9 @@ enum Cmd {
         /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
+        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
+        #[arg(long = "disabled", value_name = "NAME")]
+        disabled: Vec<String>,
     },
     /// Print one skill body plus package envelope (includes argument-hint, when-to-use, and allowed-tools).
     Load {
@@ -76,6 +79,9 @@ enum Cmd {
         /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
+        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
+        #[arg(long = "disabled", value_name = "NAME")]
+        disabled: Vec<String>,
     },
     /// Explain loaded, skipped, and activation decisions.
     Why {
@@ -104,6 +110,9 @@ enum Cmd {
         /// Skip cwd-to-git and $HOME .agents / vendor trees. Extra --path and --user-dir still load.
         #[arg(long = "no-implicit-roots")]
         no_implicit_roots: bool,
+        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
+        #[arg(long = "disabled", value_name = "NAME")]
+        disabled: Vec<String>,
     },
     /// Validate one SKILL.md path.
     Validate {
@@ -140,17 +149,31 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             user_dir,
             ascii_names,
             no_implicit_roots,
+            disabled,
         } => {
             let mode = list_output_mode(json, xml, catalog, watch, format)?;
             if matches!(mode, ListOutput::Watch) {
-                let (cwd, opts) =
-                    discovery_opts(&paths, &vendor, user_dir, ascii_names, !no_implicit_roots)?;
+                let (cwd, opts) = discovery_opts(
+                    &paths,
+                    &vendor,
+                    user_dir,
+                    ascii_names,
+                    !no_implicit_roots,
+                    &disabled,
+                )?;
                 for dir in watch_dirs(&cwd, &opts) {
                     println!("{}", dir.display());
                 }
                 return Ok(ExitCode::SUCCESS);
             }
-            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names, !no_implicit_roots)?;
+            let report = discover_cwd(
+                &paths,
+                &vendor,
+                user_dir,
+                ascii_names,
+                !no_implicit_roots,
+                &disabled,
+            )?;
             if matches!(mode, ListOutput::Catalog) {
                 print!(
                     "{}",
@@ -204,8 +227,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             user_dir,
             ascii_names,
             no_implicit_roots,
+            disabled,
         } => {
-            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names, !no_implicit_roots)?;
+            let report = discover_cwd(
+                &paths,
+                &vendor,
+                user_dir,
+                ascii_names,
+                !no_implicit_roots,
+                &disabled,
+            )?;
             match find_skill_by_name(&report.skills, &name) {
                 Some(skill) => {
                     print!(
@@ -231,8 +262,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             user_dir,
             ascii_names,
             no_implicit_roots,
+            disabled,
         } => {
-            let report = discover_cwd(&paths, &vendor, user_dir, ascii_names, !no_implicit_roots)?;
+            let report = discover_cwd(
+                &paths,
+                &vendor,
+                user_dir,
+                ascii_names,
+                !no_implicit_roots,
+                &disabled,
+            )?;
             let budgets = progressive_budgets(context_tokens);
             let why = why(&report, name.as_deref(), context.as_deref(), Some(budgets));
             if let Some(miss) = why.unknown_skill_miss() {
@@ -353,6 +392,7 @@ fn discovery_opts(
     user_dir: Option<PathBuf>,
     ascii_names: bool,
     implicit_roots: bool,
+    disabled: &[String],
 ) -> Result<(PathBuf, DiscoveryOptions), String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let vendor_roots = SkillSource::parse_vendor_roots(vendor)?;
@@ -362,6 +402,7 @@ fn discovery_opts(
         user_skills_dir: user_dir,
         ascii_names,
         implicit_roots,
+        disabled: disabled.to_vec(),
         ..DiscoveryOptions::default()
     };
     Ok((cwd, opts))
@@ -373,7 +414,15 @@ fn discover_cwd(
     user_dir: Option<PathBuf>,
     ascii_names: bool,
     implicit_roots: bool,
+    disabled: &[String],
 ) -> Result<craftbag::DiscoveryReport, String> {
-    let (cwd, opts) = discovery_opts(paths, vendor, user_dir, ascii_names, implicit_roots)?;
+    let (cwd, opts) = discovery_opts(
+        paths,
+        vendor,
+        user_dir,
+        ascii_names,
+        implicit_roots,
+        disabled,
+    )?;
     discover(&cwd, &opts).map_err(|e| e.to_string())
 }

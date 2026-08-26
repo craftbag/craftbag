@@ -49,6 +49,9 @@ struct DiscoverArgs {
     /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
+    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
+    #[serde(default)]
+    disabled: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +71,9 @@ struct LoadArgs {
     /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
+    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
+    #[serde(default)]
+    disabled: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -90,6 +96,9 @@ struct WhyArgs {
     /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
+    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
+    #[serde(default)]
+    disabled: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +114,7 @@ fn opts_from(
     user_dir: Option<String>,
     ascii_names: bool,
     implicit_roots: Option<bool>,
+    disabled: Vec<String>,
 ) -> Result<DiscoveryOptions, String> {
     // CLI clap rejects `--user-dir` with no value. Present empty or
     // whitespace is the same miss, not discover-cwd as User.
@@ -119,6 +129,7 @@ fn opts_from(
         user_skills_dir: user_dir.map(PathBuf::from),
         ascii_names,
         implicit_roots: implicit_roots.unwrap_or(true),
+        disabled,
         ..DiscoveryOptions::default()
     })
 }
@@ -131,6 +142,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         args.user_dir,
         args.ascii_names,
         args.implicit_roots,
+        args.disabled,
     )?;
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
@@ -194,6 +206,7 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
             args.user_dir,
             args.ascii_names,
             args.implicit_roots,
+            args.disabled,
         )?,
     )
     .map_err(|e| e.to_string())?;
@@ -217,6 +230,7 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
             args.user_dir,
             args.ascii_names,
             args.implicit_roots,
+            args.disabled,
         )?,
     )
     .map_err(|e| e.to_string())?;
@@ -258,7 +272,8 @@ fn discover_properties() -> Value {
         },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
-        "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."}
+        "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
+        "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."}
     })
 }
 
@@ -2782,6 +2797,143 @@ mod tests {
         assert!(
             default_text.contains("homeskill"),
             "omitted implicit_roots must still load HOME .agents: {default_text}"
+        );
+    }
+
+    #[test]
+    fn tools_list_advertises_disabled() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(145)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let props = &tool["inputSchema"]["properties"];
+            assert!(
+                props.get("disabled").is_some(),
+                "{} must advertise disabled like CLI --disabled: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["disabled"]["type"], "array",
+                "{} disabled type: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["disabled"]["items"]["type"], "string",
+                "{} disabled items: {props}",
+                tool["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn skills_list_null_disabled_is_error() {
+        empty_home(|| {
+            let resp = call(146, "skills_list", json!({"disabled": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says disabled is string array; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog for null disabled: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_disabled_omits_named_skill() {
+        let extra = tempfile::tempdir().expect("extra");
+        let keep = extra.path().join("keep");
+        fs::create_dir_all(&keep).expect("keep");
+        fs::write(
+            keep.join("SKILL.md"),
+            "---\nname: keep\ndescription: stay\n---\nKEEP\n",
+        )
+        .expect("write keep");
+        let off = extra.path().join("off");
+        fs::create_dir_all(&off).expect("off");
+        fs::write(
+            off.join("SKILL.md"),
+            "---\nname: off\ndescription: hide\n---\nOFF\n",
+        )
+        .expect("write off");
+        let listed = empty_home(|| {
+            call(
+                147,
+                "skills_list",
+                json!({
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false,
+                    "disabled": ["OFF"]
+                }),
+            )
+        });
+        let text = call_text(&listed);
+        assert!(
+            text.contains("keep"),
+            "disabled list must still include keep: {text}"
+        );
+        assert!(
+            !text.contains("off"),
+            "disabled OFF must NFKC-hide off: {text}"
+        );
+        let defaulted = empty_home(|| {
+            call(
+                148,
+                "skills_list",
+                json!({
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }),
+            )
+        });
+        let default_text = call_text(&defaulted);
+        assert!(
+            default_text.contains("off") && default_text.contains("keep"),
+            "omitted disabled must still load off: {default_text}"
+        );
+    }
+
+    #[test]
+    fn skills_load_disabled_is_unknown() {
+        let extra = tempfile::tempdir().expect("extra");
+        let off = extra.path().join("off");
+        fs::create_dir_all(&off).expect("off");
+        fs::write(
+            off.join("SKILL.md"),
+            "---\nname: off\ndescription: hide\n---\nOFF\n",
+        )
+        .expect("write off");
+        let resp = empty_home(|| {
+            call(
+                149,
+                "skills_load",
+                json!({
+                    "name": "off",
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false,
+                    "disabled": ["off"]
+                }),
+            )
+        });
+        assert_eq!(resp["result"]["isError"], true, "{}", call_text(&resp));
+        assert_eq!(
+            resp["result"]["error_kind"],
+            "unknown_skill",
+            "disabled load must be unknown, not a skip peel: {}",
+            call_text(&resp)
         );
     }
 }
