@@ -217,3 +217,4 @@
 {"ts":"2026-08-26T00:18:00Z","job_id":"improve-watch-dirs-omit-non-dir-127","work_source":"improve","result":"landed","head":"fd19066b857b10d1e5556dbec0a6e9bf9ad65581","pr":127,"tests":"watch_dirs omit FIFO file roots","noop":false}
 {"ts":"2026-08-26T00:18:20Z","job_id":"adversary-after-127-noop","work_source":"adversary","result":"noop","head":"fd19066b857b10d1e5556dbec0a6e9bf9ad65581","pr":null,"tests":"127 watch omit green","noop":true}
 {"ts":"2026-08-26T00:39:10Z","job_id":"improve-watch-dirs-omit-escaped-128","work_source":"improve","result":"landed","head":"0ebc68ed8c6c053b2b8c7ed2dc96cc71d5bd7363","pr":128,"tests":"watch_dirs omit escaped roots","noop":false}
+{"ts":"2026-08-26T00:39:30Z","job_id":"adversary-after-128-noop","work_source":"adversary","result":"noop","head":"0ebc68ed8c6c053b2b8c7ed2dc96cc71d5bd7363","pr":null,"tests":"128 watch escape green","noop":true}
