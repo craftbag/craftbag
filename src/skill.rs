@@ -131,6 +131,8 @@ impl Skill {
 mod tests {
     use std::path::PathBuf;
 
+    use proptest::prelude::*;
+
     use super::{
         SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
         SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
@@ -347,5 +349,64 @@ mod tests {
                 && !out.contains("\"path\""),
             "Skill serialize must still omit source_path: {out}"
         );
+    }
+
+    /// List/why `path` must populate `source_path` for any host string, not
+    /// only `/tmp/x/SKILL.md`. Includes empty, unicode, and a segment named
+    /// `source_path` (a `contains("source_path")` omit check would false-fail).
+    fn host_path() -> impl Strategy<Value = String> {
+        prop_oneof![
+            Just(String::new()),
+            Just("/tmp/x/SKILL.md".to_owned()),
+            Just("/tmp/winner_path/source_path/SKILL.md".to_owned()),
+            Just("/home/user/.agents/skills/foo/SKILL.md".to_owned()),
+            Just("/tmp/ünicode dir/技能/SKILL.md".to_owned()),
+            Just(r"C:\Users\foo\SKILL.md".to_owned()),
+            ".{1,64}",
+            prop::collection::vec("[A-Za-z0-9._-]{1,10}", 1usize..5)
+                .prop_map(|parts| format!("/{}/SKILL.md", parts.join("/"))),
+        ]
+    }
+
+    fn list_why_source_token() -> impl Strategy<Value = &'static str> {
+        prop::sample::select(vec![
+            "extra",
+            "extra_path",
+            "extraPath",
+            "agents",
+            "user",
+            "claude",
+            "config",
+        ])
+    }
+
+    proptest! {
+        #[test]
+        fn serde_list_why_path_for_any_host_path(
+            path in host_path(),
+            source in list_why_source_token(),
+        ) {
+            let json = serde_json::json!({
+                "name": "x",
+                "description": "y",
+                "content": "z",
+                "source": source,
+                "path": path,
+            })
+            .to_string();
+            let skill: Skill = serde_json::from_str(&json).expect("list/why path");
+            prop_assert_eq!(
+                skill.source_path.as_deref(),
+                Some(std::path::Path::new(&path))
+            );
+            prop_assert_eq!(skill.package_root(), std::path::Path::new(&path).parent());
+            let out = serde_json::to_value(&skill).expect("ser");
+            prop_assert!(
+                out.get("sourcePath").is_none()
+                    && out.get("source_path").is_none()
+                    && out.get("path").is_none(),
+                "Skill serialize must still omit source_path: {out}"
+            );
+        }
     }
 }
