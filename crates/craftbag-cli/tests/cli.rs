@@ -2894,6 +2894,19 @@ fn why_help_names_json_winner_path() {
 }
 
 #[test]
+fn why_help_names_json_path() {
+    // SkillMiss.path landed in #139. `--path` is the extra-root flag, so
+    // a leftover host must see `path when a skip` to peel the SKILL.md
+    // instead of scraping `at ` from Display.
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("`path` when a skip"));
+}
+
+#[test]
 fn validate_help_names_json_error_kind() {
     let (_home, mut cmd) = bin();
     cmd.arg("validate")
