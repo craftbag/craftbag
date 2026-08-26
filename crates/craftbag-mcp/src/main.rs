@@ -952,6 +952,53 @@ mod tests {
     }
 
     #[test]
+    fn list_json_includes_metadata() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("annotated");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: annotated\ndescription: hinted\nmetadata:\n  author: A & B\n  version: \"1.0\"\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-metadata");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-metadata\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let out = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+        let skills = v["skills"].as_array().expect("skills");
+        let hinted_row = skills
+            .iter()
+            .find(|s| s["name"] == "annotated")
+            .expect("annotated");
+        assert_eq!(
+            hinted_row["metadata"],
+            serde_json::json!({"author": "A & B", "version": "1.0"}),
+            "MCP list must carry metadata: {out}"
+        );
+        let bare_row = skills
+            .iter()
+            .find(|s| s["name"] == "no-metadata")
+            .expect("no-metadata");
+        assert_eq!(
+            bare_row["metadata"],
+            serde_json::json!({}),
+            "empty metadata is {{}} on MCP list JSON, not omitted: {out}"
+        );
+    }
+
+    #[test]
     fn why_json_includes_when_to_use() {
         let extra = tempfile::tempdir().expect("extra");
         let hinted = extra.path().join("ranked");
@@ -1032,6 +1079,35 @@ mod tests {
         assert_eq!(
             hinted_row["allowed_tools"], "Read Bash(git:*)",
             "MCP why must carry allowed_tools like list JSON/XML: {why_text}"
+        );
+    }
+
+    #[test]
+    fn why_json_includes_metadata() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("annotated");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: annotated\ndescription: hinted\nmetadata:\n  author: A & B\n  version: \"1.0\"\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let why_text = empty_home(|| {
+            let why = call(44, "skills_why", json!({"paths": [path]}));
+            assert_eq!(why["result"]["isError"], false, "{}", call_text(&why));
+            call_text(&why).to_owned()
+        });
+        let v: serde_json::Value = serde_json::from_str(&why_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        let hinted_row = loaded
+            .iter()
+            .find(|s| s["name"] == "annotated")
+            .expect("annotated");
+        assert_eq!(
+            hinted_row["metadata"],
+            serde_json::json!({"author": "A & B", "version": "1.0"}),
+            "MCP why must carry metadata like list JSON/XML: {why_text}"
         );
     }
 
@@ -1139,6 +1215,60 @@ mod tests {
             assert!(
                 !bare_text.contains("Triggers:"),
                 "empty triggers must not add a load line: {bare_text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_load_includes_metadata() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("annotated");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: annotated\ndescription: hinted\nmetadata:\n  author: craftbag\n  version: \"1.0\"\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-metadata");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-metadata\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                58,
+                "skills_load",
+                json!({"name": "annotated", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("Metadata: author=craftbag, version=1.0"),
+                "MCP load must carry metadata like list JSON/XML: {hinted_text}"
+            );
+            let bare_load = call(
+                59,
+                "skills_load",
+                json!({"name": "no-metadata", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("Metadata:"),
+                "empty metadata must not add a load line: {bare_text}"
             );
         });
     }

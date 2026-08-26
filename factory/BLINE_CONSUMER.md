@@ -89,25 +89,27 @@ are the `--watch-dirs` flag name (same walk). The older `--json` /
 `list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
 `why` JSON `loaded` rows include
 `description` plus `user_invocable`, `disable_model_invocation`,
-`argument_hint`, `when_to_use`, `triggers`, `allowed_tools`, `license`, and
-`compatibility` so a host can
+`argument_hint`, `when_to_use`, `triggers`, `allowed_tools`, `license`,
+`compatibility`, and `metadata` so a host can
 build a slash palette, prompt catalog, preview activation triggers, apply
 pre-approved tools,
-or check license / environment without re-parsing SKILL.md. Omitted
+or check license / environment / metadata without re-parsing SKILL.md. Omitted
 `argument_hint`, `when_to_use`, `allowed_tools`, `license`, and
 `compatibility` are JSON `null` and empty XML tags. Empty `triggers` is
-JSON `[]` and an empty XML tag. List and why
+JSON `[]` and an empty XML tag. Empty `metadata` is JSON `{}` and an
+empty XML tag. List and why
 JSON both serialize `SkillSummary` so those keys cannot drift. A new
 `SkillSummary` field must land on list JSON, why JSON, and list XML
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
 (name + description, plus `Use when:` when set). CLI `load` /
 MCP `skills_load` is the text envelope, not that JSON object. CLI
 `load` and MCP `skills_load` print `Argument hint: …`,
-`When to use: …`, `Triggers: …`, `Allowed tools: …`, `License: …`, and
-`Compatibility: …` in the envelope when those frontmatter fields
+`When to use: …`, `Triggers: …`, `Allowed tools: …`, `License: …`,
+`Compatibility: …`, and `Metadata: …` in the envelope when those frontmatter fields
 are set (same text as list/why JSON). Empty `triggers` add no line.
+Empty `metadata` adds no line.
 Omitted fields add no line. Description, When to use, Triggers, License, Compatibility,
-Allowed tools, Argument hint, User arguments, and Activate hint fold
+Metadata, Allowed tools, Argument hint, User arguments, and Activate hint fold
 Unicode whitespace to spaces so each stays one envelope
 line. Package root and `scripts/` / `references/` / `assets/`
 listings use the same fold so a newline in a path or file name
