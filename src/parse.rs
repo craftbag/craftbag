@@ -53,7 +53,7 @@ pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
     };
     let mut unknown = Vec::new();
     for line in yaml.lines() {
-        if line.starts_with(' ') || line.starts_with('\t') {
+        if line_is_yaml_indented(line) {
             continue;
         }
         let trimmed = line.trim();
@@ -212,7 +212,7 @@ pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
 
 fn scan_frontmatter_name(yaml: &str) -> Option<String> {
     for line in yaml.lines() {
-        if line.starts_with(' ') || line.starts_with('\t') {
+        if line_is_yaml_indented(line) {
             continue;
         }
         let trimmed = line.trim();
@@ -277,6 +277,12 @@ pub fn skill_name_matches_directory(skill_md: &Path, name: &str) -> bool {
     }
 }
 
+/// Space, tab, or other White_Space. `trim()` would peel these, so they
+/// are not top-level keys.
+fn line_is_yaml_indented(line: &str) -> bool {
+    matches!(line.chars().next(), Some(c) if c.is_whitespace())
+}
+
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
 pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     let mut name: Option<String> = None;
@@ -302,7 +308,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         }
 
         if in_metadata {
-            let is_indented = line.starts_with(' ') || line.starts_with('\t');
+            let is_indented = line_is_yaml_indented(line);
             if is_indented {
                 if let Some((k, v)) = trimmed.split_once(':') {
                     let k = k.trim();
@@ -331,7 +337,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
         in_triggers = false;
 
-        if (line.starts_with(' ') || line.starts_with('\t')) && trimmed.split_once(':').is_some() {
+        if line_is_yaml_indented(line) && trimmed.split_once(':').is_some() {
             continue;
         }
 
@@ -405,7 +411,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 "allowed-tools" | "allowed_tools" if !value.is_empty() => {
                     allowed_tools = Some(value.to_owned());
                 }
-                "metadata" if value.is_empty() => {
+                "metadata" if value.is_empty() && !line_is_yaml_indented(line) => {
                     in_metadata = true;
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
@@ -475,7 +481,7 @@ where
             lines.next();
             continue;
         }
-        if !(next.starts_with(' ') || next.starts_with('\t')) {
+        if !line_is_yaml_indented(next) {
             break;
         }
         let Some(raw) = lines.next() else {
@@ -1090,6 +1096,159 @@ BODY
             peek_frontmatter_name(input),
             None,
             "nested name is not a skill identity for load/why peel"
+        );
+    }
+
+    #[test]
+    fn parse_skill_tab_indented_hooks_name_does_not_overwrite() {
+        let input = "\
+---
+name: wanted
+description: docs
+hooks:
+\tname: pre-commit
+\tuser-invocable: false
+---
+BODY
+";
+        let skill = parse_skill(input).expect("tab-indented hooks map must still load");
+        assert_eq!(skill.name, "wanted");
+        assert!(
+            skill.user_invocable,
+            "tab-indented user-invocable must not flip the omitted default"
+        );
+        assert_eq!(peek_frontmatter_name(input).as_deref(), Some("wanted"));
+    }
+
+    #[test]
+    fn parse_skill_nested_metadata_under_hooks_is_not_top_level_metadata() {
+        let input = "\
+---
+name: wanted
+description: docs
+hooks:
+  metadata:
+    name: nested-meta
+    author: nest
+---
+BODY
+";
+        let skill = parse_skill(input).expect("nested metadata under hooks must still load");
+        assert_eq!(skill.name, "wanted");
+        assert!(
+            skill.metadata.is_empty(),
+            "hooks.metadata is not top-level metadata: {:?}",
+            skill.metadata
+        );
+        assert_eq!(peek_frontmatter_name(input).as_deref(), Some("wanted"));
+    }
+
+    #[test]
+    fn parse_skill_indented_name_under_triggers_does_not_overwrite() {
+        let input = "\
+---
+name: wanted
+description: docs
+triggers:
+  - git
+  name: evil
+---
+BODY
+";
+        let skill = parse_skill(input).expect("indented name under triggers must still load");
+        assert_eq!(skill.name, "wanted");
+        assert_eq!(skill.triggers, vec!["git"]);
+        assert_eq!(peek_frontmatter_name(input).as_deref(), Some("wanted"));
+    }
+
+    #[test]
+    fn parse_skill_unicode_indent_hooks_name_does_not_overwrite() {
+        for indent in ["\u{00a0}", "\u{3000}", "\u{2003}", "\u{000b}", "\u{000c}"] {
+            let input = format!(
+                "---\nname: wanted\ndescription: docs\nhooks:\n{indent}name: pre-commit\n---\nBODY\n"
+            );
+            let skill = parse_skill(&input).unwrap_or_else(|e| {
+                panic!("unicode indent {indent:?} hooks.name must still load: {e}")
+            });
+            assert_eq!(
+                skill.name, "wanted",
+                "unicode indent {indent:?} hooks.name must not overwrite"
+            );
+            assert_eq!(
+                peek_frontmatter_name(&input).as_deref(),
+                Some("wanted"),
+                "peek unicode indent {indent:?}"
+            );
+        }
+        let missing = "\
+---
+description: docs
+hooks:
+\u{00a0}name: pre-commit
+---
+BODY
+";
+        assert!(
+            matches!(
+                parse_skill(missing),
+                Err(ParseError::MissingField(ref f)) if f == "name"
+            ),
+            "unicode-indented name is not a top-level name"
+        );
+        assert_eq!(
+            peek_frontmatter_name(missing),
+            None,
+            "peek must ignore unicode-indented name"
+        );
+        assert!(
+            !unknown_frontmatter_keys(
+                "---\nname: wanted\ndescription: docs\nhooks:\n\u{00a0}host-only: x\n---\n"
+            )
+            .iter()
+            .any(|k| k == "host-only"),
+            "unicode-indented host key is not a top-level unknown"
+        );
+    }
+
+    #[test]
+    fn parse_skill_unicode_indent_nested_metadata_is_not_in_metadata() {
+        let input = "\
+---
+name: wanted
+description: docs
+hooks:
+\u{00a0}metadata:
+    name: nested-meta
+    author: nest
+---
+BODY
+";
+        let skill = parse_skill(input).expect("unicode-indented hooks.metadata must still load");
+        assert_eq!(skill.name, "wanted");
+        assert!(
+            skill.metadata.is_empty(),
+            "unicode-indented hooks.metadata is not top-level: {:?}",
+            skill.metadata
+        );
+    }
+
+    #[test]
+    fn parse_skill_block_scalar_keeps_indented_name_line() {
+        let input = "\
+---
+name: wanted
+description: |
+  line one
+  name: not-a-key
+\u{00a0}name: also-not-a-key
+---
+BODY
+";
+        let skill = parse_skill(input).expect("block scalar must keep indented lines");
+        assert_eq!(skill.name, "wanted");
+        assert_eq!(
+            skill.description,
+            "line one\nname: not-a-key\nname: also-not-a-key"
         );
     }
 
