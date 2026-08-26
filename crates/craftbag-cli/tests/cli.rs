@@ -2320,6 +2320,59 @@ fn list_vendor_cursor_loads_project_layout() {
 }
 
 #[test]
+fn list_watch_dirs_vendor_cursor_lists_project_skills() {
+    let cwd = corpus().join("incumbent/cursor-project");
+    let want = cwd
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize cursor-project: {e}"))
+        .join(".cursor")
+        .join("skills");
+    assert!(
+        want.is_dir(),
+        "committed Cursor project skills dir must exist: {}",
+        want.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--watch-dirs")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_stdout = String::from_utf8_lossy(&off_out.stdout);
+    assert!(
+        !stdout_has_path(&off_stdout, &want),
+        "watch-dirs without --vendor cursor must not list .cursor/skills: {off_stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--vendor")
+        .arg("cursor")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &want),
+        "watch-dirs --vendor cursor must list .cursor/skills: {stdout}"
+    );
+}
+
+#[test]
 fn why_vendor_cursor_names_create_rule() {
     let cwd = corpus().join("incumbent/cursor-project");
     let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
