@@ -223,3 +223,4 @@
 {"ts":"2026-08-26T01:01:09Z","job_id":"improve-allowed-tools-130","work_source":"improve","result":"landed","head":"3ec01dd13cd00f0c3d0fcd66179a8c11f160f679","pr":130,"tests":"allowed_tools list why xml load","noop":false}
 {"ts":"2026-08-26T01:01:20Z","job_id":"adversary-after-130-noop","work_source":"adversary","result":"noop","head":"3ec01dd13cd00f0c3d0fcd66179a8c11f160f679","pr":null,"tests":"130 allowed_tools green","noop":true}
 {"ts": "2026-08-26T01:13:38Z", "job_id": "improve-extra-path-parse-once-131", "work_source": "improve", "result": "landed", "head": "d704d2fdd5f97cce9ca31407f8a3c7e39740afee", "pr": 131, "tests": "extra-path parse once", "noop": false}
+{"ts": "2026-08-26T01:23:24Z", "job_id": "adversary-after-131-noop", "work_source": "adversary", "result": "noop", "head": "d704d2fdd5f97cce9ca31407f8a3c7e39740afee", "pr": null, "tests": "131 parse-once analog green", "noop": true}
