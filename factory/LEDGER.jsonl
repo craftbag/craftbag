@@ -380,3 +380,4 @@
 {"ts": "2026-08-26T19:46:00Z", "job_id": "adversary-after-211-user-dir-skills-fifo-green", "work_source": "adversary", "result": "noop", "head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58", "pr": null, "tests": "Unreadable arm covers chmod/socket", "noop": true}
 {"ts": "2026-08-26T19:50:50Z", "job_id": "improve-mpi30-pm-steal-list-noop", "work_source": "improve", "result": "noop", "head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58", "pr": null, "tests": "steal list already shipped", "noop": true}
 {"ts": "2026-08-26T19:56:30Z", "job_id": "improve-mpi30-spec-noop", "work_source": "improve", "result": "noop", "head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58", "pr": null, "tests": "spec locks already on main", "noop": true}
+{"ts": "2026-08-26T19:56:50Z", "job_id": "expand-5-competitor-steal-list-noop", "work_source": "expand", "result": "noop", "head": "3a1478f32c808ae7dad35ba2f70ff5b5ab5e2f58", "pr": null, "tests": "steal list already shipped", "noop": true}
