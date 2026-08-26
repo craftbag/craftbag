@@ -2534,6 +2534,145 @@ fn why_disabled_is_unknown() {
 }
 
 #[test]
+fn list_help_names_ignore() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--ignore"))
+        .stdout(predicates::str::contains("no skip row"));
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--ignore"));
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--ignore"));
+}
+
+#[test]
+fn list_ignore_omits_prefix() {
+    let extra = tempfile::tempdir().expect("extra");
+    let keep = extra.path().join("keep");
+    fs::create_dir_all(&keep).expect("keep");
+    fs::write(
+        keep.join("SKILL.md"),
+        "---\nname: keep\ndescription: stay\n---\nKEEP\n",
+    )
+    .expect("write keep");
+    let secret = extra.path().join("secret");
+    fs::create_dir_all(&secret).expect("secret");
+    fs::write(
+        secret.join("SKILL.md"),
+        "---\nname: secret\ndescription: hide\n---\nSECRET\n",
+    )
+    .expect("write secret");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--ignore")
+        .arg(&secret)
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(names, ["keep"], "ignored prefix must not appear: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(skips.is_empty(), "ignore is silent (no skip row): {stdout}");
+}
+
+#[test]
+fn load_ignore_is_unknown() {
+    let extra = tempfile::tempdir().expect("extra");
+    let secret = extra.path().join("secret");
+    fs::create_dir_all(&secret).expect("secret");
+    fs::write(
+        secret.join("SKILL.md"),
+        "---\nname: secret\ndescription: hide\n---\nSECRET\n",
+    )
+    .expect("write secret");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("secret")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--ignore")
+        .arg(&secret)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill: secret"),
+        "ignored load must be unknown, not a skip row: {stderr}"
+    );
+}
+
+#[test]
+fn why_ignore_is_unknown() {
+    let extra = tempfile::tempdir().expect("extra");
+    let secret = extra.path().join("secret");
+    fs::create_dir_all(&secret).expect("secret");
+    fs::write(
+        secret.join("SKILL.md"),
+        "---\nname: secret\ndescription: hide\n---\nSECRET\n",
+    )
+    .expect("write secret");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("secret")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--ignore")
+        .arg(&secret)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("json");
+    assert_eq!(v["error_kind"], "unknown_skill", "stdout={stdout}");
+}
+
+#[test]
 fn load_help_names_args_and_argument_hint() {
     let (_home, mut cmd) = bin();
     cmd.arg("load")
