@@ -85,17 +85,15 @@ mod tests {
             docs.contains("`$HOME/.agents`"),
             "crate-root rustdoc must name implicit HOME .agents, not user_skills_dir: {docs}"
         );
+        // Substring `--no-implicit-roots` / `implicit_roots: false` /
+        // `user_skills_dir` is also in "does not load `user_skills_dir`".
         assert!(
-            docs.contains("--no-implicit-roots"),
-            "crate-root rustdoc must map CLI --no-implicit-roots to implicit_roots: {docs}"
+            docs.contains("CLI `--no-implicit-roots` and MCP `implicit_roots: false`"),
+            "crate-root rustdoc must map CLI --no-implicit-roots and MCP implicit_roots: false (not an inverted sentence): {docs}"
         );
         assert!(
-            docs.contains("implicit_roots: false"),
-            "crate-root rustdoc must map MCP implicit_roots: false: {docs}"
-        );
-        assert!(
-            docs.contains("user_skills_dir"),
-            "crate-root rustdoc must say user_skills_dir still loads when implicit_roots is off: {docs}"
+            docs.contains("`user_skills_dir` still load"),
+            "crate-root rustdoc must say user_skills_dir still loads when implicit_roots is off (not an inverted sentence): {docs}"
         );
         assert!(
             super::DiscoveryOptions::default().implicit_roots,
