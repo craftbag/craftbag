@@ -69,9 +69,12 @@ fn bline_consumer_host_table_names_skill_miss() {
         "rust path-filter must include factory/BLINE_CONSUMER.md so a host-table edit runs this test"
     );
     assert!(
-        notes
-            .lines()
-            .any(|l| l.contains('|') && l.contains("SkillMiss.error") && l.contains("error_kind")),
-        "BLINE_CONSUMER host table must name SkillMiss.error and error_kind"
+        notes.lines().any(|l| {
+            l.contains('|')
+                && l.contains("SkillMiss.error")
+                && l.contains("error_kind")
+                && l.contains("SkillMiss.path")
+        }),
+        "BLINE_CONSUMER host table must name SkillMiss.error, error_kind, and path"
     );
 }

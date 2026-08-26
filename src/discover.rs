@@ -183,6 +183,9 @@ pub struct SkillMiss {
     pub error_kind: &'static str,
     /// Same text as CLI stderr / MCP `content[0].text`.
     pub error: String,
+    /// Skip or validate `SKILL.md` when known. Omitted on `unknown_skill`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
 }
 
 impl SkillMiss {
@@ -221,10 +224,12 @@ pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
                 crate::sanitize_error_token(&skip.path.display().to_string()),
                 crate::sanitize_error_token(&skip.detail)
             ),
+            path: Some(skip.path.clone()),
         },
         None => SkillMiss {
             error_kind: UNKNOWN_SKILL_KIND,
             error: format!("unknown skill: {}", crate::sanitize_error_token(name)),
+            path: None,
         },
     }
 }
@@ -261,7 +266,8 @@ pub struct ValidationReport {
 impl ValidationReport {
     /// Host-branchable miss when this path did not validate.
     ///
-    /// Same `{ error_kind, error }` as [`unknown_or_skipped_skill`].
+    /// Same `{ error_kind, error }` as [`unknown_or_skipped_skill`], plus
+    /// `path` when the skip row is known.
     /// `error_kind` is the skip code (`parse_error`, `unreadable`,
     /// `name_directory_mismatch`). Ok reports return `None`.
     pub fn miss(&self) -> Option<SkillMiss> {
@@ -277,6 +283,7 @@ impl ValidationReport {
         Some(SkillMiss {
             error_kind: skip.kind.as_str(),
             error: crate::sanitize_error_token(raw),
+            path: Some(skip.path.clone()),
         })
     }
 }
@@ -1557,6 +1564,42 @@ mod tests {
             keys,
             ["error".to_owned(), "error_kind".to_owned()],
             "SkillMiss peel is {{ error_kind, error }}; MCP/CLI must not invent kind: {json}"
+        );
+    }
+
+    #[test]
+    fn load_miss_exposes_path_when_skip_is_known() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/Bad_Name/SKILL.md"),
+            name: Some("Bad_Name".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
+            winner_path: None,
+        };
+        let skipped = unknown_or_skipped_skill("bad_name", std::slice::from_ref(&skip));
+        assert_eq!(
+            skipped.path.as_deref(),
+            Some(skip.path.as_path()),
+            "host must locate the skip without scraping Display"
+        );
+        let json = serde_json::to_string(&skipped).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["path"].as_str().map(std::path::Path::new),
+            Some(skip.path.as_path()),
+            "json={json}"
+        );
+
+        let unknown = unknown_or_skipped_skill("no-such", &[]);
+        assert!(
+            unknown.path.is_none(),
+            "unknown_skill has no SKILL.md to name"
+        );
+        let json = serde_json::to_string(&unknown).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert!(
+            v.get("path").is_none(),
+            "omit path on unknown_skill: {json}"
         );
     }
 
@@ -3940,6 +3983,35 @@ mod tests {
         assert!(
             v.get("errorKind").is_none(),
             "error_kind must stay snake_case: {json}"
+        );
+    }
+
+    #[test]
+    fn validate_miss_exposes_path() {
+        let mismatch = corpus_dir().join("agentskills/name-mismatch/wrong-dir/SKILL.md");
+        let report = validate_path(&mismatch);
+        let miss = report.miss().expect("peel");
+        assert_eq!(
+            miss.path.as_deref(),
+            Some(report.path.as_path()),
+            "validate peel must keep the SKILL.md path: {miss:?}"
+        );
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["path"].as_str().map(std::path::Path::new),
+            Some(report.path.as_path()),
+            "json={json}"
+        );
+
+        let root = tempfile::tempdir().expect("tmp");
+        let missing = root.path().join("no-such").join("SKILL.md");
+        let unread = validate_path(&missing);
+        let miss = unread.miss().expect("peel");
+        assert_eq!(
+            miss.path.as_deref(),
+            Some(unread.path.as_path()),
+            "unreadable peel must keep the asked path: {miss:?}"
         );
     }
 

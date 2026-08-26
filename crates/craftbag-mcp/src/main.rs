@@ -208,8 +208,9 @@ fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
     (err.message, true, err.miss)
 }
 
-/// Copy `{ error_kind, error }` from [`SkillMiss`] so MCP cannot drop a
-/// peel key that CLI `why --json` / `validate --json` already serialize.
+/// Copy `{ error_kind, error }` and optional `path` from [`SkillMiss`] so
+/// MCP cannot drop a peel key that CLI `why --json` / `validate --json`
+/// already serialize.
 fn merge_skill_miss(result: &mut Value, miss: &SkillMiss) {
     let peel = serde_json::to_value(miss).expect("SkillMiss serde");
     let obj = peel.as_object().expect("SkillMiss is a JSON object");
@@ -257,7 +258,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known (same as why --json).",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -1389,6 +1390,11 @@ mod tests {
             assert!(
                 !text.contains("unknown skill"),
                 "skipped parse error must not look missing: {text}"
+            );
+            let path = resp["result"]["path"].as_str().expect("path");
+            assert!(
+                path.ends_with("Bad_Name/SKILL.md") || path.ends_with("Bad_Name\\SKILL.md"),
+                "MCP load skip must peel SkillMiss.path next to isError: {resp}"
             );
         });
     }
