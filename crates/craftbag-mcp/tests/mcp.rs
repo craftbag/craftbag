@@ -435,3 +435,67 @@ fn stdio_skills_why_vendor_grok_names_project_grok() {
         "project-grok is a loaded vendor skill, not a skip: {text}"
     );
 }
+
+#[test]
+fn stdio_skills_list_watch_vendor_grok_lists_project_skills() {
+    let cwd = corpus_grok_project();
+    let want = cwd
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize grok-project: {e}"))
+        .join(".grok")
+        .join("skills");
+    assert!(
+        want.is_dir(),
+        "committed Grok project skills dir must exist: {}",
+        want.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let off = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {"format": "watch"}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], false,
+        "watch without vendor is not a miss: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    assert!(
+        off_text.lines().all(|l| Path::new(l) != want.as_path()),
+        "watch without vendor grok must not list .grok/skills: {off_text}"
+    );
+
+    let on = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {"format": "watch", "vendor": ["grok"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.lines().any(|l| Path::new(l) == want.as_path()),
+        "watch --vendor grok must list .grok/skills: {text}"
+    );
+    assert!(
+        !text.contains("project-grok") && !text.contains("## Skills"),
+        "watch format must not load SKILL.md: {text}"
+    );
+}
