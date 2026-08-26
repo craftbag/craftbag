@@ -1197,4 +1197,40 @@ Should fail parse.
             "require_bool_yaml must receive the table snake name, not the raw YAML key"
         );
     }
+
+    #[test]
+    fn hyphen_bool_block_scalar_hostile_value_is_sanitized() {
+        // require_bool_yaml still sanitizes U+2028 / em dash after
+        // HYPHEN_BOOL_KEYS (inline scalars already cover U+2028).
+        for &(hyphen, snake) in HYPHEN_BOOL_KEYS {
+            let input = format!(
+                "---\nname: demo\ndescription: d\n{hyphen}: |\n  yes\u{2028}no\u{2014}maybe\n---\nbody\n"
+            );
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                matches!(err, ParseError::InvalidYaml(_))
+                    && msg.contains(snake)
+                    && msg.contains("boolean"),
+                "hostile block must peel {snake}: {msg}"
+            );
+            assert_eq!(
+                msg.lines().count(),
+                1,
+                "hostile block error must stay one line: {msg:?}"
+            );
+            assert!(
+                !msg.contains('\u{2028}'),
+                "U+2028 must not leak from block bool: {msg:?}"
+            );
+            assert!(
+                !msg.contains('\u{2014}'),
+                "em dash must not leak from block bool: {msg:?}"
+            );
+            assert!(
+                !msg.contains(hyphen),
+                "hostile block must not leak raw YAML key {hyphen}: {msg}"
+            );
+        }
+    }
 }
