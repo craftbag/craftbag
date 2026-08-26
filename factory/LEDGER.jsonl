@@ -260,3 +260,4 @@
 {"ts": "2026-08-26T06:09:05Z", "job_id": "adversary-after-150-noop", "work_source": "adversary", "result": "noop", "head": "675397bb9202f58f137d4d0db52dcb3fc719215d", "pr": null, "tests": "Skill serialize stays camelCase; snake aliases locked", "noop": true}
 {"ts": "2026-08-26T06:19:02Z", "job_id": "improve-mpi26-adv-yaml-bool", "work_source": "improve", "result": "landed", "head": "a8195828f5ad38c8dcdcfb0d08dd5b3d48d03298", "pr": 151, "tests": "29 passed parse:: present-null YAML bools", "noop": false}
 {"ts": "2026-08-26T06:26:56Z", "job_id": "adversary-after-151-noop", "work_source": "adversary", "result": "noop", "head": "a8195828f5ad38c8dcdcfb0d08dd5b3d48d03298", "pr": null, "tests": "killed at 6m zero git diff", "noop": true}
+{"ts": "2026-08-26T06:34:15Z", "job_id": "improve-mpi26-arch-noop", "work_source": "improve", "result": "noop", "head": "a8195828f5ad38c8dcdcfb0d08dd5b3d48d03298", "pr": null, "tests": "killed at 6m zero git diff", "noop": true}
