@@ -245,6 +245,7 @@ Bline: `discover_skills_for_cwd_report` (the doctor skip source).
 | `incumbent/cursor-user` | `HOME` + `--vendor cursor` | load `home-rule` from `~/.cursor/skills` | not compared | craftbag prove |
 | `incumbent/grok-project` | cwd + `--vendor grok` | load `project-grok` source vendor grok | not compared | craftbag prove |
 | `incumbent/grok-user` | `HOME` + `--vendor grok` | load `home-grok` from `~/.grok/skills` | not compared | craftbag prove |
+| `leftover/empty-nested-skills` | extra path + `--no-implicit-roots` | load `wanted` next to empty `skills/` | not compared | leftover analog of #223 |
 
 `--path` on a project root (`lowercase-skill-md`) does not walk
 `.agents/skills` (extra-path package/collection rules). Bline cwd
