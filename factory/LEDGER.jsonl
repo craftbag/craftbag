@@ -351,3 +351,4 @@
 {"ts": "2026-08-26T17:21:20Z", "job_id": "adversary-after-198-ignore-family-green", "work_source": "adversary", "result": "noop", "head": "e1e1c0e9758e3ffafa3bcdeba4cb0a77e5bff09f", "pr": null, "tests": "ignore/watch family closed", "noop": true}
 {"ts": "2026-08-26T17:22:00Z", "job_id": "improve-mpi29-pm-steal-list-noop", "work_source": "improve", "result": "noop", "head": "e1e1c0e9758e3ffafa3bcdeba4cb0a77e5bff09f", "pr": null, "tests": "steal list already shipped", "noop": true}
 {"ts": "2026-08-26T17:29:00Z", "job_id": "improve-mpi29-spec-noop", "work_source": "improve", "result": "noop", "head": "e1e1c0e9758e3ffafa3bcdeba4cb0a77e5bff09f", "pr": null, "tests": "spec locks already on main", "noop": true}
+{"ts": "2026-08-26T17:34:20Z", "job_id": "expand-3-incumbent-cursor-user", "work_source": "expand", "result": "landed", "head": "7de2e9b51b70798e2025b667959c9fd1f32eac64", "pr": 199, "tests": "incumbent_cursor_user_home_vendor_layout_loads", "noop": false}
