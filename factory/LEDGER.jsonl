@@ -337,3 +337,4 @@
 {"ts": "2026-08-26T14:50:00Z", "job_id": "improve-mpi28-obs-winner-path", "work_source": "improve", "result": "landed", "head": "7a2911bdd7408813d0864273e706e2d4e2c78cf9", "pr": 191, "tests": "winner_path peel", "noop": false}
 {"ts": "2026-08-26T14:50:30Z", "job_id": "adversary-after-191-winner-path-green", "work_source": "adversary", "result": "noop", "head": "7a2911bdd7408813d0864273e706e2d4e2c78cf9", "pr": null, "tests": "winner_path already on all SkillMiss wires", "noop": true}
 {"ts": "2026-08-26T15:01:00Z", "job_id": "improve-mpi29-qa-winner-path-cli", "work_source": "improve", "result": "landed", "head": "6d1643a95694a239ecd606b5cce6f666ab5d7348", "pr": 192, "tests": "CLI winner_path lock", "noop": false}
+{"ts": "2026-08-26T15:01:30Z", "job_id": "adversary-after-192-cli-winner-path-green", "work_source": "adversary", "result": "noop", "head": "6d1643a95694a239ecd606b5cce6f666ab5d7348", "pr": null, "tests": "192 already locks CLI wires", "noop": true}
