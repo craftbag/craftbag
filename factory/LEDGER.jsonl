@@ -326,3 +326,4 @@
 {"ts": "2026-08-26T13:35:20Z", "job_id": "improve-mpi28-perf-noop", "work_source": "improve", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": null, "tests": "zero git diff; parse-once already landed", "noop": true}
 {"ts": "2026-08-26T13:42:20Z", "job_id": "improve-mpi28-compat-noop", "work_source": "improve", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": null, "tests": "zero git diff", "noop": true}
 {"ts": "2026-08-26T13:52:00Z", "job_id": "expand-corpus-0-noop", "work_source": "expand", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": 187, "tests": "closed 187 one-level skills roots", "noop": true}
+{"ts": "2026-08-26T14:02:00Z", "job_id": "expand-prop-1-present-null-bool", "work_source": "expand", "result": "landed", "head": "db9dae64175b31feb1e982311a84c26587baf270", "pr": 188, "tests": "prop_parse 12 passed", "noop": false}
