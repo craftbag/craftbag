@@ -74,14 +74,22 @@ pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
     unknown
 }
 
-fn frontmatter_yaml(content: &str) -> Option<&str> {
+/// Split `--- yaml --- body`. Parse, peek, and unknown-key scan share
+/// this so a delimiter change cannot drift across those paths.
+fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
         return None;
     }
     let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
     let close_pos = after_open.find("\n---")?;
-    Some(&after_open[..close_pos])
+    let yaml = &after_open[..close_pos];
+    let body = after_open[close_pos + 4..].trim_start_matches(['\r', '\n']);
+    Some((yaml, body))
+}
+
+fn frontmatter_yaml(content: &str) -> Option<&str> {
+    split_frontmatter(content).map(|(yaml, _)| yaml)
 }
 
 /// Parse a SKILL.md file's content into a [`Skill`].
@@ -93,19 +101,7 @@ fn frontmatter_yaml(content: &str) -> Option<&str> {
 /// `source` defaults to [`crate::SkillSource::Agents`]; callers override it
 /// from the discovery root.
 pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
-        return Err(ParseError::MissingFrontmatter);
-    }
-
-    let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
-    let close_pos = after_open
-        .find("\n---")
-        .ok_or(ParseError::MissingFrontmatter)?;
-
-    let yaml_block = &after_open[..close_pos];
-    let body_start = close_pos + 4;
-    let body = after_open[body_start..].trim_start_matches(['\r', '\n']);
+    let (yaml_block, body) = split_frontmatter(content).ok_or(ParseError::MissingFrontmatter)?;
 
     let mut skill = parse_frontmatter(yaml_block)?;
     skill.content = body.to_owned();
@@ -206,13 +202,7 @@ pub fn skill_name_is_ascii_policy(name: &str) -> bool {
 
 /// Frontmatter `name` when the field parsed, even if the skill is invalid.
 pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
-        return None;
-    }
-    let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
-    let close_pos = after_open.find("\n---")?;
-    let yaml_block = &after_open[..close_pos];
+    let (yaml_block, _) = split_frontmatter(content)?;
     if let Ok(skill) = parse_frontmatter(yaml_block) {
         return Some(skill.name);
     }
@@ -596,8 +586,8 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
 mod tests {
     use super::{
         HYPHEN_BOOL_KEYS, is_known_frontmatter_key, parse_frontmatter, parse_skill,
-        peek_frontmatter_name, skill_name_matches_directory, unknown_frontmatter_keys,
-        validate_skill_name,
+        peek_frontmatter_name, skill_name_matches_directory, split_frontmatter,
+        unknown_frontmatter_keys, validate_skill_name,
     };
     use crate::error::ParseError;
     use crate::skill::SKILL_DESCRIPTION_MAX_CHARS;
@@ -1023,6 +1013,51 @@ Should fail parse.
         assert_eq!(
             peek_frontmatter_name(missing_desc).as_deref(),
             Some("only-name")
+        );
+    }
+
+    #[test]
+    fn split_frontmatter_returns_yaml_and_body() {
+        let (yaml, body) =
+            split_frontmatter("---\nname: demo\ndescription: d\n---\nhello\n").expect("split");
+        assert_eq!(yaml, "name: demo\ndescription: d");
+        assert_eq!(body, "hello\n");
+        assert!(split_frontmatter("no delimiters").is_none());
+        assert!(split_frontmatter("---\nname: demo\n").is_none());
+        let (yaml_crlf, body_crlf) =
+            split_frontmatter("---\r\nname: demo\r\n---\r\nbody\r\n").expect("crlf");
+        assert_eq!(yaml_crlf, "name: demo\r");
+        assert_eq!(body_crlf, "body\r\n");
+        let skill = parse_skill("---\nname: demo\ndescription: d\n---\nhello\n").expect("parse");
+        assert_eq!(skill.content, "hello\n");
+        assert_eq!(
+            peek_frontmatter_name("---\nname: demo\ndescription: d\n---\nhello\n").as_deref(),
+            Some("demo")
+        );
+        assert!(
+            unknown_frontmatter_keys("---\nname: demo\ndescription: d\nhost-only: x\n---\n")
+                .contains(&"host-only".to_owned())
+        );
+    }
+
+    #[test]
+    fn split_frontmatter_is_the_only_delimiter_scan() {
+        let prod = include_str!("parse.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("prod");
+        assert_eq!(
+            prod.matches("find(\"\\n---\")").count(),
+            1,
+            "delimiter scan must live only in split_frontmatter"
+        );
+        assert!(
+            prod.contains("fn split_frontmatter("),
+            "split_frontmatter must exist"
+        );
+        assert!(
+            prod.matches("split_frontmatter(").count() >= 4,
+            "definition plus parse_skill, peek, and frontmatter_yaml must call it"
         );
     }
 
