@@ -409,9 +409,10 @@ pub fn unknown_list_format(format: &str) -> String {
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
 /// Also emits `user_invocable`, `disable_model_invocation`,
-/// `argument_hint`, `when_to_use`, and `allowed_tools` so a host
-/// that lists via XML can build a slash palette or apply
-/// pre-approved tools without re-parsing.
+/// `argument_hint`, `when_to_use`, `allowed_tools`, `license`,
+/// and `compatibility` so a host that lists via XML can build a
+/// slash palette, apply pre-approved tools, or check license /
+/// environment without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -462,6 +463,16 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             out.push_str(&xml_escape(tools));
         }
         out.push_str("</allowed_tools>\n");
+        out.push_str("<license>");
+        if let Some(license) = skill.license.as_deref() {
+            out.push_str(&xml_escape(license));
+        }
+        out.push_str("</license>\n");
+        out.push_str("<compatibility>");
+        if let Some(compat) = skill.compatibility.as_deref() {
+            out.push_str(&xml_escape(compat));
+        }
+        out.push_str("</compatibility>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -1128,6 +1139,52 @@ mod tests {
         assert!(
             skill_block.contains("<allowed_tools></allowed_tools>"),
             "omitted allowed_tools must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
+    fn format_available_skills_xml_includes_license() {
+        let mut hinted = make_skill("licensed", &[], 10);
+        hinted.license = Some("MIT & Apache".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/licensed/SKILL.md"));
+        let mut bare = make_skill("no-license", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-license/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<license>MIT &amp; Apache</license>"),
+            "list XML must carry escaped license: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-license</name>")
+            .nth(1)
+            .expect("no-license skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<license></license>"),
+            "omitted license must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
+    fn format_available_skills_xml_includes_compatibility() {
+        let mut hinted = make_skill("gated", &[], 10);
+        hinted.compatibility = Some("rust <1.85>".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/gated/SKILL.md"));
+        let mut bare = make_skill("no-compat", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-compat/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<compatibility>rust &lt;1.85&gt;</compatibility>"),
+            "list XML must carry escaped compatibility: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-compat</name>")
+            .nth(1)
+            .expect("no-compat skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<compatibility></compatibility>"),
+            "omitted compatibility must still emit an empty XML tag: {xml}"
         );
     }
 
