@@ -104,6 +104,16 @@ pub struct SkillSummary {
     /// why JSON (`None`).
     #[serde(rename = "allowed_tools", default)]
     pub allowed_tools: Option<String>,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    /// Official agentskills `license`. Omitted on cached pre-this-PR
+    /// why JSON (`None`).
+    #[serde(default)]
+    pub license: Option<String>,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    /// Official agentskills `compatibility`. Omitted on cached pre-this-PR
+    /// why JSON (`None`).
+    #[serde(default)]
+    pub compatibility: Option<String>,
 }
 
 impl From<&Skill> for SkillSummary {
@@ -118,6 +128,8 @@ impl From<&Skill> for SkillSummary {
             argument_hint: skill.argument_hint.clone(),
             when_to_use: skill.when_to_use.clone(),
             allowed_tools: skill.allowed_tools.clone(),
+            license: skill.license.clone(),
+            compatibility: skill.compatibility.clone(),
         }
     }
 }
@@ -162,7 +174,8 @@ impl WhyReport {
 ///
 /// Loaded rows include `description`, `user_invocable`,
 /// `disable_model_invocation`, `argument_hint`, `when_to_use`,
-/// and `allowed_tools` (same keys as list JSON / list XML).
+/// `allowed_tools`, `license`, and `compatibility` (same keys as
+/// list JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -738,6 +751,50 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_license() {
+        let mut hinted = Skill::new("licensed", "d", "body");
+        hinted.license = Some("MIT".to_owned());
+        let bare = Skill::new("no-license", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["license"], "MIT",
+            "why JSON must carry license like list JSON/XML: {json}"
+        );
+        assert!(
+            v["loaded"][1]["license"].is_null(),
+            "omitted license is null, not a camelCase key: {json}"
+        );
+    }
+
+    #[test]
+    fn why_json_includes_compatibility() {
+        let mut hinted = Skill::new("gated", "d", "body");
+        hinted.compatibility = Some("rust".to_owned());
+        let bare = Skill::new("no-compat", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["compatibility"], "rust",
+            "why JSON must carry compatibility like list JSON/XML: {json}"
+        );
+        assert!(
+            v["loaded"][1]["compatibility"].is_null(),
+            "omitted compatibility is null, not a camelCase key: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -803,7 +860,8 @@ mod tests {
 
         // Machine-readable list/why JSON and list XML must share these
         // keys. path is location in official skills-ref XML. Catalog and
-        // load stay text envelopes (when_to_use / allowed_tools / argument_hint).
+        // load stay text envelopes (when_to_use / allowed_tools /
+        // argument_hint / license / compatibility).
         const FIELDS: &[(&str, &str)] = &[
             ("name", "name"),
             ("description", "description"),
@@ -814,6 +872,8 @@ mod tests {
             ("argument_hint", "argument_hint"),
             ("when_to_use", "when_to_use"),
             ("allowed_tools", "allowed_tools"),
+            ("license", "license"),
+            ("compatibility", "compatibility"),
         ];
 
         let mut skill = Skill::new("slash-ok", "palette", "body");
@@ -824,6 +884,8 @@ mod tests {
         skill.argument_hint = Some("[name]".to_owned());
         skill.when_to_use = Some("after rebase".to_owned());
         skill.allowed_tools = Some("Read Bash".to_owned());
+        skill.license = Some("MIT".to_owned());
+        skill.compatibility = Some("rust".to_owned());
 
         let summary = SkillSummary::from(&skill);
         let json = serde_json::to_value(&summary).expect("summary serde");
