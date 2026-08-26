@@ -1550,6 +1550,14 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&json).expect("json");
         assert_eq!(v["error_kind"], "unknown_skill", "json={json}");
         assert_eq!(v["error"], "unknown skill: no-such", "json={json}");
+
+        let mut keys: Vec<_> = v.as_object().expect("object").keys().cloned().collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            ["error".to_owned(), "error_kind".to_owned()],
+            "SkillMiss peel is {{ error_kind, error }}; MCP/CLI must not invent kind: {json}"
+        );
     }
 
     #[test]

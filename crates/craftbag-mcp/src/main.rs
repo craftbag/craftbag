@@ -146,14 +146,14 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
 
 struct ToolError {
     message: String,
-    error_kind: Option<&'static str>,
+    miss: Option<SkillMiss>,
 }
 
 impl From<String> for ToolError {
     fn from(message: String) -> Self {
         Self {
             message,
-            error_kind: None,
+            miss: None,
         }
     }
 }
@@ -161,8 +161,8 @@ impl From<String> for ToolError {
 impl From<SkillMiss> for ToolError {
     fn from(miss: SkillMiss) -> Self {
         Self {
-            message: miss.error,
-            error_kind: Some(miss.error_kind),
+            message: miss.error.clone(),
+            miss: Some(miss),
         }
     }
 }
@@ -204,8 +204,18 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     Ok(serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)
 }
 
-fn tool_fail(err: ToolError) -> (String, bool, Option<&'static str>) {
-    (err.message, true, err.error_kind)
+fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
+    (err.message, true, err.miss)
+}
+
+/// Copy `{ error_kind, error }` from [`SkillMiss`] so MCP cannot drop a
+/// peel key that CLI `why --json` / `validate --json` already serialize.
+fn merge_skill_miss(result: &mut Value, miss: &SkillMiss) {
+    let peel = serde_json::to_value(miss).expect("SkillMiss serde");
+    let obj = peel.as_object().expect("SkillMiss is a JSON object");
+    for (key, value) in obj {
+        result[key] = value.clone();
+    }
 }
 
 fn discover_properties() -> Value {
@@ -306,7 +316,7 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 Ok(p) => p,
                 Err(e) => return Some(err(id, -32602, &e.to_string())),
             };
-            let (text, is_err, error_kind) = match params.name.as_str() {
+            let (text, is_err, miss) = match params.name.as_str() {
                 "skills_list" => match tool_args(params.arguments) {
                     Ok(args) => match list_json(args) {
                         Ok(s) => (s, false, None),
@@ -340,8 +350,8 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 "content": [{"type": "text", "text": text}],
                 "isError": is_err
             });
-            if let Some(kind) = error_kind {
-                result["error_kind"] = json!(kind);
+            if let Some(miss) = miss {
+                merge_skill_miss(&mut result, &miss);
             }
             Some(ok(id, result))
         }
@@ -1309,6 +1319,47 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_why_miss_peels_skill_miss_keys() {
+        use craftbag::unknown_or_skipped_skill;
+
+        // One table so MCP cannot keep hand-copying error_kind and drop a
+        // new SkillMiss field the way CLI why --json already serializes.
+        let unknown = unknown_or_skipped_skill("no-such-skill", &[]);
+        let cases = [
+            (
+                60,
+                "skills_load",
+                json!({"name": "no-such-skill"}),
+                &unknown,
+            ),
+            (61, "skills_why", json!({"name": "no-such-skill"}), &unknown),
+        ];
+        empty_home(|| {
+            for (id, tool, args, miss) in cases {
+                let peel = serde_json::to_value(miss).expect("skill miss serde");
+                let peel_obj = peel.as_object().expect("object");
+                assert!(
+                    peel_obj.contains_key("error_kind") && peel_obj.contains_key("error"),
+                    "SkillMiss peel is {{ error_kind, error }}: {peel}"
+                );
+                let resp = call(id, tool, args);
+                assert_eq!(resp["result"]["isError"], true, "tool={tool} resp={resp}");
+                for (key, value) in peel_obj {
+                    assert_eq!(
+                        &resp["result"][key], value,
+                        "MCP {tool} must peel SkillMiss.{key} like CLI why --json: {resp}"
+                    );
+                }
+                assert_eq!(
+                    call_text(&resp),
+                    miss.error,
+                    "content[0].text stays the one-line miss: tool={tool}"
+                );
+            }
+        });
+    }
+
+    #[test]
     fn skills_load_parse_error_skip_is_not_unknown() {
         empty_home(|| {
             let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1326,6 +1377,10 @@ mod tests {
                 "skipped load must reuse skip code, not Display: {resp}"
             );
             let text = call_text(&resp);
+            assert_eq!(
+                resp["result"]["error"], text,
+                "parse skip must peel SkillMiss.error like CLI why --json: {resp}"
+            );
             assert!(
                 text.contains("skipped skill: Bad_Name"),
                 "load must name the skipped skill: {text}"
