@@ -1,4 +1,9 @@
 //! Public types, SKILL.md parse, discovery, and activation selector.
+//!
+//! [`DiscoveryOptions::default`] sets `implicit_roots: true` so
+//! [`discover`] walks cwd-to-git and `$HOME` `.agents` / vendor trees.
+//! CLI `--no-implicit-roots` and MCP `implicit_roots: false` turn that
+//! walk off; extra `paths` and `user_skills_dir` still load.
 
 mod activate;
 mod discover;
@@ -44,5 +49,28 @@ mod tests {
     #[test]
     fn version_is_nonzero() {
         assert!(!super::version().is_empty());
+    }
+
+    /// A host adding CLI `--no-implicit-roots` / MCP `implicit_roots`
+    /// should see the default on the crate root, not only in discover.rs.
+    #[test]
+    fn crate_root_docs_name_implicit_roots_default() {
+        let docs: String = include_str!("lib.rs")
+            .lines()
+            .filter(|line| line.starts_with("//!"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            docs.contains("implicit_roots: true"),
+            "crate-root rustdoc must name DiscoveryOptions::default implicit_roots: true: {docs}"
+        );
+        assert!(
+            docs.contains("--no-implicit-roots"),
+            "crate-root rustdoc must map CLI --no-implicit-roots to implicit_roots: {docs}"
+        );
+        assert!(
+            super::DiscoveryOptions::default().implicit_roots,
+            "documented default must stay true"
+        );
     }
 }
