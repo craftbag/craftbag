@@ -53,19 +53,31 @@ pub struct Skill {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
     /// agentskills optional experimental: space-separated pre-approved tools.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "allowed_tools"
+    )]
     pub allowed_tools: Option<String>,
     /// Host extension: show in slash palette / bare `/name`. Default true.
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", alias = "user_invocable")]
     pub user_invocable: bool,
     /// Host extension: never auto-inject full body; slash only. Default false.
-    #[serde(default)]
+    #[serde(default, alias = "disable_model_invocation")]
     pub disable_model_invocation: bool,
     /// Host extension: palette argument hint.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "argument_hint"
+    )]
     pub argument_hint: Option<String>,
     /// Host extension: extra when-to-use text for ranking/catalog.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "when_to_use"
+    )]
     pub when_to_use: Option<String>,
 }
 
@@ -190,5 +202,40 @@ mod tests {
         assert!(skill.user_invocable);
         assert!(!skill.disable_model_invocation);
         assert_eq!(skill.source, SkillSource::Agents);
+    }
+
+    #[test]
+    fn serde_accepts_snake_case_list_why_keys() {
+        // List / why JSON uses these keys. Skill camelCase serde must
+        // still honor them so a host row is not silently defaulted.
+        let json = r#"{
+            "name": "x",
+            "description": "y",
+            "content": "z",
+            "source": "agents",
+            "user_invocable": false,
+            "disable_model_invocation": true,
+            "argument_hint": "[name]",
+            "when_to_use": "after rebase",
+            "allowed_tools": "Read"
+        }"#;
+        let skill: Skill = serde_json::from_str(json).expect("snake_case Skill JSON");
+        assert!(
+            !skill.user_invocable,
+            "user_invocable: false must not stay the omitted-flag default"
+        );
+        assert!(skill.disable_model_invocation);
+        assert_eq!(skill.argument_hint.as_deref(), Some("[name]"));
+        assert_eq!(skill.when_to_use.as_deref(), Some("after rebase"));
+        assert_eq!(skill.allowed_tools.as_deref(), Some("Read"));
+        let out = serde_json::to_string(&skill).expect("ser");
+        assert!(
+            out.contains("\"userInvocable\""),
+            "Skill serialize stays camelCase: {out}"
+        );
+        assert!(
+            !out.contains("\"user_invocable\""),
+            "Skill serialize must not switch to snake_case: {out}"
+        );
     }
 }
