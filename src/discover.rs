@@ -1,6 +1,7 @@
 //! Multi-root SKILL.md discovery. First name wins.
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
@@ -68,7 +69,10 @@ impl Default for DiscoveryOptions {
 /// Discover skills for `cwd` using the host-neutral root matrix.
 ///
 /// Missing directories are not an error. Parse and IO problems become
-/// [`SkillSkip`] rows.
+/// [`SkillSkip`] rows. A skills root walks named packages and Cursor-style
+/// category folders (a directory with no `SKILL.md`, then a package).
+/// A directory that already has `SKILL.md` / `skill.md` is that package;
+/// nested `SKILL.md` stays an asset.
 pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, Error> {
     Ok(discover_report(cwd, opts))
 }
@@ -1193,6 +1197,10 @@ fn skip_if_dir_escapes(dir: &Path, confine: &Path, skips: &mut Vec<SkillSkip>) -
     false
 }
 
+/// Category folders without a package `SKILL.md` (Cursor
+/// `.cursor/skills/shipping/land-it`). A named package is not walked.
+const MAX_SKILLS_CATEGORY_DEPTH: u32 = 8;
+
 fn load_skills_from_dir(
     dir: &Path,
     source: &SkillSource,
@@ -1202,86 +1210,107 @@ fn load_skills_from_dir(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
-        Err(e) => {
-            skips.push(SkillSkip {
-                path: dir.to_path_buf(),
-                name: None,
-                kind: SkipKind::Unreadable,
-                detail: e.to_string(),
-                winner_path: None,
-            });
-            return;
+    let mut seen = HashSet::new();
+    let mut stack = vec![(dir.to_path_buf(), 0u32)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > MAX_SKILLS_CATEGORY_DEPTH {
+            continue;
         }
-    };
+        let key = dir
+            .canonicalize()
+            .unwrap_or_else(|_| lexical_normalize(&dir));
+        if !seen.insert(key) {
+            continue;
+        }
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                skips.push(SkillSkip {
+                    path: dir,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail: e.to_string(),
+                    winner_path: None,
+                });
+                continue;
+            }
+        };
 
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        if !path.is_dir() {
-            if path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
-                && !path_is_ignored(&path, ignore)
-            {
-                if !stays_under(&path, dir) {
-                    skips.push(SkillSkip {
-                        path,
-                        name: None,
-                        kind: SkipKind::Unreadable,
-                        detail: "SKILL.md symlink escapes walk root".to_owned(),
-                        winner_path: None,
-                    });
-                    continue;
-                }
-                match read_skill_md(&path) {
-                    Ok(content) => {
-                        let name = peek_frontmatter_name(&content);
-                        skips.push(SkillSkip {
-                            path,
-                            name,
-                            kind: SkipKind::RootFile,
-                            detail: "put the file in a named subdirectory.".to_owned(),
-                            winner_path: None,
-                        });
-                    }
-                    Err(e) => {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if !path.is_dir() {
+                if path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
+                    && !path_is_ignored(&path, ignore)
+                {
+                    if !stays_under(&path, &dir) {
                         skips.push(SkillSkip {
                             path,
                             name: None,
                             kind: SkipKind::Unreadable,
-                            detail: e,
+                            detail: "SKILL.md symlink escapes walk root".to_owned(),
                             winner_path: None,
                         });
+                        continue;
+                    }
+                    match read_skill_md(&path) {
+                        Ok(content) => {
+                            let name = peek_frontmatter_name(&content);
+                            skips.push(SkillSkip {
+                                path,
+                                name,
+                                kind: SkipKind::RootFile,
+                                detail: "put the file in a named subdirectory.".to_owned(),
+                                winner_path: None,
+                            });
+                        }
+                        Err(e) => {
+                            skips.push(SkillSkip {
+                                path,
+                                name: None,
+                                kind: SkipKind::Unreadable,
+                                detail: e,
+                                winner_path: None,
+                            });
+                        }
                     }
                 }
+                continue;
             }
-            continue;
-        }
 
-        let skill_file = ["SKILL.md", "skill.md"]
-            .into_iter()
-            .map(|name| path.join(name))
-            .find(|p| skill_md_inode_exists(p));
-        let Some(skill_file) = skill_file else {
-            continue;
-        };
-        if !stays_under(&path, dir) {
-            skips.push(SkillSkip {
-                path: skill_file,
-                name: None,
-                kind: SkipKind::Unreadable,
-                detail: "skill package symlink escapes walk root".to_owned(),
-                winner_path: None,
-            });
-            continue;
+            let skill_file = ["SKILL.md", "skill.md"]
+                .into_iter()
+                .map(|name| path.join(name))
+                .find(|p| skill_md_inode_exists(p));
+            let Some(skill_file) = skill_file else {
+                // Cursor walks category folders. A dir with SKILL.md is a
+                // package; nested SKILL.md there stays an asset.
+                if depth < MAX_SKILLS_CATEGORY_DEPTH
+                    && stays_under(&path, &dir)
+                    && !path_is_ignored(&path, ignore)
+                {
+                    stack.push((path, depth + 1));
+                }
+                continue;
+            };
+            if !stays_under(&path, &dir) {
+                skips.push(SkillSkip {
+                    path: skill_file,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail: "skill package symlink escapes walk root".to_owned(),
+                    winner_path: None,
+                });
+                continue;
+            }
+            if skip_if_skill_md_escapes_package(&skill_file, skips) {
+                continue;
+            }
+            try_load_skill_file(&skill_file, source, ignore, opts, denylist, skills, skips);
         }
-        if skip_if_skill_md_escapes_package(&skill_file, skips) {
-            continue;
-        }
-        try_load_skill_file(&skill_file, source, ignore, opts, denylist, skills, skips);
     }
 }
 
@@ -4025,6 +4054,128 @@ mod tests {
         assert!(
             off_why.unknown_skill_message().is_some(),
             "why without vendor cursor must treat create-rule as unknown"
+        );
+    }
+
+    #[test]
+    fn incumbent_cursor_nested_category_layout_loads() {
+        let cwd = corpus_dir().join("incumbent/cursor-project");
+        let off = empty_home_discover(cwd.as_path(), &DiscoveryOptions::default());
+        assert!(
+            off.skills.iter().all(|s| s.name != "land-it"),
+            "cursor vendor is opt-in for nested category folders too"
+        );
+        let on = empty_home_discover(
+            cwd.as_path(),
+            &DiscoveryOptions {
+                vendor_roots: vec!["cursor".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "land-it")
+            .expect("land-it");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "cursor".to_owned()
+            }
+        );
+        assert!(
+            on.skills.iter().any(|s| s.name == "create-rule"),
+            "flat sibling create-rule must still load: {:?}",
+            on.skills
+        );
+        let why = crate::why(&on, Some("land-it"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why={why:?}");
+        assert_eq!(why.loaded[0].name, "land-it");
+        let want = cwd
+            .join(".cursor")
+            .join("skills")
+            .join("shipping")
+            .join("land-it")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the nested fixture SKILL.md: got={got:?} want={want:?}"
+        );
+        assert!(
+            why.skips.is_empty(),
+            "land-it is loaded, not a skip: {:?}",
+            why.skips
+        );
+        let off_why = crate::why(&off, Some("land-it"), None, None);
+        assert!(off_why.loaded.is_empty(), "off why={off_why:?}");
+        assert!(
+            off_why.unknown_skill_message().is_some(),
+            "why without vendor cursor must treat land-it as unknown"
+        );
+    }
+
+    #[test]
+    fn extra_path_skills_collection_loads_nested_category() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = cwd.path().join("skills");
+        let pkg = extra.join("shipping").join("land-it");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: land-it\ndescription: nested extra-path category\n---\nNESTED\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let skill = find_skill_by_name(&report.skills, "land-it").expect("land-it");
+        assert_eq!(skill.source, SkillSource::ExtraPath);
+        assert!(skill.content.contains("NESTED"));
+        assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn category_symlink_cycle_does_not_hang() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = cwd.path().join("skills");
+        let ok = extra.join("ok-one");
+        let shipping = extra.join("shipping");
+        fs::create_dir_all(&ok).expect("mkdir ok");
+        fs::create_dir_all(&shipping).expect("mkdir shipping");
+        fs::write(
+            ok.join("SKILL.md"),
+            "---\nname: ok-one\ndescription: sibling package\n---\nOK\n",
+        )
+        .expect("write");
+        std::os::unix::fs::symlink(&extra, shipping.join("loop")).expect("cycle");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "ok-one").is_some(),
+            "cycle must not hide the sibling package: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "land-it").is_none(),
+            "cycle must not invent skills: {:?}",
+            report.skills
         );
     }
 

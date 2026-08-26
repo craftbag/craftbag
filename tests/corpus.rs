@@ -49,3 +49,15 @@ fn corpus_incumbent_cursor_project_parses() {
     let skill = parse_skill(&read(rel)).expect("parse");
     assert_eq!(skill.name, "create-rule");
 }
+
+#[test]
+fn corpus_incumbent_cursor_nested_category_parses() {
+    let rel = "incumbent/cursor-project/.cursor/skills/shipping/land-it/SKILL.md";
+    assert!(
+        corpus().join(rel).is_file(),
+        "committed Cursor nested category fixture must exist: {rel}"
+    );
+    let skill = parse_skill(&read(rel)).expect("parse");
+    assert_eq!(skill.name, "land-it");
+    assert!(skill.content.contains("shipping category folder"));
+}
