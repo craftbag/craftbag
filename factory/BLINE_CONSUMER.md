@@ -243,6 +243,7 @@ Bline: `discover_skills_for_cwd_report` (the doctor skip source).
 | `incumbent/vercel-npx/skills` | extra path is the `skills/` collection | load `deploy-hint` | load `deploy-hint` | match |
 | `incumbent/cursor-project` | cwd + `--vendor cursor` | load `create-rule` source vendor cursor | not compared | craftbag prove |
 | `incumbent/cursor-user` | `HOME` + `--vendor cursor` | load `home-rule` from `~/.cursor/skills` | not compared | craftbag prove |
+| `incumbent/grok-project` | cwd + `--vendor grok` | load `project-grok` source vendor grok | not compared | craftbag prove |
 | `incumbent/grok-user` | `HOME` + `--vendor grok` | load `home-grok` from `~/.grok/skills` | not compared | craftbag prove |
 
 `--path` on a project root (`lowercase-skill-md`) does not walk

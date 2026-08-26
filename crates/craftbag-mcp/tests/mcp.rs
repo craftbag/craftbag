@@ -14,6 +14,10 @@ fn corpus_cursor_project() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/cursor-project")
 }
 
+fn corpus_grok_project() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/grok-project")
+}
+
 fn rpc(req: &serde_json::Value) -> serde_json::Value {
     let tmp = tempfile::tempdir().expect("tmp");
     let home = tempfile::tempdir().expect("home");
@@ -269,6 +273,78 @@ fn stdio_skills_list_vendor_cursor_names_create_rule() {
         .unwrap_or_else(|| panic!("list must name create-rule: {text}"));
     assert_eq!(
         row["source"], "cursor",
+        "list JSON source must be the wire token: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize list path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "list path must be the fixture SKILL.md: {text}");
+}
+
+#[test]
+fn stdio_skills_list_vendor_grok_names_project_grok() {
+    let cwd = corpus_grok_project();
+    let skill = cwd.join(".grok/skills/project-grok/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Grok project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let off = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], false,
+        "list without vendor is not a miss: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    let off_v: serde_json::Value = serde_json::from_str(off_text).expect("list json");
+    let off_skills = off_v["skills"].as_array().expect("skills");
+    assert!(
+        off_skills.iter().all(|s| s["name"] != "project-grok"),
+        "grok vendor is opt-in: {off_text}"
+    );
+
+    let on = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {"vendor": ["grok"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let row = skills
+        .iter()
+        .find(|s| s["name"] == "project-grok")
+        .unwrap_or_else(|| panic!("list must name project-grok: {text}"));
+    assert_eq!(
+        row["source"], "grok",
         "list JSON source must be the wire token: {text}"
     );
     let path = row["path"].as_str().expect("path");
