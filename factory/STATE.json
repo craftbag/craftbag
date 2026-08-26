@@ -6,39 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "b3be173017614975f8211021cb14577bff7e588e",
+  "ledger_sha": "f7879fe1125782fc18c7b7a069efa9fe33ad4cf6",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b1623671d846d3003c3604bc73e053c9a56249a6",
   "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-grok-project-why-watch",
+    "id": "leftover-mcp-watch-grok-project",
     "work_source": "improve",
-    "started_at": "2026-08-26T22:36:00Z",
-    "finished_at": "2026-08-26T22:51:38Z",
+    "started_at": "2026-08-26T22:52:00Z",
+    "finished_at": "2026-08-26T23:06:25Z",
     "result": "landed",
-    "head": "858e6d5c797aa4f9522358463f6b94814aab406f",
-    "pr": 221,
+    "head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
+    "pr": 222,
     "files": [
-      "crates/craftbag-cli/tests/cli.rs",
       "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "why_vendor_grok_names_project_grok,list_watch_dirs_vendor_grok_lists_project_skills,stdio_skills_why_vendor_grok_names_project_grok",
+    "tests": "stdio_skills_list_watch_vendor_grok_lists_project_skills",
     "review": "0"
   },
-  "last_sha": "858e6d5c797aa4f9522358463f6b94814aab406f",
+  "last_sha": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-26T22:51:38Z",
+    "checked_at": "2026-08-26T23:06:25Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 31,
-    "next_perspective": 10,
+    "next_perspective": 11,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "grok-project cwd + --vendor grok why names project-grok; watch-dirs lists .grok/skills; vendor off is unknown_skill."
+    "last_why_summary": "grok-project MCP skills_list format=watch lists cwd .grok/skills when vendor grok is on."
   },
   "budgets": {
     "max_cycles": null,
