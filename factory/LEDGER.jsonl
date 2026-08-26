@@ -360,3 +360,4 @@
 {"ts": "2026-08-26T18:06:00Z", "job_id": "improve-mpi29-compat-source-tokens", "work_source": "improve", "result": "landed", "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75", "pr": 203, "tests": "serde_accepts_list_why_source_tokens", "noop": false}
 {"ts": "2026-08-26T18:06:20Z", "job_id": "adversary-after-203-source-tokens-green", "work_source": "adversary", "result": "noop", "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75", "pr": null, "tests": "SkillSummary already wire tokens", "noop": true}
 {"ts": "2026-08-26T18:13:30Z", "job_id": "improve-mpi29-adv-noop", "work_source": "improve", "result": "noop", "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75", "pr": null, "tests": "6min zero git diff", "noop": true}
+{"ts": "2026-08-26T18:21:00Z", "job_id": "improve-mpi29-arch-noop", "work_source": "improve", "result": "noop", "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75", "pr": null, "tests": "6min zero git diff", "noop": true}
