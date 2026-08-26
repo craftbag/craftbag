@@ -409,10 +409,11 @@ pub fn unknown_list_format(format: &str) -> String {
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
 /// Also emits `user_invocable`, `disable_model_invocation`,
-/// `argument_hint`, `when_to_use`, `allowed_tools`, `license`,
-/// and `compatibility` so a host that lists via XML can build a
-/// slash palette, apply pre-approved tools, or check license /
-/// environment without re-parsing.
+/// `argument_hint`, `when_to_use`, `triggers`, `allowed_tools`,
+/// `license`, and `compatibility` so a host that lists via XML can
+/// build a slash palette, preview activation triggers, apply
+/// pre-approved tools, or check license / environment without
+/// re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -458,6 +459,9 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             out.push_str(&xml_escape(when));
         }
         out.push_str("</when_to_use>\n");
+        out.push_str("<triggers>");
+        out.push_str(&xml_escape(&skill.triggers.join(", ")));
+        out.push_str("</triggers>\n");
         out.push_str("<allowed_tools>");
         if let Some(tools) = skill.allowed_tools.as_deref() {
             out.push_str(&xml_escape(tools));
@@ -1185,6 +1189,29 @@ mod tests {
         assert!(
             skill_block.contains("<compatibility></compatibility>"),
             "omitted compatibility must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
+    fn format_available_skills_xml_includes_triggers() {
+        let mut hinted = make_skill("fired", &[], 10);
+        hinted.triggers = vec!["git".to_owned(), "A & B".to_owned()];
+        hinted.source_path = Some(PathBuf::from("/tmp/fired/SKILL.md"));
+        let mut bare = make_skill("no-triggers", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-triggers/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<triggers>git, A &amp; B</triggers>"),
+            "list XML must carry escaped triggers: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-triggers</name>")
+            .nth(1)
+            .expect("no-triggers skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<triggers></triggers>"),
+            "empty triggers must still emit an empty XML tag: {xml}"
         );
     }
 

@@ -89,12 +89,14 @@ are the `--watch-dirs` flag name (same walk). The older `--json` /
 `list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
 `why` JSON `loaded` rows include
 `description` plus `user_invocable`, `disable_model_invocation`,
-`argument_hint`, `when_to_use`, `allowed_tools`, `license`, and
+`argument_hint`, `when_to_use`, `triggers`, `allowed_tools`, `license`, and
 `compatibility` so a host can
-build a slash palette, prompt catalog, apply pre-approved tools,
+build a slash palette, prompt catalog, preview activation triggers, apply
+pre-approved tools,
 or check license / environment without re-parsing SKILL.md. Omitted
 `argument_hint`, `when_to_use`, `allowed_tools`, `license`, and
-`compatibility` are JSON `null` and empty XML tags. List and why
+`compatibility` are JSON `null` and empty XML tags. Empty `triggers` is
+JSON `[]` and an empty XML tag. List and why
 JSON both serialize `SkillSummary` so those keys cannot drift. A new
 `SkillSummary` field must land on list JSON, why JSON, and list XML
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
