@@ -551,7 +551,7 @@ fn push_inline_metadata(
                 "metadata pair must be `key: value`, got: {shown}"
             )));
         };
-        let k = k.trim();
+        let k = k.trim().trim_matches(|c| c == '"' || c == '\'').trim();
         let v = v.trim().trim_matches(|c| c == '"' || c == '\'').trim();
         if !k.is_empty() {
             metadata.insert(k.to_owned(), v.to_owned());
@@ -1165,6 +1165,22 @@ BODY
         assert!(
             msg.contains("metadata") && !msg.contains('\u{2028}'),
             "scalar metadata must name the field and stay one line: {msg}"
+        );
+
+        let quoted = "\
+---
+name: annotated
+description: docs
+metadata: {\"author\": \"A & B\"}
+---
+BODY
+";
+        let quoted_skill = parse_skill(quoted).expect("quoted flow-map keys must load");
+        assert_eq!(
+            quoted_skill.metadata.get("author").map(String::as_str),
+            Some("A & B"),
+            "quoted metadata key must peel quotes: {:?}",
+            quoted_skill.metadata
         );
     }
 
