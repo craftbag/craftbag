@@ -1090,6 +1090,60 @@ mod tests {
     }
 
     #[test]
+    fn skills_load_includes_triggers() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hinted = extra.path().join("triggered");
+        std::fs::create_dir_all(&hinted).expect("mkdir");
+        std::fs::write(
+            hinted.join("SKILL.md"),
+            "---\nname: triggered\ndescription: hinted\ntriggers: git, A & B\n---\nbody\n",
+        )
+        .expect("write");
+        let bare = extra.path().join("no-triggers");
+        std::fs::create_dir_all(&bare).expect("mkdir");
+        std::fs::write(
+            bare.join("SKILL.md"),
+            "---\nname: no-triggers\ndescription: bare\n---\nbody\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let hinted_load = call(
+                56,
+                "skills_load",
+                json!({"name": "triggered", "paths": [path.clone()]}),
+            );
+            assert_eq!(
+                hinted_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&hinted_load)
+            );
+            let hinted_text = call_text(&hinted_load);
+            assert!(
+                hinted_text.contains("Triggers: git, A & B"),
+                "MCP load must carry triggers like list JSON/XML: {hinted_text}"
+            );
+            let bare_load = call(
+                57,
+                "skills_load",
+                json!({"name": "no-triggers", "paths": [path]}),
+            );
+            assert_eq!(
+                bare_load["result"]["isError"],
+                false,
+                "{}",
+                call_text(&bare_load)
+            );
+            let bare_text = call_text(&bare_load);
+            assert!(
+                !bare_text.contains("Triggers:"),
+                "empty triggers must not add a load line: {bare_text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_load_includes_argument_hint() {
         let extra = tempfile::tempdir().expect("extra");
         let hinted = extra.path().join("slash-hint");

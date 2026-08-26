@@ -2019,6 +2019,56 @@ fn load_includes_when_to_use() {
 }
 
 #[test]
+fn load_includes_triggers() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("triggered");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: triggered\ndescription: hinted\ntriggers: git, A & B\n---\nbody\n",
+    )
+    .expect("write");
+    let bare = extra.path().join("no-triggers");
+    fs::create_dir_all(&bare).expect("mkdir");
+    fs::write(
+        bare.join("SKILL.md"),
+        "---\nname: no-triggers\ndescription: bare\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("triggered")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Triggers: git, A & B"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("no-triggers")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: no-triggers]"),
+        "bare skill must still load: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Triggers:"),
+        "empty triggers must not add a load line: {stdout}"
+    );
+}
+
+#[test]
 fn load_includes_argument_hint() {
     let extra = tempfile::tempdir().expect("extra");
     let hinted = extra.path().join("slash-hint");
