@@ -2363,6 +2363,148 @@ fn list_watch_dirs_no_implicit_roots_omits_cwd_and_home() {
 }
 
 #[test]
+fn list_help_names_disabled() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--disabled"))
+        .stdout(predicates::str::contains("no skip row"));
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--disabled"));
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--disabled"));
+}
+
+#[test]
+fn list_disabled_omits_named_skill() {
+    let extra = tempfile::tempdir().expect("extra");
+    let keep = extra.path().join("keep");
+    fs::create_dir_all(&keep).expect("keep");
+    fs::write(
+        keep.join("SKILL.md"),
+        "---\nname: keep\ndescription: stay\n---\nKEEP\n",
+    )
+    .expect("write keep");
+    let off = extra.path().join("off");
+    fs::create_dir_all(&off).expect("off");
+    fs::write(
+        off.join("SKILL.md"),
+        "---\nname: off\ndescription: hide\n---\nOFF\n",
+    )
+    .expect("write off");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--disabled")
+        .arg("off")
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(names, ["keep"], "disabled off must not appear: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "disabled is silent (no skip row): {stdout}"
+    );
+}
+
+#[test]
+fn load_disabled_is_unknown() {
+    let extra = tempfile::tempdir().expect("extra");
+    let off = extra.path().join("off");
+    fs::create_dir_all(&off).expect("off");
+    fs::write(
+        off.join("SKILL.md"),
+        "---\nname: off\ndescription: hide\n---\nOFF\n",
+    )
+    .expect("write off");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("off")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--disabled")
+        .arg("OFF")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill: off"),
+        "disabled load must be unknown, not a skip row: {stderr}"
+    );
+}
+
+#[test]
+fn why_disabled_is_unknown() {
+    let extra = tempfile::tempdir().expect("extra");
+    let off = extra.path().join("off");
+    fs::create_dir_all(&off).expect("off");
+    fs::write(
+        off.join("SKILL.md"),
+        "---\nname: off\ndescription: hide\n---\nOFF\n",
+    )
+    .expect("write off");
+
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("off")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .arg("--disabled")
+        .arg("off")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("json");
+    assert_eq!(v["error_kind"], "unknown_skill", "stdout={stdout}");
+}
+
+#[test]
 fn load_help_names_args_and_argument_hint() {
     let (_home, mut cmd) = bin();
     cmd.arg("load")
