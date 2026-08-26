@@ -96,6 +96,40 @@ fn checkout_missing_persist(yaml: &str) -> Option<usize> {
     None
 }
 
+/// Line of a harden-runner step that is still gated to Linux.
+///
+/// harden-runner v2.15+ runs on Windows and macOS. A leftover
+/// `if: runner.os == 'Linux'` skips the step and leaves those jobs
+/// unhardened while still passing a string-presence check.
+fn harden_runner_linux_gated(yaml: &str) -> Option<usize> {
+    let lines: Vec<&str> = yaml.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if !line.contains("step-security/harden-runner@") {
+            continue;
+        }
+        let mut start = i;
+        while start > 0 && !lines[start].trim_start().starts_with("- ") {
+            start -= 1;
+        }
+        let indent = lines[start].chars().take_while(|c| *c == ' ').count();
+        let mut j = start;
+        while j < lines.len() {
+            if j > start {
+                let next_indent = lines[j].chars().take_while(|c| *c == ' ').count();
+                if lines[j].trim_start().starts_with("- ") && next_indent <= indent {
+                    break;
+                }
+            }
+            let t = lines[j].trim();
+            if t.starts_with("if:") && t.contains("runner.os") && t.contains("Linux") {
+                return Some(i + 1);
+            }
+            j += 1;
+        }
+    }
+    None
+}
+
 #[test]
 fn parse_jobs_finds_ci_yml_jobs() {
     let ci = read_rel(".github/workflows/ci.yml");
@@ -174,6 +208,11 @@ fn workflows_have_dispatch_concurrency_timeouts_and_harden() {
 
         if let Some(line) = checkout_missing_persist(&yaml) {
             panic!("{rel} checkout at line {line} must set persist-credentials: false");
+        }
+        if let Some(line) = harden_runner_linux_gated(&yaml) {
+            panic!(
+                "{rel} harden-runner at line {line} must not be gated to Linux; v2.15+ runs on Windows and macOS"
+            );
         }
     }
 }
