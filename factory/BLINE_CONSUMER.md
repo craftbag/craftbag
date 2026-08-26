@@ -16,7 +16,8 @@ reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json`
 prints `{ "error_kind", "error" }` on stdout and keeps the same one-line
 text on stderr. A matching skip also peels `path` (the `SKILL.md`).
 Unknown omits `path`. A `name_collision` skip also peels `winner_path`
-(the loaded `SKILL.md`). Other misses omit it. MCP `skills_load` /
+(the loaded `SKILL.md`). Other misses omit it. SkillSkip deserialize
+accepts that snake `winner_path` (serialize still emits `winnerPath`). MCP `skills_load` /
 `skills_why` merge that same `SkillMiss` object next to `isError`
 (`error_kind`, `error`, `path` when known, and `winner_path` on
 collision) and leave `content[0].text` unchanged (same text as `error`).
