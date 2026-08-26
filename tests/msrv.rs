@@ -135,3 +135,26 @@ fn bline_consumer_names_skill_summary_sibling_lock() {
         "BLINE_CONSUMER must name CLI load --help / MCP skills_load envelope fields"
     );
 }
+
+/// `watch_dirs_omits_ignored_extra_path` and watch_dirs rustdoc omit
+/// ignore prefixes. Host notes must not keep a second paragraph that
+/// says `watch_dirs` is unchanged.
+#[test]
+fn bline_consumer_watch_dirs_omits_ignore_prefixes() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("`watch_dirs` omits the same prefixes"),
+        "BLINE_CONSUMER must say watch_dirs omits ignore prefixes (same as discover)"
+    );
+    let collapsed = notes.replace('\n', " ");
+    assert!(
+        !collapsed.contains("`watch_dirs` is unchanged"),
+        "BLINE_CONSUMER must not say watch_dirs is unchanged after ignore prefixes are omitted"
+    );
+    assert!(
+        notes.contains("Empty or whitespace-only items are ignored")
+            && notes.contains("Omitted MCP `ignore`")
+            && notes.contains("Present `null` is a type error"),
+        "BLINE_CONSUMER must keep ignore empty-item / omitted / null rules when merging the leftover paragraph"
+    );
+}
