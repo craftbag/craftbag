@@ -173,3 +173,24 @@ fn bline_consumer_watch_dirs_omits_ignore_prefixes() {
         "BLINE_CONSUMER must keep ignore empty-item / omitted / null rules when merging the leftover paragraph"
     );
 }
+
+/// Catalog stays cheap (name + description, plus `Use when:`). Watch is
+/// paths. Host notes must not group `list --catalog` / MCP catalog or
+/// watch with SkillSummary JSON keys (`user_invocable`, …).
+#[test]
+fn bline_consumer_does_not_group_catalog_with_skill_summary_json() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    for sentence in notes.split('.') {
+        let s = sentence.replace('\n', " ");
+        let groups_cheap_wire = s.contains("`list --catalog`")
+            || s.contains("catalog, or watch")
+            || (s.contains("catalog") && s.contains("watch") && s.contains("include"));
+        let claims_summary = s.contains("user_invocable")
+            || s.contains("disable_model_invocation")
+            || s.contains("allowed_tools");
+        assert!(
+            !groups_cheap_wire || !claims_summary,
+            "BLINE_CONSUMER must not group catalog/watch with SkillSummary JSON fields: {s}"
+        );
+    }
+}
