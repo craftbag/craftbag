@@ -2876,6 +2876,14 @@ mod tests {
                 "{} implicit_roots schema must attach .agents to cwd-to-git: {desc}",
                 tool["name"]
             );
+            // `paths` / `user_dir` also appear as their own properties, so
+            // a lone contains would pass if implicit_roots said they do
+            // not load.
+            assert!(
+                desc.contains("extra paths and user_dir still load"),
+                "{} implicit_roots schema must say extra paths / user_dir still load (not an inverted sentence): {desc}",
+                tool["name"]
+            );
         }
     }
 

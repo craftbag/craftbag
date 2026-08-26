@@ -84,6 +84,7 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// (nearest git root first via [`walk_cwd_to_git_root`]) and
 /// `$HOME/.agents` / vendor trees. When it is false, cwd-to-git and `$HOME`
 /// `.agents` / vendor trees are omitted (same as [`discover`]).
+/// Extra `paths` and `user_skills_dir` still load.
 /// Extra-path `dir/skills` is listed only when [`discover`] would walk
 /// that collection (leftover or Vercel-style). A named extra-path
 /// package, or an escaped / unreadable `skills/` tree, is omitted.
@@ -7545,6 +7546,12 @@ mod tests {
         assert!(
             docs.contains("cwd-to-git `.agents`"),
             "watch_dirs rustdoc must attach .agents to the implicit cwd-to-git walk, not the whole tree: {docs}"
+        );
+        // Substring `paths` / `user_skills_dir` is also in
+        // "does not load extra `paths`".
+        assert!(
+            docs.contains("Extra `paths` and `user_skills_dir` still load"),
+            "watch_dirs rustdoc must say extra paths still load when implicit_roots is off (not an inverted sentence): {docs}"
         );
     }
 
