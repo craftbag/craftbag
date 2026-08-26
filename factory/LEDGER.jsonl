@@ -235,3 +235,4 @@
 {"ts": "2026-08-26T02:58:44Z", "job_id": "adversary-mcp-list-format-names-137", "work_source": "adversary", "result": "landed", "head": "aa99256f1dd1e0631350412a6f62c78b7466f3fb", "pr": 137, "tests": "MCP list format names", "noop": false}
 {"ts": "2026-08-26T03:07:45Z", "job_id": "adversary-xml-available-skills-138", "work_source": "adversary", "result": "landed", "head": "df911566551686f958c040219a5e0dab7c679dbe", "pr": 138, "tests": "xml available_skills names", "noop": false}
 {"ts": "2026-08-26T03:11:00Z", "job_id": "adversary-after-138-noop", "work_source": "adversary", "result": "noop", "head": "df911566551686f958c040219a5e0dab7c679dbe", "pr": null, "tests": "138 xml name analogs green", "noop": true}
+{"ts": "2026-08-26T03:19:39Z", "job_id": "improve-skillmiss-path-139", "work_source": "improve", "result": "landed", "head": "0a20a07e0530b1553145f2ead2f6406c91f1e45a", "pr": 139, "tests": "SkillMiss.path skip peel", "noop": false}
