@@ -69,8 +69,10 @@ and an empty `<argument_hint>` tag. List and why JSON both serialize
 `SkillSummary` so those keys cannot drift. CLI `load` and MCP
 `skills_load` print `Argument hint: …` in the envelope when
 frontmatter `argument-hint` is set (same text as list/why JSON).
-Omitted hint is no line. Folded newlines become spaces so the field
-stays one line. Catalog markdown is one list item per skill: newlines in a
+Omitted hint is no line. Description, License, Compatibility,
+Argument hint, User arguments, and Activate hint fold Unicode
+whitespace to spaces so each stays one envelope line. The skill
+body after `---` keeps its newlines. Catalog markdown is one list item per skill: newlines in a
 literal `|` or folded `>` description become spaces (JSON and XML keep
 the raw description). List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),

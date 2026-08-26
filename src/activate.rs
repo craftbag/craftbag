@@ -542,39 +542,45 @@ pub fn format_body_header(skill: &Skill) -> String {
     out
 }
 
+/// Fold a load-envelope field to one line (same whitespace rule as catalog).
+///
+/// Empty or whitespace-only values omit the line so a `|` / `>` scalar
+/// cannot split the header the way catalog list items used to.
+fn push_envelope_line(out: &mut String, label: &str, value: &str) {
+    let value = catalog_one_line(value);
+    if value.is_empty() {
+        return;
+    }
+    out.push_str(label);
+    out.push_str(": ");
+    out.push_str(&value);
+    out.push('\n');
+}
+
 /// User-turn payload that asks the model to follow one skill fully.
 pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_>) -> String {
     let args = arguments.trim();
     let mut out = String::new();
     out.push_str(&format!("[Activated skill: {}]\n\n", skill.name));
     out.push_str("Follow this skill completely for the rest of this turn.\n");
-    if !skill.description.is_empty() {
-        out.push_str(&format!("Description: {}\n", skill.description));
-    }
+    push_envelope_line(&mut out, "Description", &skill.description);
     if let Some(lic) = &skill.license {
-        out.push_str(&format!("License: {lic}\n"));
+        push_envelope_line(&mut out, "License", lic);
     }
     if let Some(compat) = &skill.compatibility {
-        out.push_str(&format!("Compatibility: {compat}\n"));
+        push_envelope_line(&mut out, "Compatibility", compat);
     }
-    // Same text as list/why JSON and list XML. Fold to one line so
-    // a literal `|` argument-hint cannot split the envelope.
     if let Some(hint) = skill.argument_hint.as_deref() {
-        let hint = catalog_one_line(hint);
-        if !hint.is_empty() {
-            out.push_str(&format!("Argument hint: {hint}\n"));
-        }
+        push_envelope_line(&mut out, "Argument hint", hint);
     }
-    if !args.is_empty() {
-        out.push_str(&format!("User arguments: {args}\n"));
-    }
+    push_envelope_line(&mut out, "User arguments", args);
     let body_lines = skill.content.lines().count();
     if body_lines > SKILL_BODY_LINE_SOFT_WARN {
         out.push_str(&format!(
             "Note: this SKILL.md has {body_lines} lines (agentskills recommends ~500). Prefer splitting detail into references/ under the skill package root.\n"
         ));
     }
-    out.push_str(&format!("Activate hint: {}\n", fmt.activate_hint));
+    push_envelope_line(&mut out, "Activate hint", fmt.activate_hint);
     out.push('\n');
     out.push_str(&format_package_envelope(skill));
     out.push('\n');
@@ -1026,6 +1032,58 @@ mod tests {
         assert!(
             !bare.contains("Argument hint:"),
             "omitted argument_hint must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
+    fn format_load_message_flattens_multiline_envelope_fields() {
+        let mut skill = Skill::new(
+            "lit-skill",
+            "line one\nline two\r\nline three",
+            "body\nstill here",
+        );
+        skill.license = Some("Apache\n2.0".to_owned());
+        skill.compatibility = Some("rust\ncargo".to_owned());
+        skill.argument_hint = Some("[name]\n[id]".to_owned());
+        let load = format_load_message(
+            &skill,
+            "--fix\n--dry-run",
+            FormatOptions {
+                activate_hint: "Use host\nactivate",
+            },
+        );
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Description: line one line two line three\n"),
+            "literal `|` description must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("License: Apache 2.0\n"),
+            "license block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Compatibility: rust cargo\n"),
+            "compatibility block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Argument hint: [name] [id]\n"),
+            "argument_hint block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("User arguments: --fix --dry-run\n"),
+            "host args with newlines must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Activate hint: Use host activate\n"),
+            "host activate hint must stay one envelope line: {load}"
+        );
+        assert!(
+            !header.contains("line one\nline two"),
+            "raw description must not split the envelope: {load}"
+        );
+        assert!(
+            load.contains("body\nstill here"),
+            "skill body after --- must keep newlines: {load}"
         );
     }
 }

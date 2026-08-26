@@ -1610,6 +1610,42 @@ fn load_includes_argument_hint() {
 }
 
 #[test]
+fn load_flattens_multiline_description() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("lit-skill");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: lit-skill\ndescription: |\n  line one\n  line two\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("lit-skill")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let header = stdout.split("\n---\n").next().expect("header");
+    assert!(
+        header.contains("Description: line one line two\n"),
+        "load must fold a `|` description to one envelope line: {stdout}"
+    );
+    assert!(
+        !header.contains("line one\nline two"),
+        "raw `|` description must not split the envelope: {stdout}"
+    );
+}
+
+#[test]
 fn load_unicode_name_skips_with_ascii_names() {
     let extra = tempfile::tempdir().expect("extra");
     let pkg = extra.path().join("café");
