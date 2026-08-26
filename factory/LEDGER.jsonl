@@ -399,3 +399,4 @@
 {"ts": "2026-08-26T21:41:00Z", "job_id": "adversary-after-217-validate-help-path-green", "work_source": "adversary", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": 217, "tests": "validate help already names path", "noop": true}
 {"ts": "2026-08-26T21:49:00Z", "job_id": "improve-mpi31-maint-noop", "work_source": "improve", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": null, "tests": "zero diff after 6m", "noop": true}
 {"ts": "2026-08-26T21:54:00Z", "job_id": "improve-mpi31-ops-noop", "work_source": "improve", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": null, "tests": "zero diff", "noop": true}
+{"ts": "2026-08-26T22:03:00Z", "job_id": "expand-2-fuzz-vendor-token", "work_source": "expand", "result": "landed", "head": "b1623671d846d3003c3604bc73e053c9a56249a6", "pr": 218, "tests": "vendor_token fuzz smoke", "noop": false}
