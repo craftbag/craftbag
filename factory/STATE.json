@@ -6,32 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "6799c15f2e03b3a0568cee75381fa8fdf5cbb3a6",
+  "ledger_sha": "779501ca542c75fe9f15b2ea60d3835f9a20277c",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "e1e1c0e9758e3ffafa3bcdeba4cb0a77e5bff09f",
   "expand_cursor": 4,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-after-199-cursor-user-cli",
+    "id": "adversary-after-200-cursor-user-mcp",
     "work_source": "adversary",
-    "started_at": "2026-08-26T17:34:20Z",
-    "finished_at": "2026-08-26T17:38:10Z",
+    "started_at": "2026-08-26T17:38:10Z",
+    "finished_at": "2026-08-26T17:43:00Z",
     "result": "landed",
-    "head": "021961c9acd3de2b651f6641780b28314ab8cecc",
-    "pr": 200,
+    "head": "7236b05d9c16a71a1d6198c1f9e38566fe29e7c5",
+    "pr": 201,
     "files": [
-      "crates/craftbag-cli/tests/cli.rs"
+      "crates/craftbag-mcp/src/main.rs"
     ],
-    "tests": "list_vendor_cursor_loads_user_home_layout",
+    "tests": "list_json_vendor_cursor_loads_user_home_layout",
     "review": "0"
   },
-  "last_sha": "021961c9acd3de2b651f6641780b28314ab8cecc",
+  "last_sha": "7236b05d9c16a71a1d6198c1f9e38566fe29e7c5",
   "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-26T17:38:10Z",
+    "checked_at": "2026-08-26T17:43:00Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
