@@ -1885,6 +1885,77 @@ mod tests {
     }
 
     #[test]
+    fn present_null_disable_model_invocation_skip_is_parse_error_with_path() {
+        // Same peel as user_invocable: parse_frontmatter shares
+        // require_bool_yaml. Hosts must peel parse_error + path, not
+        // scrape Display or treat the package as unknown_skill.
+        let root = tempfile::tempdir().expect("tmp");
+        let extra = root.path().join("extra");
+        let pkg = extra.join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        let skill_md = pkg.join("SKILL.md");
+        fs::write(
+            &skill_md,
+            "---\nname: demo\ndescription: d\ndisable_model_invocation: null\n---\nbody\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(
+            root.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(report.skills.is_empty(), "skills={:?}", report.skills);
+        assert_eq!(report.skips.len(), 1, "skips={:?}", report.skips);
+        let skip = &report.skips[0];
+        assert_eq!(skip.kind, SkipKind::ParseError);
+        assert_eq!(skip.code(), "parse_error");
+        assert_eq!(skip.path, skill_md);
+        assert_eq!(skip.name.as_deref(), Some("demo"));
+        assert!(
+            skip.detail.contains("disable_model_invocation") && skip.detail.contains("boolean"),
+            "detail must name the present-null bool: {}",
+            skip.detail
+        );
+
+        let miss = unknown_or_skipped_skill("demo", &report.skips);
+        assert_eq!(miss.error_kind, "parse_error");
+        assert!(!miss.is_not_found());
+        assert_eq!(miss.path.as_deref(), Some(skill_md.as_path()));
+        assert!(
+            !miss.error.contains("unknown skill"),
+            "present-null must not look missing: {}",
+            miss.error
+        );
+        let peel = serde_json::to_value(&miss).expect("ser");
+        assert_eq!(peel["error_kind"], "parse_error", "json={peel}");
+        assert_eq!(
+            peel["path"].as_str().map(std::path::Path::new),
+            Some(skill_md.as_path()),
+            "json={peel}"
+        );
+
+        let why = crate::why(&report, Some("demo"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::ParseError);
+        assert_eq!(why.skips[0].code(), "parse_error");
+        assert!(why.unknown_skill_miss().is_none());
+
+        let validated = validate_path(&skill_md);
+        assert!(!validated.ok, "validate={validated:?}");
+        let vmiss = validated.miss().expect("validate peel");
+        assert_eq!(vmiss.error_kind, "parse_error");
+        assert_eq!(vmiss.path.as_deref(), Some(skill_md.as_path()));
+        assert!(
+            vmiss.error.contains("disable_model_invocation") && vmiss.error.contains("boolean"),
+            "validate peel must name the present-null bool: {}",
+            vmiss.error
+        );
+    }
+
+    #[test]
     fn lowercase_skill_md_nameless_parse_matches_case_fold() {
         let cwd = tempfile::tempdir().expect("cwd");
         let pkg = cwd.path().join("extra").join("Demo");
