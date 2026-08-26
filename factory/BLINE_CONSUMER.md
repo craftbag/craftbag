@@ -134,6 +134,13 @@ Identity is the same NFKC fold as load / why (`OFF` hides `off`).
 Omitted MCP `disabled` is empty. Present `null` is a type error.
 `watch_dirs` is unchanged (it does not load SKILL.md).
 
+Set `DiscoveryOptions.ignore` (CLI `--ignore PATH`, MCP
+`ignore: ["PATH"]`) to hide path prefixes without a skip row.
+Empty or whitespace-only items are ignored (not cwd). Relative
+prefixes join discover cwd (`~` expanded). Omitted MCP `ignore`
+is empty. Present `null` is a type error. `watch_dirs` is
+unchanged (it does not load SKILL.md).
+
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
 same list (one path per line) without loading SKILL.md. An extra-path
 that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
@@ -186,10 +193,11 @@ Not skip kinds in v1 (silent or activation-only):
 |------|----------------|
 | `BudgetOmitted` | `why.activation` / `filter_skills` only |
 | `Disabled` | `DiscoveryOptions.disabled` (CLI `--disabled`, MCP `disabled`; no skip row) |
+| `Ignored` | `DiscoveryOptions.ignore` (CLI `--ignore`, MCP `ignore`; no skip row) |
 | `VendorDenylist` | Cursor list is silent |
 | `InvocationOff` | `disable_model_invocation` is activation, not a skip |
 
-Do not add those four as `SkipKind` variants until they have corpus
+Do not add those five as `SkipKind` variants until they have corpus
 fixtures.
 
 ## Corpus skip-row compare (2026-08-24)

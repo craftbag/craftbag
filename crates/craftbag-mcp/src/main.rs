@@ -52,6 +52,9 @@ struct DiscoverArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
+    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
+    #[serde(default)]
+    ignore: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +77,9 @@ struct LoadArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
+    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
+    #[serde(default)]
+    ignore: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -99,6 +105,9 @@ struct WhyArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
+    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
+    #[serde(default)]
+    ignore: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,6 +124,7 @@ fn opts_from(
     ascii_names: bool,
     implicit_roots: Option<bool>,
     disabled: Vec<String>,
+    ignore: Vec<String>,
 ) -> Result<DiscoveryOptions, String> {
     // CLI clap rejects `--user-dir` with no value. Present empty or
     // whitespace is the same miss, not discover-cwd as User.
@@ -125,12 +135,12 @@ fn opts_from(
     }
     Ok(DiscoveryOptions {
         paths,
+        ignore,
+        disabled,
         vendor_roots: SkillSource::parse_vendor_roots(vendor)?,
         user_skills_dir: user_dir.map(PathBuf::from),
         ascii_names,
         implicit_roots: implicit_roots.unwrap_or(true),
-        disabled,
-        ..DiscoveryOptions::default()
     })
 }
 
@@ -143,6 +153,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         args.ascii_names,
         args.implicit_roots,
         args.disabled,
+        args.ignore,
     )?;
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
@@ -207,6 +218,7 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
             args.ascii_names,
             args.implicit_roots,
             args.disabled,
+            args.ignore,
         )?,
     )
     .map_err(|e| e.to_string())?;
@@ -231,6 +243,7 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
             args.ascii_names,
             args.implicit_roots,
             args.disabled,
+            args.ignore,
         )?,
     )
     .map_err(|e| e.to_string())?;
@@ -277,7 +290,8 @@ fn discover_properties() -> Value {
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
-        "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."}
+        "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
+        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd. Example: [\"./secret\"]."}
     })
 }
 
@@ -2963,6 +2977,143 @@ mod tests {
             resp["result"]["error_kind"],
             "unknown_skill",
             "disabled load must be unknown, not a skip peel: {}",
+            call_text(&resp)
+        );
+    }
+
+    #[test]
+    fn tools_list_advertises_ignore() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(150)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let props = &tool["inputSchema"]["properties"];
+            assert!(
+                props.get("ignore").is_some(),
+                "{} must advertise ignore like CLI --ignore: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["ignore"]["type"], "array",
+                "{} ignore type: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["ignore"]["items"]["type"], "string",
+                "{} ignore items: {props}",
+                tool["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn skills_list_null_ignore_is_error() {
+        empty_home(|| {
+            let resp = call(151, "skills_list", json!({"ignore": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says ignore is string array; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog for null ignore: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_ignore_omits_prefix() {
+        let extra = tempfile::tempdir().expect("extra");
+        let keep = extra.path().join("keep");
+        std::fs::create_dir_all(&keep).expect("keep");
+        std::fs::write(
+            keep.join("SKILL.md"),
+            "---\nname: keep\ndescription: stay\n---\nKEEP\n",
+        )
+        .expect("write keep");
+        let secret = extra.path().join("secret");
+        std::fs::create_dir_all(&secret).expect("secret");
+        std::fs::write(
+            secret.join("SKILL.md"),
+            "---\nname: secret\ndescription: hide\n---\nSECRET\n",
+        )
+        .expect("write secret");
+        let listed = empty_home(|| {
+            call(
+                152,
+                "skills_list",
+                json!({
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false,
+                    "ignore": [secret.display().to_string()]
+                }),
+            )
+        });
+        let text = call_text(&listed);
+        assert!(
+            text.contains("keep"),
+            "ignore list must still include keep: {text}"
+        );
+        assert!(
+            !text.contains("secret"),
+            "ignored prefix must hide secret: {text}"
+        );
+        let defaulted = empty_home(|| {
+            call(
+                153,
+                "skills_list",
+                json!({
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }),
+            )
+        });
+        let default_text = call_text(&defaulted);
+        assert!(
+            default_text.contains("secret") && default_text.contains("keep"),
+            "omitted ignore must still load secret: {default_text}"
+        );
+    }
+
+    #[test]
+    fn skills_load_ignore_is_unknown() {
+        let extra = tempfile::tempdir().expect("extra");
+        let secret = extra.path().join("secret");
+        std::fs::create_dir_all(&secret).expect("secret");
+        std::fs::write(
+            secret.join("SKILL.md"),
+            "---\nname: secret\ndescription: hide\n---\nSECRET\n",
+        )
+        .expect("write secret");
+        let resp = empty_home(|| {
+            call(
+                154,
+                "skills_load",
+                json!({
+                    "name": "secret",
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false,
+                    "ignore": [secret.display().to_string()]
+                }),
+            )
+        });
+        assert_eq!(resp["result"]["isError"], true, "{}", call_text(&resp));
+        assert_eq!(
+            resp["result"]["error_kind"],
+            "unknown_skill",
+            "ignored load must be unknown, not a skip peel: {}",
             call_text(&resp)
         );
     }
