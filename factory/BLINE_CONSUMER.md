@@ -87,8 +87,8 @@ catalog. `extra` is `--path` / `paths`, not a vendor name.
 CLI `list --format` uses the same tokens as MCP `skills_list`
 (`json`, `xml`, `catalog`, `watch`). `watch-dirs` and `watch_dirs`
 are the `--watch-dirs` flag name (same walk). The older `--json` /
-`--xml` / `--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml` /
-`list --catalog`, MCP `skills_list` (json, xml, catalog, or watch), and
+`--xml` / `--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml`,
+MCP `skills_list` (json or xml), and
 `why` JSON `loaded` rows include
 `description` plus `user_invocable`, `disable_model_invocation`,
 `argument_hint`, `when_to_use`, `triggers`, `allowed_tools`, `license`,
