@@ -411,8 +411,12 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 "allowed-tools" | "allowed_tools" if !value.is_empty() => {
                     allowed_tools = Some(value.to_owned());
                 }
-                "metadata" if value.is_empty() && !line_is_yaml_indented(line) => {
-                    in_metadata = true;
+                "metadata" if !line_is_yaml_indented(line) => {
+                    if value.is_empty() {
+                        in_metadata = true;
+                    } else {
+                        push_inline_metadata(&mut metadata, value)?;
+                    }
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
                     argument_hint = Some(value.to_owned());
@@ -518,6 +522,42 @@ where
         }
         out
     }
+}
+
+/// Official agentskills `metadata` as a flow map (`{k: v, k2: v2}`).
+/// A present scalar is InvalidYaml, not a silent empty map.
+fn push_inline_metadata(
+    metadata: &mut BTreeMap<String, String>,
+    raw: &str,
+) -> Result<(), ParseError> {
+    let trimmed = raw.trim();
+    let inner = match trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+        Some(inner) => inner,
+        None => {
+            let shown = crate::sanitize_error_token(trimmed);
+            return Err(ParseError::InvalidYaml(format!(
+                "metadata must be a map, got: {shown}"
+            )));
+        }
+    };
+    for part in inner.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let Some((k, v)) = part.split_once(':') else {
+            let shown = crate::sanitize_error_token(part);
+            return Err(ParseError::InvalidYaml(format!(
+                "metadata pair must be `key: value`, got: {shown}"
+            )));
+        };
+        let k = k.trim();
+        let v = v.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+        if !k.is_empty() {
+            metadata.insert(k.to_owned(), v.to_owned());
+        }
+    }
+    Ok(())
 }
 
 fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
@@ -1072,6 +1112,59 @@ BODY
             peek_frontmatter_name(input).as_deref(),
             Some("wanted"),
             "peek must keep the top-level name"
+        );
+    }
+
+    #[test]
+    fn parse_skill_inline_flow_metadata_is_kept() {
+        // Block `metadata:` is already collected. After SkillSummary
+        // emits the map, a flow `{k: v}` form must not silently drop
+        // author/version (leftover analog of PR 182).
+        let input = "\
+---
+name: annotated
+description: docs
+metadata: {author: A & B, version: '1.0'}
+---
+BODY
+";
+        let skill = parse_skill(input).expect("flow-map metadata must load");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("A & B"),
+            "inline metadata author: {:?}",
+            skill.metadata
+        );
+        assert_eq!(
+            skill.metadata.get("version").map(String::as_str),
+            Some("1.0"),
+            "inline metadata version: {:?}",
+            skill.metadata
+        );
+        let load = crate::activate::format_load_message(
+            &skill,
+            "",
+            crate::activate::FormatOptions::default(),
+        );
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Metadata: author=A & B, version=1.0\n"),
+            "load must print flow-map metadata: {load}"
+        );
+
+        let garbage = "\
+---
+name: annotated
+description: docs
+metadata: not-a-map
+---
+BODY
+";
+        let err = parse_skill(garbage).expect_err("scalar metadata must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("metadata") && !msg.contains('\u{2028}'),
+            "scalar metadata must name the field and stay one line: {msg}"
         );
     }
 
