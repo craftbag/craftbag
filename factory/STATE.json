@@ -6,35 +6,34 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "460b391c6c812964ecb1e99dea7d02b45465258a",
+  "ledger_sha": "716b49ce34c7cdeb487eede53456efe4db2b94f9",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "a2680c0bc3d2df1d2e572e41b6ef47978ecd8c68",
   "expand_cursor": 3,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "adversary-list-skills-skips-136",
+    "id": "adversary-mcp-list-format-names-137",
     "work_source": "adversary",
-    "started_at": "2026-08-26T02:46:08Z",
-    "finished_at": "2026-08-26T02:46:08Z",
+    "started_at": "2026-08-26T02:58:44Z",
+    "finished_at": "2026-08-26T02:58:44Z",
     "result": "landed",
-    "head": "94322e428f14939992eeef29a5a227505e2e3ca7",
-    "pr": 136,
+    "head": "aa99256f1dd1e0631350412a6f62c78b7466f3fb",
+    "pr": 137,
     "files": [
-      "crates/craftbag-cli/src/main.rs",
       "crates/craftbag-mcp/src/main.rs"
     ],
-    "tests": "433 passed list skills skips names",
+    "tests": "434 passed MCP list format names",
     "review": "0"
   },
-  "last_sha": "94322e428f14939992eeef29a5a227505e2e3ca7",
+  "last_sha": "aa99256f1dd1e0631350412a6f62c78b7466f3fb",
   "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
-    "main": "unknown",
+    "main": "green",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-26T02:46:08Z",
+    "checked_at": "2026-08-26T02:58:44Z",
     "failing_jobs": [],
-    "app_merge_attribution": true
+    "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 25,
