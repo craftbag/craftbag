@@ -61,7 +61,7 @@ enum Cmd {
         #[arg(long = "ignore", value_name = "PATH")]
         ignore: Vec<String>,
     },
-    /// Print one skill body plus package envelope (includes argument-hint, when-to-use, and allowed-tools).
+    /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
     Load {
         name: String,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix

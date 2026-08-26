@@ -14,7 +14,9 @@
 //! `triggers`, `allowed_tools`, `license`, `compatibility`, `metadata`).
 //! A new field on that type must land in all three wires
 //! (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap.
-//! [`format_load_message`] is the text envelope.
+//! [`format_load_message`] is the text envelope (`License`,
+//! `Compatibility`, `Metadata`, `Allowed tools`, and host extras
+//! when set).
 
 mod activate;
 mod discover;

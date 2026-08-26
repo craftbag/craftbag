@@ -100,4 +100,15 @@ fn bline_consumer_names_skill_summary_sibling_lock() {
         notes.contains("text envelope"),
         "BLINE_CONSUMER must say load is the text envelope, not SkillSummary JSON"
     );
+    assert!(
+        notes.contains("load --help")
+            && notes.contains("argument-hint")
+            && notes.contains("when-to-use")
+            && notes.contains("triggers")
+            && notes.contains("allowed-tools")
+            && notes.contains("license")
+            && notes.contains("compatibility")
+            && notes.contains("metadata"),
+        "BLINE_CONSUMER must name CLI load --help / MCP skills_load envelope fields"
+    );
 }

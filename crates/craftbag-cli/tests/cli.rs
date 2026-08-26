@@ -3162,7 +3162,11 @@ fn load_help_names_args_and_argument_hint() {
         .stdout(predicates::str::contains("--args"))
         .stdout(predicates::str::contains("argument-hint"))
         .stdout(predicates::str::contains("when-to-use"))
+        .stdout(predicates::str::contains("triggers"))
         .stdout(predicates::str::contains("allowed-tools"))
+        .stdout(predicates::str::contains("license"))
+        .stdout(predicates::str::contains("compatibility"))
+        .stdout(predicates::str::contains("metadata"))
         .stdout(predicates::str::contains("Example:"));
 }
 

@@ -324,7 +324,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known (same as why --json).",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -2822,6 +2822,20 @@ mod tests {
             load_desc.contains("path when a skip"),
             "skills_load must name SkillMiss.path like CLI validate --json: {load_desc}"
         );
+        for field in [
+            "argument-hint",
+            "when-to-use",
+            "triggers",
+            "allowed-tools",
+            "license",
+            "compatibility",
+            "metadata",
+        ] {
+            assert!(
+                load_desc.contains(field),
+                "skills_load must name envelope field {field} like CLI load --help: {load_desc}"
+            );
+        }
     }
 
     #[test]

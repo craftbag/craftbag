@@ -660,6 +660,11 @@ fn push_envelope_line(out: &mut String, label: &str, value: &str) {
 }
 
 /// User-turn payload that asks the model to follow one skill fully.
+///
+/// Envelope lines (when set): Description, When to use, Triggers, License,
+/// Compatibility, Metadata, Allowed tools, Argument hint, User arguments,
+/// and Activate hint. Official agentskills `license` / `compatibility` /
+/// `metadata` / `allowed-tools` use the same text as list/why JSON.
 pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_>) -> String {
     let args = arguments.trim();
     let mut out = String::new();
