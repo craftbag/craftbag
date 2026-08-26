@@ -398,3 +398,4 @@
 {"ts": "2026-08-26T21:29:00Z", "job_id": "adversary-after-216-user-dir-parse-fail-green", "work_source": "adversary", "result": "noop", "head": "f20db3c85a36bed073c1f4c91d3aef64b0a1b38d", "pr": null, "tests": "user_dir analog green", "noop": true}
 {"ts": "2026-08-26T21:41:00Z", "job_id": "adversary-after-217-validate-help-path-green", "work_source": "adversary", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": 217, "tests": "validate help already names path", "noop": true}
 {"ts": "2026-08-26T21:49:00Z", "job_id": "improve-mpi31-maint-noop", "work_source": "improve", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": null, "tests": "zero diff after 6m", "noop": true}
+{"ts": "2026-08-26T21:54:00Z", "job_id": "improve-mpi31-ops-noop", "work_source": "improve", "result": "noop", "head": "74380880aee8ae1de9b7505bec8d3a4daa9054f4", "pr": null, "tests": "zero diff", "noop": true}
