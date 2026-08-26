@@ -239,3 +239,4 @@
 {"ts": "2026-08-26T03:27:26Z", "job_id": "adversary-after-139-noop", "work_source": "adversary", "result": "noop", "head": "0a20a07e0530b1553145f2ead2f6406c91f1e45a", "pr": null, "tests": "139 path peel analogs green", "noop": true}
 {"ts": "2026-08-26T03:36:51Z", "job_id": "improve-skillmiss-key-lock-140", "work_source": "improve", "result": "landed", "head": "93b71853fa44a76cae5f2f16bcf8797ee74ba1e7", "pr": 140, "tests": "SkillMiss.error own key", "noop": false}
 {"ts": "2026-08-26T03:42:19Z", "job_id": "adversary-after-140-noop", "work_source": "adversary", "result": "noop", "head": "93b71853fa44a76cae5f2f16bcf8797ee74ba1e7", "pr": null, "tests": "140 key lock analogs green", "noop": true}
+{"ts": "2026-08-26T04:08:01Z", "job_id": "issues-141-implicit-roots", "work_source": "issues", "result": "landed", "head": "47c641d37e773a7790bb6734d342a380ef5b0818", "pr": 142, "tests": "450 passed implicit_roots collection-only", "noop": false}
