@@ -2,6 +2,16 @@
 
 MSRV 1.85 (`rust-toolchain.toml`). No let-chains.
 
+`rust-toolchain.toml` installs rustfmt and clippy. The local gate also
+needs cargo-nextest, cargo-deny, and `gh` (stealth runs `gh repo view`):
+
+```bash
+cargo install cargo-nextest --locked
+cargo install cargo-deny --locked
+```
+
+Hosted CI also runs fuzz-smoke, gitleaks, actionlint, and zizmor.
+
 Local gate before every commit:
 
 ```bash
