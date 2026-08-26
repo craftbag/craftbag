@@ -93,6 +93,124 @@ fn validate_strict_corpus_ok() {
 }
 
 #[test]
+fn validate_json_exposes_error_kind() {
+    let path = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg(&path)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "invalid name must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "validate --json must keep the human one-line: {stderr:?}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["error_kind"], "parse_error", "stdout={stdout}");
+    assert_eq!(v["error"], stderr.trim(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        v.get("errorKind").is_none(),
+        "error_kind must stay snake_case: {stdout}"
+    );
+}
+
+#[test]
+fn validate_json_name_mismatch_exposes_error_kind() {
+    let path = corpus().join("agentskills/name-mismatch/wrong-dir/SKILL.md");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg(&path)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "name mismatch must fail");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(
+        v["error_kind"], "name_directory_mismatch",
+        "stdout={stdout}"
+    );
+    assert!(
+        v["error"].as_str().is_some_and(|e| e.contains("good-name")),
+        "stdout={stdout}"
+    );
+}
+
+#[test]
+fn validate_json_ok_has_no_error_kind() {
+    let path = corpus().join("agentskills/minimal-valid/SKILL.md");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg(&path)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["ok"], true, "stdout={stdout}");
+    assert_eq!(v["name"], "minimal-valid", "stdout={stdout}");
+    assert!(
+        v.get("error_kind").is_none(),
+        "ok validate must not peel a miss: {stdout}"
+    );
+}
+
+#[test]
+fn validate_json_hostile_unknown_key_stays_one_line() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let pkg = tmp.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\nevil\u{2028}key: x\n---\nbody\n",
+    )
+    .expect("write");
+    let skill = pkg.join("SKILL.md");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--strict")
+        .arg("--json")
+        .arg(&skill)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "strict hostile key must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "validate --json must keep one stderr line: {stderr:?}"
+    );
+    assert!(
+        !stderr.contains('\u{2028}'),
+        "U+2028 must not leak into stderr: {stderr:?}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["error_kind"], "parse_error", "stdout={stdout}");
+    assert_eq!(v["error"], stderr.trim(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        v["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("evil?key") && !e.contains('\u{2028}')),
+        "stdout={stdout}"
+    );
+}
+
+#[test]
 fn list_extra_path_json() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();

@@ -20,6 +20,12 @@ text on stderr. MCP `skills_load` / `skills_why` add `error_kind` next to
 `SkillMiss::is_not_found`) from a path-dep. Do not parse
 `unknown skill:` / `skipped skill:`.
 
+CLI `validate --json` uses the same peel on a failed path.
+`error_kind` is the skip code (`parse_error`, `unreadable`,
+`name_directory_mismatch`). Success prints the `ValidationReport`
+(no `error_kind`). Call `ValidationReport::miss`. Echoed keys and
+names go through `sanitize_error_token` so stderr stays one line.
+
 ## Path-dep (separate worktree)
 
 Use a Bline worktree that is not findbug and not the durable

@@ -100,6 +100,9 @@ enum Cmd {
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
+        /// Same `{ error_kind, error }` peel as `why --json` on failure.
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -262,11 +265,25 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Validate { path, strict } => {
+        Cmd::Validate { path, strict, json } => {
             let report = validate_path_with_options(&path, strict);
             if report.ok {
-                println!("ok\t{}", report.name.as_deref().unwrap_or("-"));
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
+                    );
+                } else {
+                    println!("ok\t{}", report.name.as_deref().unwrap_or("-"));
+                }
                 Ok(ExitCode::SUCCESS)
+            } else if let (true, Some(miss)) = (json, report.miss()) {
+                let _ = writeln!(io::stderr(), "{miss}");
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
+                );
+                Ok(ExitCode::from(1))
             } else {
                 for e in &report.errors {
                     let _ = writeln!(io::stderr(), "{e}");

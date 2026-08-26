@@ -258,6 +258,33 @@ pub struct ValidationReport {
     pub skip: Option<SkillSkip>,
 }
 
+impl ValidationReport {
+    /// Host-branchable miss when this path did not validate.
+    ///
+    /// Same `{ error_kind, error }` as [`unknown_or_skipped_skill`].
+    /// `error_kind` is the skip code (`parse_error`, `unreadable`,
+    /// `name_directory_mismatch`). Ok reports return `None`.
+    pub fn miss(&self) -> Option<SkillMiss> {
+        if self.ok {
+            return None;
+        }
+        let skip = self.skip.as_ref()?;
+        let raw = self
+            .errors
+            .first()
+            .map(String::as_str)
+            .unwrap_or(skip.detail.as_str());
+        Some(SkillMiss {
+            error_kind: skip.kind.as_str(),
+            error: crate::sanitize_error_token(raw),
+        })
+    }
+}
+
+fn one_line_error(raw: impl std::fmt::Display) -> String {
+    crate::sanitize_error_token(&raw.to_string())
+}
+
 /// Validate a SKILL.md path: readable, parse, and name/dir match.
 ///
 /// Unknown frontmatter keys are ignored so host extensions still load.
@@ -279,16 +306,17 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
     let content = match read_skill_md(path) {
         Ok(c) => c,
         Err(e) => {
+            let detail = one_line_error(e);
             return ValidationReport {
                 path: path_buf.clone(),
                 ok: false,
                 name: None,
-                errors: vec![e.to_string()],
+                errors: vec![detail.clone()],
                 skip: Some(SkillSkip {
                     path: path_buf,
                     name: None,
                     kind: SkipKind::Unreadable,
-                    detail: e.to_string(),
+                    detail,
                     winner_path: None,
                 }),
             };
@@ -299,22 +327,26 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
             if strict {
                 let unknown = unknown_frontmatter_keys(&content);
                 if !unknown.is_empty() {
-                    let detail = if unknown.len() == 1 {
-                        format!("unknown frontmatter key: {}", unknown[0])
+                    let shown: Vec<String> = unknown
+                        .iter()
+                        .map(|k| crate::sanitize_error_token(k))
+                        .collect();
+                    let detail = if shown.len() == 1 {
+                        format!("unknown frontmatter key: {}", shown[0])
                     } else {
-                        format!("unknown frontmatter keys: {}", unknown.join(", "))
+                        format!("unknown frontmatter keys: {}", shown.join(", "))
                     };
-                    let err = ParseError::InvalidYaml(detail);
+                    let err = one_line_error(ParseError::InvalidYaml(detail));
                     return ValidationReport {
                         path: path_buf.clone(),
                         ok: false,
                         name: Some(skill.name.clone()),
-                        errors: vec![err.to_string()],
+                        errors: vec![err.clone()],
                         skip: Some(SkillSkip {
                             path: path_buf,
                             name: Some(skill.name),
                             kind: SkipKind::ParseError,
-                            detail: err.to_string(),
+                            detail: err,
                             winner_path: None,
                         }),
                     };
@@ -331,7 +363,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
             } else {
                 let detail = format!(
                     "frontmatter name `{}` must match parent directory name",
-                    skill.name
+                    crate::sanitize_error_token(&skill.name)
                 );
                 ValidationReport {
                     path: path_buf.clone(),
@@ -350,16 +382,17 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
         }
         Err(e) => {
             let name = peek_frontmatter_name(&content);
+            let detail = one_line_error(e);
             ValidationReport {
                 path: path_buf.clone(),
                 ok: false,
                 name: name.clone(),
-                errors: vec![e.to_string()],
+                errors: vec![detail.clone()],
                 skip: Some(SkillSkip {
                     path: path_buf,
                     name,
                     kind: SkipKind::ParseError,
-                    detail: e.to_string(),
+                    detail,
                     winner_path: None,
                 }),
             }
@@ -3849,9 +3882,96 @@ mod tests {
             "errors={:?}",
             report.errors
         );
-        let skip = report.skip.expect("skip");
+        let skip = report.skip.as_ref().expect("skip");
         assert_eq!(skip.kind, SkipKind::ParseError);
         assert_eq!(skip.code(), "parse_error");
+        let miss = report.miss().expect("failed validate has a peel");
+        assert_eq!(miss.error_kind, "parse_error");
+        assert_eq!(miss.error, report.errors[0]);
+        assert!(!miss.is_not_found());
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "parse_error", "json={json}");
+        assert_eq!(v["error"], miss.error, "json={json}");
+        assert!(
+            v.get("errorKind").is_none(),
+            "error_kind must stay snake_case: {json}"
+        );
+    }
+
+    #[test]
+    fn validate_miss_exposes_error_kind() {
+        let root = tempfile::tempdir().expect("tmp");
+        let ok_pkg = root.path().join("demo");
+        write_unknown_key_skill(&ok_pkg);
+        let ok = validate_path(&ok_pkg.join("SKILL.md"));
+        assert!(ok.ok, "ok={ok:?}");
+        assert!(ok.miss().is_none(), "ok validate must not peel a miss");
+
+        let mismatch = corpus_dir().join("agentskills/name-mismatch/wrong-dir/SKILL.md");
+        let report = validate_path(&mismatch);
+        assert!(!report.ok, "name mismatch must fail: {report:?}");
+        let miss = report.miss().expect("peel");
+        assert_eq!(miss.error_kind, "name_directory_mismatch");
+        assert!(
+            miss.error.contains("good-name"),
+            "mismatch peel must name the frontmatter: {}",
+            miss.error
+        );
+        assert!(!miss.is_not_found());
+
+        let missing = root.path().join("no-such").join("SKILL.md");
+        let unread = validate_path(&missing);
+        assert!(!unread.ok, "missing path must fail: {unread:?}");
+        let miss = unread.miss().expect("peel");
+        assert_eq!(miss.error_kind, "unreadable");
+        assert!(!miss.is_not_found());
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "unreadable", "json={json}");
+        assert!(
+            v.get("errorKind").is_none(),
+            "error_kind must stay snake_case: {json}"
+        );
+    }
+
+    #[test]
+    fn validate_hostile_unknown_key_keeps_error_kind_stable() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: demo\ndescription: d\nevil\u{2028}key: x\n---\nbody\n",
+        )
+        .expect("write");
+        let report = validate_path_with_options(&pkg.join("SKILL.md"), true);
+        assert!(!report.ok, "strict must reject U+2028 key: {report:?}");
+        let miss = report.miss().expect("peel");
+        assert_eq!(miss.error_kind, "parse_error");
+        assert_eq!(
+            miss.error.lines().count(),
+            1,
+            "validate peel must stay one line: {:?}",
+            miss.error
+        );
+        assert!(
+            !miss.error.contains('\u{2028}'),
+            "U+2028 must not leak into error: {}",
+            miss.error
+        );
+        assert!(
+            miss.error.contains("evil?key"),
+            "hostile key must be sanitized: {}",
+            miss.error
+        );
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "parse_error", "json={json}");
+        assert!(
+            v.get("errorKind").is_none(),
+            "error_kind must stay snake_case: {json}"
+        );
     }
 
     #[test]
