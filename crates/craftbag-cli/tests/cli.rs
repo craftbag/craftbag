@@ -1038,6 +1038,141 @@ fn why_unknown_json_exposes_error_kind() {
         ["error".to_owned(), "error_kind".to_owned()],
         "why --json unknown peel is {{ error_kind, error }}; path is omitted: {stdout}"
     );
+    assert!(
+        v.get("winner_path").is_none() && v.get("winnerPath").is_none(),
+        "why --json unknown must omit winner_path like MCP skills_why: {stdout}"
+    );
+}
+
+#[test]
+fn why_load_validate_collision_winner_path() {
+    // Discover already records SkillSkip.winner_path. CLI why/load/validate
+    // must expose that on the process wire (MCP merge_skill_miss is the
+    // sibling lock). why --json of the collided name is a WhyReport, not a
+    // SkillMiss peel, because the winner stays loaded.
+    let tmp = tempfile::tempdir().expect("tmp");
+    let a = corpus().join("collision/a");
+    let b = corpus().join("collision/b");
+    let loser = b.join("foo").join("SKILL.md");
+
+    let (_home, mut why) = bin();
+    let why_out = why
+        .current_dir(tmp.path())
+        .arg("why")
+        .arg("foo")
+        .arg("--json")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&a)
+        .arg("--path")
+        .arg(&b)
+        .output()
+        .expect("run");
+    assert_eq!(
+        why_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&why_out.stderr)
+    );
+    let why_stdout = String::from_utf8_lossy(&why_out.stdout);
+    let why_v: serde_json::Value = serde_json::from_str(&why_stdout).expect("why json");
+    assert_eq!(why_v["loaded"][0]["name"], "foo", "{why_stdout}");
+    assert_eq!(why_v["skips"][0]["kind"], "name_collision", "{why_stdout}");
+    assert_eq!(why_v["skips"][0]["code"], "name_collision", "{why_stdout}");
+    let skip_path = why_v["skips"][0]["path"].as_str().expect("skip path");
+    assert!(
+        skip_path.ends_with("collision/b/foo/SKILL.md")
+            || skip_path.ends_with("collision\\b\\foo\\SKILL.md"),
+        "why skip path is the loser SKILL.md: {why_stdout}"
+    );
+    let skip_winner = why_v["skips"][0]["winnerPath"]
+        .as_str()
+        .expect("winnerPath");
+    assert!(
+        skip_winner.ends_with("collision/a/foo/SKILL.md")
+            || skip_winner.ends_with("collision\\a\\foo\\SKILL.md"),
+        "why --json skip must emit camelCase winnerPath, not scrape lost to: {why_stdout}"
+    );
+    assert!(
+        why_v["skips"][0].get("winner_path").is_none(),
+        "SkillSkip winnerPath stays camelCase; SkillMiss peel is snake_case: {why_stdout}"
+    );
+    assert!(
+        why_v.get("winner_path").is_none() && why_v.get("error_kind").is_none(),
+        "named collision is a WhyReport, not a SkillMiss peel: {why_stdout}"
+    );
+
+    let (_home, mut load) = bin();
+    let load_out = load
+        .current_dir(tmp.path())
+        .arg("load")
+        .arg("foo")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&a)
+        .arg("--path")
+        .arg(&b)
+        .output()
+        .expect("run");
+    assert_eq!(
+        load_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&load_out.stderr)
+    );
+    let load_stdout = String::from_utf8_lossy(&load_out.stdout);
+    assert!(
+        load_stdout.contains("[Activated skill: foo]"),
+        "load of a collided name must return the winner: {load_stdout}"
+    );
+    assert!(
+        load_stdout.contains("First path wins"),
+        "load must print the winner body, not the loser: {load_stdout}"
+    );
+    assert!(
+        !load_stdout.contains("Second path is skipped"),
+        "load must not print the loser body: {load_stdout}"
+    );
+
+    let (_home, mut validate_loser) = bin();
+    let loser_out = validate_loser
+        .arg("validate")
+        .arg("--json")
+        .arg(&loser)
+        .output()
+        .expect("run");
+    assert_eq!(
+        loser_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&loser_out.stderr)
+    );
+    let loser_stdout = String::from_utf8_lossy(&loser_out.stdout);
+    let loser_v: serde_json::Value = serde_json::from_str(&loser_stdout).expect("validate json");
+    assert_eq!(loser_v["ok"], true, "{loser_stdout}");
+    assert!(
+        loser_v.get("error_kind").is_none()
+            && loser_v.get("winner_path").is_none()
+            && loser_v.get("winnerPath").is_none(),
+        "validate is one path, so a collided SKILL.md is not a name_collision peel: {loser_stdout}"
+    );
+
+    let parse = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
+    let (_home, mut validate_parse) = bin();
+    let parse_out = validate_parse
+        .arg("validate")
+        .arg("--json")
+        .arg(&parse)
+        .output()
+        .expect("run");
+    assert_eq!(parse_out.status.code(), Some(1), "invalid name must fail");
+    let parse_stdout = String::from_utf8_lossy(&parse_out.stdout);
+    let parse_v: serde_json::Value = serde_json::from_str(&parse_stdout).expect("validate json");
+    assert_eq!(parse_v["error_kind"], "parse_error", "{parse_stdout}");
+    assert!(
+        parse_v.get("winner_path").is_none() && parse_v.get("winnerPath").is_none(),
+        "validate --json parse_error must omit winner_path like MCP unknown: {parse_stdout}"
+    );
 }
 
 #[test]
