@@ -1356,6 +1356,10 @@ mod tests {
                     miss.error,
                     "content[0].text stays the one-line miss: tool={tool}"
                 );
+                assert!(
+                    resp["result"].get("path").is_none(),
+                    "MCP {tool} unknown_skill omits path like CLI why --json: {resp}"
+                );
             }
         });
     }
@@ -2468,10 +2472,19 @@ mod tests {
             let tool = tools.iter().find(|t| t["name"] == name).expect(name);
             let desc = tool["description"].as_str().unwrap_or("");
             assert!(
-                desc.contains("error_kind") && desc.contains("error"),
-                "{name} must name SkillMiss.error / error_kind like CLI why --json: {desc}"
+                desc.contains("error_kind plus error"),
+                "{name} must name SkillMiss.error as its own key, not a substring of error_kind: {desc}"
             );
         }
+        let load = tools
+            .iter()
+            .find(|t| t["name"] == "skills_load")
+            .expect("skills_load");
+        let load_desc = load["description"].as_str().unwrap_or("");
+        assert!(
+            load_desc.contains("path when a skip"),
+            "skills_load must name SkillMiss.path like CLI validate --json: {load_desc}"
+        );
     }
 
     #[test]
