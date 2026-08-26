@@ -64,7 +64,9 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// [`walk_cwd_to_git_root`]. Extra-path `dir/skills` is listed only
 /// when [`discover`] would walk that collection (leftover or
 /// Vercel-style). A named extra-path package, or an escaped /
-/// unreadable `skills/` tree, is omitted. Host `user_skills_dir` is
+/// unreadable `skills/` tree, is omitted. Escaped project or home
+/// `.agents/skills` / `.{vendor}/skills` (symlink out of that walk
+/// root) is omitted, same as [`discover`]. Host `user_skills_dir` is
 /// a skills root: leftover `SKILL.md` / `skill.md` must not hide
 /// `user_dir/skills` (same collection walk as extra-path leftover).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
@@ -78,10 +80,14 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     // walk root (listing a FIFO for notify can hang).
 
     for dir in walk_cwd_to_git_root(&cwd) {
-        push_watch_dir(&mut out, dir.join(".agents").join("skills"));
+        push_watch_confined_dir(&mut out, dir.join(".agents").join("skills"), &dir);
         for name in ["bline", "claude", "cursor", "grok"] {
             if vendor_enabled(opts, name) {
-                push_watch_dir(&mut out, dir.join(format!(".{name}")).join("skills"));
+                push_watch_confined_dir(
+                    &mut out,
+                    dir.join(format!(".{name}")).join("skills"),
+                    &dir,
+                );
             }
         }
     }
@@ -97,10 +103,14 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     }
 
     if let Some(home) = home_dir() {
-        push_watch_dir(&mut out, home.join(".agents").join("skills"));
+        push_watch_confined_dir(&mut out, home.join(".agents").join("skills"), &home);
         for name in ["bline", "claude", "cursor", "grok"] {
             if vendor_enabled(opts, name) {
-                push_watch_dir(&mut out, home.join(format!(".{name}")).join("skills"));
+                push_watch_confined_dir(
+                    &mut out,
+                    home.join(format!(".{name}")).join("skills"),
+                    &home,
+                );
             }
         }
     }
@@ -130,6 +140,12 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
 
 fn push_watch_dir(out: &mut Vec<PathBuf>, p: PathBuf) {
     if p.is_dir() {
+        push_watch_unique(out, p);
+    }
+}
+
+fn push_watch_confined_dir(out: &mut Vec<PathBuf>, p: PathBuf, confine: &Path) {
+    if p.is_dir() && stays_under(&p, confine) {
         push_watch_unique(out, p);
     }
 }
@@ -2989,6 +3005,52 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &extra.path().join("skills")),
             "escaped extra/skills must not be a watch root: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, outside.path()),
+            "watch_dirs must not list the escaped skills target: {dirs:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn watch_dirs_omits_escaped_project_and_home_skills_roots() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("out");
+        write_skill(&outside.path().join("stolen"), "stolen", "SECRET_BODY");
+        let agents = cwd.path().join(".agents");
+        fs::create_dir_all(&agents).expect("mkdir .agents");
+        let agents_skills = agents.join("skills");
+        std::os::unix::fs::symlink(outside.path(), &agents_skills).expect("symlink agents");
+        let claude = cwd.path().join(".claude");
+        fs::create_dir_all(&claude).expect("mkdir .claude");
+        let claude_skills = claude.join("skills");
+        std::os::unix::fs::symlink(outside.path(), &claude_skills).expect("symlink vendor");
+        let home = tempfile::tempdir().expect("home");
+        let home_agents = home.path().join(".agents");
+        fs::create_dir_all(&home_agents).expect("mkdir HOME/.agents");
+        let home_skills = home_agents.join("skills");
+        std::os::unix::fs::symlink(outside.path(), &home_skills).expect("symlink home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["claude".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            !watch_paths_contain(&dirs, &agents_skills),
+            "watch_dirs must not list escaped .agents/skills (discover does not walk it): {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &claude_skills),
+            "watch_dirs must not list escaped .claude/skills: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &home_skills),
+            "watch_dirs must not list escaped HOME/.agents/skills: {dirs:?}"
         );
         assert!(
             !watch_paths_contain(&dirs, outside.path()),

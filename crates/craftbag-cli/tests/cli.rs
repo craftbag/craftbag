@@ -374,6 +374,45 @@ fn list_watch_dirs_vendor_claude_lists_user_home() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn list_watch_dirs_omits_escaped_project_skills_root() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let outside = tempfile::tempdir().expect("out");
+    fs::create_dir_all(outside.path().join("stolen")).expect("mkdir");
+    fs::write(
+        outside.path().join("stolen").join("SKILL.md"),
+        "---\nname: stolen\ndescription: leaked\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let agents = cwd.path().join(".agents");
+    fs::create_dir_all(&agents).expect("mkdir .agents");
+    let agents_skills = agents.join("skills");
+    std::os::unix::fs::symlink(outside.path(), &agents_skills).expect("symlink");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout_has_path(&stdout, &agents_skills),
+        "must not watch escaped .agents/skills: {stdout}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, outside.path()),
+        "must not list the escaped target: {stdout}"
+    );
+}
+
 #[test]
 fn list_watch_dirs_conflicts_with_json() {
     let (_home, mut cmd) = bin();
