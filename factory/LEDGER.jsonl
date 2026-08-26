@@ -228,3 +228,4 @@
 {"ts": "2026-08-26T01:42:38Z", "job_id": "adversary-after-132-noop", "work_source": "adversary", "result": "noop", "head": "15668099af28498e64ce3cdfbf44098e94a7589d", "pr": null, "tests": "132 error_kind analogs green", "noop": true}
 {"ts": "2026-08-26T01:55:48Z", "job_id": "improve-validate-error-kind-133", "work_source": "improve", "result": "landed", "head": "930fbf6ae4f47870a709250c4f4b00849e7c84ff", "pr": 133, "tests": "validate error_kind", "noop": false}
 {"ts": "2026-08-26T02:02:35Z", "job_id": "adversary-after-133-noop", "work_source": "adversary", "result": "noop", "head": "930fbf6ae4f47870a709250c4f4b00849e7c84ff", "pr": null, "tests": "133 validate peel analogs green", "noop": true}
+{"ts": "2026-08-26T02:20:07Z", "job_id": "improve-mcp-skillmiss-error-134", "work_source": "improve", "result": "landed", "head": "a2680c0bc3d2df1d2e572e41b6ef47978ecd8c68", "pr": 134, "tests": "SkillMiss.error MCP load why", "noop": false}
