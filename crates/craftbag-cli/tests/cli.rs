@@ -2116,6 +2116,17 @@ fn list_help_names_vendor_path_examples() {
 }
 
 #[test]
+fn list_help_names_json_skills_skips() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--json"))
+        .stdout(predicates::str::contains("{ skills, skips }"));
+}
+
+#[test]
 fn why_help_names_json_error_kind() {
     let (_home, mut cmd) = bin();
     cmd.arg("why")

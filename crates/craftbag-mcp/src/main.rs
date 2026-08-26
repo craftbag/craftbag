@@ -252,7 +252,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "skills_list",
-            "description": "List discovered skills.",
+            "description": "List discovered skills. format is json (default `{ skills, skips }`), xml, catalog, or watch.",
             "inputSchema": {"type": "object", "properties": list_props}
         },
         {
@@ -2466,6 +2466,27 @@ mod tests {
                 "{name} must name SkillMiss.error / error_kind like CLI why --json: {desc}"
             );
         }
+    }
+
+    #[test]
+    fn tools_list_describes_format_and_json_keys() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(54)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let desc = list["description"].as_str().unwrap_or("");
+        assert!(
+            desc.contains("format") && desc.contains("{ skills, skips }"),
+            "skills_list must name format and default json keys like CLI list --json: {desc}"
+        );
     }
 
     #[test]

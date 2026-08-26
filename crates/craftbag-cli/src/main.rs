@@ -23,6 +23,7 @@ struct Cli {
 enum Cmd {
     /// Catalog discovered skills.
     List {
+        /// Print `{ skills, skips }` (same shape as MCP skills_list).
         #[arg(long)]
         json: bool,
         /// Official skills-ref `<available_skills>` XML for host prompts.
