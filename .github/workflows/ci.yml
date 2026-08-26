@@ -209,10 +209,10 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+      - uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
       - name: zizmor
         run: |
-          python3 -m pip install --user 'zizmor==1.16.1'
+          python3 -m pip install --user 'zizmor==1.29.0'
           "$HOME/.local/bin/zizmor" --min-severity=high .github/workflows
       - run: bash factory/scripts/write-ledger.sh --self-test
 
@@ -230,7 +230,7 @@ jobs:
           persist-credentials: false
       - name: Install gitleaks
         run: |
-          VER=8.24.3
+          VER=8.30.1
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
             | tar xz -C /usr/local/bin gitleaks
       - run: gitleaks detect --source . --exit-code 1

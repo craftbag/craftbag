@@ -213,3 +213,22 @@ fn rust_path_filter_covers_all_workflows() {
         "rust path-filter must include all workflow files so hygiene tests run"
     );
 }
+
+/// Hosted workflow linters must stay on the current patch/minor pins.
+/// actionlint 1.7.7 and gitleaks 8.24.3 miss later syntax and leak rules.
+#[test]
+fn ci_pins_current_workflow_linters() {
+    let ci = read_rel(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12"),
+        "ci.yml must pin actionlint v1.7.12"
+    );
+    assert!(
+        ci.contains("VER=8.30.1"),
+        "gitleaks install must pin 8.30.1"
+    );
+    assert!(
+        ci.contains("'zizmor==1.29.0'"),
+        "workflows job must pin zizmor 1.29.0"
+    );
+}
