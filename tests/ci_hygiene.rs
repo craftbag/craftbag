@@ -177,6 +177,10 @@ fn fuzz_smoke_runs_parse_skill_and_xml_catalog() {
         fuzz.contains("cargo fuzz run catalog_format"),
         "fuzz-smoke must run catalog_format so list --catalog / MCP catalog items stay one line: {fuzz}"
     );
+    assert!(
+        fuzz.contains("cargo fuzz run vendor_token"),
+        "fuzz-smoke must run vendor_token so --vendor / MCP vendor errors stay one line: {fuzz}"
+    );
 }
 
 #[test]
