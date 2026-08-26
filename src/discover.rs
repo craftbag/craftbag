@@ -56,7 +56,9 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// Existing directories (and lone extra-path `SKILL.md` files) a host
 /// should watch so hot reload matches [`discover`].
 ///
-/// Missing roots are omitted (`notify` cannot watch them). Empty
+/// Missing roots are omitted (`notify` cannot watch them). A FIFO,
+/// socket, device, or regular file at a directory root is omitted
+/// (`notify` can hang on a FIFO; discover does not walk it). Empty
 /// `user_skills_dir` is omitted. `project` / `community` are not
 /// listed (host-only). Nearest git root first via
 /// [`walk_cwd_to_git_root`]. Extra-path `dir/skills` is listed only
@@ -70,41 +72,35 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         .canonicalize()
         .unwrap_or_else(|_| lexical_normalize(cwd));
     let mut out = Vec::new();
-    // Only existing inodes. A notify watch on a missing `.agents/skills`
-    // fails; hosts that want "create later" watch the parent instead.
-    let mut push = |p: PathBuf| {
-        if !p.exists() {
-            return;
-        }
-        if !out.iter().any(|e| e == &p) {
-            out.push(p);
-        }
-    };
+    // Only existing directories. A notify watch on a missing
+    // `.agents/skills` fails; hosts that want "create later" watch
+    // the parent instead. A FIFO / socket / device / file is not a
+    // walk root (listing a FIFO for notify can hang).
 
     for dir in walk_cwd_to_git_root(&cwd) {
-        push(dir.join(".agents").join("skills"));
+        push_watch_dir(&mut out, dir.join(".agents").join("skills"));
         for name in ["bline", "claude", "cursor", "grok"] {
             if vendor_enabled(opts, name) {
-                push(dir.join(format!(".{name}")).join("skills"));
+                push_watch_dir(&mut out, dir.join(format!(".{name}")).join("skills"));
             }
         }
     }
 
     if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        push(user_dir.clone());
+        push_watch_dir(&mut out, user_dir.clone());
         // user_dir is always a skills root. leftover SKILL.md is a
         // root_file skip, not a named package. Watch user/skills when
         // discover would walk that collection.
         if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names) {
-            push(user_dir.join("skills"));
+            push_watch_dir(&mut out, user_dir.join("skills"));
         }
     }
 
     if let Some(home) = home_dir() {
-        push(home.join(".agents").join("skills"));
+        push_watch_dir(&mut out, home.join(".agents").join("skills"));
         for name in ["bline", "claude", "cursor", "grok"] {
             if vendor_enabled(opts, name) {
-                push(home.join(format!(".{name}")).join("skills"));
+                push_watch_dir(&mut out, home.join(format!(".{name}")).join("skills"));
             }
         }
     }
@@ -117,21 +113,37 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         {
             // Discover loads a regular file (or symlink to one). A FIFO /
             // socket / device is unreadable; listing it for notify can hang.
-            if expanded.is_file() {
-                push(expanded);
-            }
+            push_watch_file(&mut out, expanded);
             continue;
         }
         if !expanded.is_dir() {
             continue;
         }
-        push(expanded.clone());
+        push_watch_dir(&mut out, expanded.clone());
         if extra_should_watch_skills_subdir(&expanded, opts.ascii_names) {
-            push(expanded.join("skills"));
+            push_watch_dir(&mut out, expanded.join("skills"));
         }
     }
 
     out
+}
+
+fn push_watch_dir(out: &mut Vec<PathBuf>, p: PathBuf) {
+    if p.is_dir() {
+        push_watch_unique(out, p);
+    }
+}
+
+fn push_watch_file(out: &mut Vec<PathBuf>, p: PathBuf) {
+    if p.is_file() {
+        push_watch_unique(out, p);
+    }
+}
+
+fn push_watch_unique(out: &mut Vec<PathBuf>, p: PathBuf) {
+    if !out.iter().any(|e| e == &p) {
+        out.push(p);
+    }
 }
 
 /// Case-insensitive skill lookup by frontmatter `name` (NFKC).
@@ -4047,6 +4059,99 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &fifo),
             "watch_dirs must not list extra-path FIFO SKILL.md (discover does not load it): {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn watch_dirs_omits_non_directory_project_and_home_roots() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let agents = cwd.path().join(".agents");
+        fs::create_dir_all(&agents).expect("mkdir .agents");
+        let agents_skills = agents.join("skills");
+        fs::write(&agents_skills, "not-a-dir").expect("file .agents/skills");
+        let home = tempfile::tempdir().expect("home");
+        let home_agents = home.path().join(".agents");
+        fs::create_dir_all(&home_agents).expect("mkdir HOME/.agents");
+        let home_skills = home_agents.join("skills");
+        fs::write(&home_skills, "not-a-dir").expect("file HOME/.agents/skills");
+        let user = tempfile::tempdir().expect("user parent");
+        let user_file = user.path().join("user-skills");
+        fs::write(&user_file, "not-a-dir").expect("file user_dir");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    user_skills_dir: Some(user_file.clone()),
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            !watch_paths_contain(&dirs, &agents_skills),
+            "watch_dirs must not list a file at .agents/skills (notify cannot walk it): {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &home_skills),
+            "watch_dirs must not list a file at HOME/.agents/skills: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &user_file),
+            "watch_dirs must not list a file user_dir: {dirs:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn watch_dirs_omits_fifo_project_home_user_and_extra_roots() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let agents = cwd.path().join(".agents");
+        fs::create_dir_all(&agents).expect("mkdir .agents");
+        let agents_fifo = agents.join("skills");
+        mkfifo(&agents_fifo);
+        let claude = cwd.path().join(".claude");
+        fs::create_dir_all(&claude).expect("mkdir .claude");
+        let claude_fifo = claude.join("skills");
+        mkfifo(&claude_fifo);
+        let home = tempfile::tempdir().expect("home");
+        let home_agents = home.path().join(".agents");
+        fs::create_dir_all(&home_agents).expect("mkdir HOME/.agents");
+        let home_fifo = home_agents.join("skills");
+        mkfifo(&home_fifo);
+        let user_parent = tempfile::tempdir().expect("user parent");
+        let user_fifo = user_parent.path().join("user-skills");
+        mkfifo(&user_fifo);
+        let extra_fifo = user_parent.path().join("extra");
+        mkfifo(&extra_fifo);
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["claude".to_owned()],
+                    user_skills_dir: Some(user_fifo.clone()),
+                    paths: vec![extra_fifo.to_string_lossy().into_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            !watch_paths_contain(&dirs, &agents_fifo),
+            "watch_dirs must not list FIFO .agents/skills (notify can hang): {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &claude_fifo),
+            "watch_dirs must not list FIFO .claude/skills: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &home_fifo),
+            "watch_dirs must not list FIFO HOME/.agents/skills: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &user_fifo),
+            "watch_dirs must not list FIFO user_dir: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra_fifo),
+            "watch_dirs must not list FIFO extra-path: {dirs:?}"
         );
     }
 

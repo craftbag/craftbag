@@ -90,6 +90,9 @@ only`) and do not appear in `skills`.
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
 same list (one path per line) without loading SKILL.md. An extra-path
 that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
+Project, home, vendor, and `user_dir` roots are listed only when they
+are directories. A FIFO, socket, device, or regular file at
+`.agents/skills` (or the matching vendor / user path) is omitted.
 
 Hot reload should watch `watch_dirs(cwd, opts)`, not a copy of
 `walk_cwd_to_git_root`. That list is the same user dir, vendor
