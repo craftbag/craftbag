@@ -6,30 +6,34 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "68b9aca3444ad4678cbb46c006c84d2a552ddac2",
+  "ledger_sha": "3eb40d664fdfbf238acc329f4cd4e4f9beb0e0c3",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "0c1d157b2b96cde33503a418a4eaa2506a8dee73",
-  "expand_cursor": 4,
+  "expand_cursor": 5,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi27-spec-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-26T08:47:45Z",
-    "finished_at": "2026-08-26T08:47:45Z",
-    "result": "noop",
-    "head": "0c1d157b2b96cde33503a418a4eaa2506a8dee73",
-    "pr": null,
-    "files": [],
-    "tests": "HYPHEN_BOOL_KEYS, ListFormat, VENDOR_TOKENS match both doors",
+    "id": "expand-prove-cursor-why",
+    "work_source": "expand",
+    "started_at": "2026-08-26T09:03:13Z",
+    "finished_at": "2026-08-26T09:03:13Z",
+    "result": "landed",
+    "head": "acc5fe6b4178a3b6836669b2024e84f94a98b842",
+    "pr": 163,
+    "files": [
+      "crates/craftbag-cli/tests/cli.rs",
+      "src/discover.rs",
+      "factory/BLINE_CONSUMER.md"
+    ],
+    "tests": "2 passed why create-rule on cursor-project",
     "review": "0"
   },
-  "last_sha": "0c1d157b2b96cde33503a418a4eaa2506a8dee73",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "last_sha": "acc5fe6b4178a3b6836669b2024e84f94a98b842",
+  "next_work_source": "adversary",
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "green",
+    "main": "unknown",
     "ready_pr": "unknown",
-    "checked_at": "2026-08-26T08:47:45Z",
+    "checked_at": "2026-08-26T09:03:13Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -51,9 +55,10 @@
       "tests/corpus/lowercase-skill-md (cwd)",
       "tests/corpus/lowercase-skill-md/.agents/skills/lc-pack (--path)",
       "tests/corpus/incumbent/claude-user (HOME + --vendor claude)",
-      "tests/corpus/incumbent/vercel-npx/skills (--path collection)"
+      "tests/corpus/incumbent/vercel-npx/skills (--path collection)",
+      "tests/corpus/incumbent/cursor-project (cwd + --vendor cursor)"
     ],
-    "last_why_summary": "vercel-npx/skills extra-path collection loads deploy-hint. name-mismatch extra-path is name_directory_mismatch good-name."
+    "last_why_summary": "cursor-project --vendor cursor why names create-rule; vendor off is unknown_skill."
   },
   "budgets": {
     "max_cycles": null,
