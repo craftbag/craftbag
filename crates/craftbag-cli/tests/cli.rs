@@ -2320,6 +2320,76 @@ fn list_vendor_cursor_loads_project_layout() {
 }
 
 #[test]
+fn why_vendor_cursor_names_create_rule() {
+    let cwd = corpus().join("incumbent/cursor-project");
+    let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Cursor project fixture must exist: {}",
+        skill.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("create-rule")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(1),
+        "cursor vendor is opt-in: stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_err = String::from_utf8_lossy(&off_out.stderr);
+    assert!(
+        off_err.contains("unknown skill: create-rule"),
+        "why without --vendor cursor must not see create-rule: {off_err}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("create-rule")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("cursor")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "create-rule")
+        .unwrap_or_else(|| panic!("why must name create-rule: {stdout}"));
+    assert_eq!(
+        row["source"], "cursor",
+        "why JSON source must be the wire token: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "create-rule is a loaded vendor skill, not a skip: {stdout}"
+    );
+}
+
+#[test]
 fn list_vendor_claude_loads_user_home_layout() {
     let home = corpus().join("incumbent/claude-user");
     let cwd = tempfile::tempdir().expect("cwd");

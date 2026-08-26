@@ -3900,6 +3900,43 @@ mod tests {
                 name: "cursor".to_owned()
             }
         );
+        let why = crate::why(&on, Some("create-rule"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why={why:?}");
+        assert_eq!(why.loaded[0].name, "create-rule");
+        assert_eq!(
+            why.loaded[0].source,
+            SkillSource::Vendor {
+                name: "cursor".to_owned()
+            }
+        );
+        let want = cwd
+            .join(".cursor")
+            .join("skills")
+            .join("create-rule")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the fixture SKILL.md: got={got:?} want={want:?}"
+        );
+        assert!(
+            why.skips.is_empty(),
+            "create-rule is loaded, not a skip: {:?}",
+            why.skips
+        );
+        let off_why = crate::why(&off, Some("create-rule"), None, None);
+        assert!(off_why.loaded.is_empty(), "off why={off_why:?}");
+        assert!(off_why.skips.is_empty(), "off skips={:?}", off_why.skips);
+        assert!(
+            off_why.unknown_skill_message().is_some(),
+            "why without vendor cursor must treat create-rule as unknown"
+        );
     }
 
     #[test]
