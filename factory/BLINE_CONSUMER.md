@@ -95,7 +95,11 @@ build a slash palette, prompt catalog, apply pre-approved tools,
 or check license / environment without re-parsing SKILL.md. Omitted
 `argument_hint`, `when_to_use`, `allowed_tools`, `license`, and
 `compatibility` are JSON `null` and empty XML tags. List and why
-JSON both serialize `SkillSummary` so those keys cannot drift. CLI
+JSON both serialize `SkillSummary` so those keys cannot drift. A new
+`SkillSummary` field must land on list JSON, why JSON, and list XML
+(`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
+(name + description, plus `Use when:` when set). CLI `load` /
+MCP `skills_load` is the text envelope, not that JSON object. CLI
 `load` and MCP `skills_load` print `Argument hint: …`,
 `When to use: …`, `Allowed tools: …`, `License: …`, and
 `Compatibility: …` in the envelope when those frontmatter fields

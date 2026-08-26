@@ -78,3 +78,26 @@ fn bline_consumer_host_table_names_skill_miss() {
         "BLINE_CONSUMER host table must name SkillMiss.error, error_kind, and path"
     );
 }
+
+/// A host adding a SkillSummary field must see the sibling lock here,
+/// not only in why.rs. Catalog stays cheap. Load is the text envelope.
+#[test]
+fn bline_consumer_names_skill_summary_sibling_lock() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("skill_summary_json_keys_have_list_xml_siblings"),
+        "BLINE_CONSUMER must name the SkillSummary sibling-lock test"
+    );
+    assert!(
+        notes.contains("list JSON") && notes.contains("why JSON") && notes.contains("list XML"),
+        "BLINE_CONSUMER must name list/why JSON + list XML as SkillSummary siblings"
+    );
+    assert!(
+        notes.to_ascii_lowercase().contains("catalog stays cheap"),
+        "BLINE_CONSUMER must say catalog stays cheap for a new SkillSummary field"
+    );
+    assert!(
+        notes.contains("text envelope"),
+        "BLINE_CONSUMER must say load is the text envelope, not SkillSummary JSON"
+    );
+}
