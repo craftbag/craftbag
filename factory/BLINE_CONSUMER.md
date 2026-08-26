@@ -100,10 +100,12 @@ frontmatter fields are set (same text as list/why JSON). Omitted
 fields add no line. Description, When to use, License, Compatibility,
 Allowed tools, Argument hint, User arguments, and Activate hint fold
 Unicode whitespace to spaces so each stays one envelope
-line. The skill body after `---` keeps its newlines. Catalog markdown
-is one list item per skill: newlines in a literal `|` or folded `>`
-description or `when-to-use` become spaces (JSON and XML keep the raw
-text). When `when-to-use` is set, the catalog line appends
+line. Package root and `scripts/` / `references/` / `assets/`
+listings use the same fold so a newline in a path or file name
+cannot inject a header field. The skill body after `---` keeps
+its newlines. Catalog markdown is one list item per skill:
+newlines in a literal `|` or folded `>` description or
+`when-to-use` become spaces (JSON and XML keep the raw text). When `when-to-use` is set, the catalog line appends
 `Use when: …`. List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serde. Omitted flags on old why JSON keep the
