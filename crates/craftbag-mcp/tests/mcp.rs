@@ -200,6 +200,61 @@ fn stdio_skills_list_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
+    // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
+    // on the MCP why door. Default vendor stays off. Empty extra/skills
+    // must not hide extra/wanted.
+    let extra = corpus_leftover_empty_nested_skills();
+    let skill = extra.join("wanted/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed leftover empty extra/skills fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {text}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(skips.is_empty(), "empty extra/skills is not a skip: {text}");
+}
+
+#[test]
 fn stdio_skills_why_vendor_cursor_names_create_rule() {
     let cwd = corpus_cursor_project();
     let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
