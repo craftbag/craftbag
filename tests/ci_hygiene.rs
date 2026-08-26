@@ -188,6 +188,23 @@ fn stealth_job_is_needed_by_aggregator_ci() {
     );
 }
 
+/// Detect changes can skip the whole rust matrix. If it fails and the
+/// aggregator does not check it, lint/test stay skipped and CI is green.
+#[test]
+fn changes_job_is_checked_by_aggregator_ci() {
+    let ci = read_rel(".github/workflows/ci.yml");
+    let jobs = parse_jobs(&ci);
+    let ci_job = jobs
+        .iter()
+        .find(|(name, _)| name == "ci")
+        .unwrap_or_else(|| panic!("ci.yml must have aggregator job id `ci`"));
+    assert!(
+        ci_job.1.contains("needs.changes.result"),
+        "aggregator must fail when Detect changes fails; otherwise rust jobs skip and CI stays green: {}",
+        ci_job.1
+    );
+}
+
 #[test]
 fn rust_path_filter_covers_all_workflows() {
     let ci = read_rel(".github/workflows/ci.yml");
