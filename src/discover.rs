@@ -4289,6 +4289,53 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_grok_user_home_vendor_layout_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = corpus_dir().join("incumbent/grok-user");
+        let off = with_home_override(Some(home.clone()), || {
+            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        assert!(
+            off.skills.iter().all(|s| s.name != "home-grok"),
+            "grok vendor is opt-in at HOME too"
+        );
+        let on = with_home_override(Some(home.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["grok".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "home-grok")
+            .expect("home-grok");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "grok".to_owned()
+            }
+        );
+        let dirs = with_home_override(Some(home.clone()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["grok".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, &home.join(".grok").join("skills")),
+            "watch_dirs must list HOME/.grok/skills when vendor grok is on: {dirs:?}"
+        );
+    }
+
+    #[test]
     fn incumbent_vercel_skills_dir_as_extra_path() {
         let cwd = tempfile::tempdir().expect("cwd");
         let extra = corpus_dir().join("incumbent/vercel-npx");
