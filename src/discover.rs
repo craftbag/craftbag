@@ -2922,6 +2922,49 @@ mod tests {
     }
 
     #[test]
+    fn extra_path_nested_unknown_map_still_loads_top_level_name() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: wanted\ndescription: docs\nhooks:\n  name: pre-commit\n  user-invocable: false\n---\nPACKAGE_BODY\n",
+        )
+        .expect("write");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![pkg.display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "nested hooks.name must not become the skill name: {report:?}"
+        );
+        let skill = find_skill_by_name(&report.skills, "wanted").expect("load wanted");
+        assert!(
+            skill.user_invocable,
+            "nested user-invocable must not flip the omitted default"
+        );
+        assert!(skill.content.contains("PACKAGE_BODY"));
+        assert!(find_skill_by_name(&report.skills, "pre-commit").is_none());
+        let miss = unknown_or_skipped_skill("pre-commit", &report.skips);
+        assert_eq!(
+            miss.error_kind, "unknown_skill",
+            "nested name must not peel a skip: {miss:?}"
+        );
+        assert!(miss.path.is_none(), "unknown must omit path: {miss:?}");
+    }
+
+    #[test]
     fn extra_path_parentdir_is_same_named_package() {
         let cwd = tempfile::tempdir().expect("cwd");
         let extra = tempfile::tempdir().expect("extra");

@@ -212,6 +212,9 @@ pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
 
 fn scan_frontmatter_name(yaml: &str) -> Option<String> {
     for line in yaml.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
@@ -327,6 +330,10 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         }
 
         in_triggers = false;
+
+        if (line.starts_with(' ') || line.starts_with('\t')) && trimmed.split_once(':').is_some() {
+            continue;
+        }
 
         if let Some((key, value)) = trimmed.split_once(':') {
             let key = key.trim();
@@ -1016,6 +1023,73 @@ Should fail parse.
         assert_eq!(
             peek_frontmatter_name(missing_desc).as_deref(),
             Some("only-name")
+        );
+    }
+
+    #[test]
+    fn parse_skill_nested_unknown_map_does_not_overwrite_top_level() {
+        // Host-extension maps are ignored. Indented name / bool keys
+        // must not become top-level (CLI load / MCP skills_load).
+        let input = "\
+---
+name: wanted
+description: docs
+user-invocable: true
+disable-model-invocation: false
+metadata:
+  name: meta-name
+hooks:
+  name: pre-commit
+  user-invocable: false
+  disable-model-invocation: true
+  description: nested
+---
+BODY
+";
+        let skill = parse_skill(input).expect("host nested map must still load");
+        assert_eq!(skill.name, "wanted");
+        assert_eq!(skill.description, "docs");
+        assert!(
+            skill.user_invocable,
+            "nested user-invocable must not flip the top-level value"
+        );
+        assert!(
+            !skill.disable_model_invocation,
+            "nested disable-model-invocation must not flip the top-level value"
+        );
+        assert_eq!(
+            skill.metadata.get("name").map(String::as_str),
+            Some("meta-name")
+        );
+        assert!(skill.content.contains("BODY"));
+        assert_eq!(
+            peek_frontmatter_name(input).as_deref(),
+            Some("wanted"),
+            "peek must keep the top-level name"
+        );
+    }
+
+    #[test]
+    fn peek_frontmatter_name_ignores_indented_name() {
+        let input = "\
+---
+description: docs
+hooks:
+  name: pre-commit
+---
+BODY
+";
+        assert!(
+            matches!(
+                parse_skill(input),
+                Err(ParseError::MissingField(ref f)) if f == "name"
+            ),
+            "missing top-level name still fails"
+        );
+        assert_eq!(
+            peek_frontmatter_name(input),
+            None,
+            "nested name is not a skill identity for load/why peel"
         );
     }
 
