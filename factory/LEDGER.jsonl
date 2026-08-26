@@ -275,3 +275,4 @@
 {"ts": "2026-08-26T07:56:49Z", "job_id": "adversary-after-159-noop", "work_source": "adversary", "result": "noop", "head": "e5da9082cb9a2613f13144c8dcb21c61d46a84cc", "pr": null, "tests": "folded > and snake block scalars already green", "noop": true}
 {"ts": "2026-08-26T08:03:30Z", "job_id": "improve-mpi27-user-noop", "work_source": "improve", "result": "noop", "head": "e5da9082cb9a2613f13144c8dcb21c61d46a84cc", "pr": null, "tests": "killed at 6m zero git diff", "noop": true}
 {"ts": "2026-08-26T08:05:10Z", "job_id": "improve-mpi27-maint-noop", "work_source": "improve", "result": "noop", "head": "e5da9082cb9a2613f13144c8dcb21c61d46a84cc", "pr": null, "tests": "outdated current; deny ok", "noop": true}
+{"ts": "2026-08-26T08:15:39Z", "job_id": "expand-incumbent-cursor-project", "work_source": "expand", "result": "landed", "head": "de71314eb9420c8d6099b10cedea946f2cde27f8", "pr": 160, "tests": "3 passed cursor vendor incumbent layout", "noop": false}
