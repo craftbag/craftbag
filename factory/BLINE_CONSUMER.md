@@ -15,9 +15,11 @@ without scraping Display. Unknown is `unknown_skill`. A matching skip
 reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json`
 prints `{ "error_kind", "error" }` on stdout and keeps the same one-line
 text on stderr. A matching skip also peels `path` (the `SKILL.md`).
-Unknown omits `path`. MCP `skills_load` / `skills_why` merge that same
-`SkillMiss` object next to `isError` (`error_kind`, `error`, and `path`
-when known) and leave `content[0].text` unchanged (same text as `error`).
+Unknown omits `path`. A `name_collision` skip also peels `winner_path`
+(the loaded `SKILL.md`). Other misses omit it. MCP `skills_load` /
+`skills_why` merge that same `SkillMiss` object next to `isError`
+(`error_kind`, `error`, `path` when known, and `winner_path` on
+collision) and leave `content[0].text` unchanged (same text as `error`).
 Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
 `SkillMiss::is_not_found`) from a path-dep. Do not parse
 `unknown skill:` / `skipped skill:`.
@@ -33,7 +35,7 @@ names go through `sanitize_error_token` so stderr stays one line.
 | CLI `why --json` | stdout `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
 | CLI `load` | stderr `error` only (no JSON peel) |
-| MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `content[0].text` is `error` |
+| MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
 
 ## Path-dep (separate worktree)
 

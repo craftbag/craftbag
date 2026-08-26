@@ -1611,8 +1611,40 @@ mod tests {
                     resp["result"].get("path").is_none(),
                     "MCP {tool} unknown_skill omits path like CLI why --json: {resp}"
                 );
+                assert!(
+                    resp["result"].get("winner_path").is_none(),
+                    "MCP {tool} unknown_skill omits winner_path: {resp}"
+                );
             }
         });
+    }
+
+    #[test]
+    fn merge_skill_miss_peels_collision_winner_path() {
+        use craftbag::{SkillSkip, SkipKind, unknown_or_skipped_skill};
+        use std::path::PathBuf;
+
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/b/foo/SKILL.md"),
+            name: Some("foo".to_owned()),
+            kind: SkipKind::NameCollision,
+            detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
+            winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+        };
+        let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
+        let mut result = json!({"isError": true});
+        super::merge_skill_miss(&mut result, &miss);
+        assert_eq!(result["error_kind"], "name_collision", "{result}");
+        assert_eq!(
+            result["path"].as_str().map(std::path::Path::new),
+            Some(skip.path.as_path()),
+            "{result}"
+        );
+        assert_eq!(
+            result["winner_path"].as_str().map(std::path::Path::new),
+            Some(std::path::Path::new("/tmp/a/foo/SKILL.md")),
+            "MCP must peel SkillMiss.winner_path, not scrape lost to: {result}"
+        );
     }
 
     #[test]

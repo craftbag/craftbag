@@ -232,6 +232,10 @@ pub struct SkillMiss {
     /// Skip or validate `SKILL.md` when known. Omitted on `unknown_skill`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<PathBuf>,
+    /// Winning `SKILL.md` when `error_kind` is `name_collision`.
+    /// Omitted on every other miss so hosts do not scrape `lost to`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winner_path: Option<PathBuf>,
 }
 
 impl SkillMiss {
@@ -271,11 +275,13 @@ pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
                 crate::sanitize_error_token(&skip.detail)
             ),
             path: Some(skip.path.clone()),
+            winner_path: skip.winner_path.clone(),
         },
         None => SkillMiss {
             error_kind: UNKNOWN_SKILL_KIND,
             error: format!("unknown skill: {}", crate::sanitize_error_token(name)),
             path: None,
+            winner_path: None,
         },
     }
 }
@@ -330,6 +336,7 @@ impl ValidationReport {
             error_kind: skip.kind.as_str(),
             error: crate::sanitize_error_token(raw),
             path: Some(skip.path.clone()),
+            winner_path: skip.winner_path.clone(),
         })
     }
 }
@@ -1650,6 +1657,68 @@ mod tests {
         assert!(
             v.get("path").is_none(),
             "omit path on unknown_skill: {json}"
+        );
+        assert!(
+            unknown.winner_path.is_none(),
+            "unknown_skill has no collision winner"
+        );
+        assert!(
+            v.get("winner_path").is_none(),
+            "omit winner_path on unknown_skill: {json}"
+        );
+    }
+
+    #[test]
+    fn load_miss_exposes_winner_path_on_name_collision() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/b/foo/SKILL.md"),
+            name: Some("foo".to_owned()),
+            kind: SkipKind::NameCollision,
+            detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
+            winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+        };
+        let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
+        assert_eq!(miss.error_kind, "name_collision");
+        assert_eq!(
+            miss.path.as_deref(),
+            Some(skip.path.as_path()),
+            "collision peel path is the loser SKILL.md"
+        );
+        assert_eq!(
+            miss.winner_path.as_deref(),
+            Some(std::path::Path::new("/tmp/a/foo/SKILL.md")),
+            "host must locate the winner without scraping lost to: {miss:?}"
+        );
+        let json = serde_json::to_string(&miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(v["error_kind"], "name_collision", "json={json}");
+        assert_eq!(
+            v["winner_path"].as_str().map(std::path::Path::new),
+            Some(std::path::Path::new("/tmp/a/foo/SKILL.md")),
+            "json={json}"
+        );
+        assert!(
+            v.get("winnerPath").is_none(),
+            "SkillMiss winner_path must stay snake_case like error_kind: {json}"
+        );
+
+        let parse = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: Some("demo".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "missing required field: name".to_owned(),
+            winner_path: None,
+        };
+        let parse_miss = unknown_or_skipped_skill("demo", &[parse]);
+        assert!(
+            parse_miss.winner_path.is_none(),
+            "non-collision skip must omit winner_path"
+        );
+        let json = serde_json::to_string(&parse_miss).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert!(
+            v.get("winner_path").is_none(),
+            "omit winner_path when there is no winner: {json}"
         );
     }
 
@@ -4523,6 +4592,10 @@ mod tests {
             miss.path.as_deref(),
             Some(unread.path.as_path()),
             "unreadable peel must keep the asked path: {miss:?}"
+        );
+        assert!(
+            miss.winner_path.is_none(),
+            "unreadable validate has no collision winner: {miss:?}"
         );
     }
 
