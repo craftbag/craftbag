@@ -103,6 +103,8 @@ fn frontmatter_yaml(content: &str) -> Option<&str> {
 /// from the discovery root.
 pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
     let (yaml_block, body) = split_frontmatter(content).ok_or(ParseError::MissingFrontmatter)?;
+    #[cfg(test)]
+    PARSE_SKILL_CONTENTS.with(|c| c.borrow_mut().push(content.to_owned()));
 
     let mut skill = parse_frontmatter(yaml_block)?;
     skill.content = body.to_owned();
@@ -208,6 +210,18 @@ pub(crate) fn peek_frontmatter_name(content: &str) -> Option<String> {
         return Some(skill.name);
     }
     scan_frontmatter_name(yaml_block)
+}
+
+#[cfg(test)]
+thread_local! {
+    static PARSE_SKILL_CONTENTS: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Drain [`parse_skill`] bodies recorded in this test thread.
+#[cfg(test)]
+pub(crate) fn take_parse_skill_contents() -> Vec<String> {
+    PARSE_SKILL_CONTENTS.with(|c| std::mem::take(&mut *c.borrow_mut()))
 }
 
 fn scan_frontmatter_name(yaml: &str) -> Option<String> {
@@ -1497,7 +1511,7 @@ BODY
     #[test]
     fn split_frontmatter_is_the_only_delimiter_scan() {
         let prod = include_str!("parse.rs")
-            .split("#[cfg(test)]")
+            .split("\nmod tests {")
             .next()
             .expect("prod");
         assert_eq!(
@@ -1678,7 +1692,7 @@ BODY
         }
 
         let prod = include_str!("parse.rs")
-            .split("#[cfg(test)]")
+            .split("\nmod tests {")
             .next()
             .expect("prod");
         assert!(
