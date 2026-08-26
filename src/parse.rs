@@ -388,10 +388,11 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     in_metadata = true;
                 }
                 "user-invocable" | "user_invocable" => {
-                    user_invocable = require_bool_yaml(key, value)?;
+                    user_invocable = require_bool_yaml("user_invocable", value)?;
                 }
                 "disable-model-invocation" | "disable_model_invocation" => {
-                    disable_model_invocation = require_bool_yaml(key, value)?;
+                    disable_model_invocation =
+                        require_bool_yaml("disable_model_invocation", value)?;
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
                     argument_hint = Some(value.to_owned());
