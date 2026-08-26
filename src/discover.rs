@@ -44,9 +44,10 @@ pub struct DiscoveryOptions {
     /// Default is off: Unicode / NFKC names still load.
     pub ascii_names: bool,
     /// Walk cwd-to-git `.agents` / vendor trees and `$HOME/.agents` /
-    /// vendor trees. Default is true. When false, only extra `paths`
-    /// and optional `user_skills_dir` load (collection-only). Empty
-    /// `paths` plus no user dir returns an empty report, not an error.
+    /// vendor trees. Default is true. When false,
+    /// extra `paths` and optional `user_skills_dir` still load
+    /// (collection-only). Empty `paths` plus no user dir returns an
+    /// empty report, not an error.
     pub implicit_roots: bool,
 }
 
@@ -7527,6 +7528,29 @@ mod tests {
         assert!(
             DiscoveryOptions::default().implicit_roots,
             "implicit_roots must default true so existing discover stays additive"
+        );
+    }
+
+    #[test]
+    fn implicit_roots_field_docs_say_extra_paths_still_load() {
+        let src = include_str!("discover.rs");
+        let field_at = src
+            .find("    pub implicit_roots: bool,")
+            .expect("implicit_roots field");
+        let docs: String = src[..field_at]
+            .lines()
+            .rev()
+            .take_while(|line| line.trim_start().starts_with("///"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        // Substring `paths` / `user_skills_dir` is also in
+        // "does not load extra `paths`".
+        assert!(
+            docs.contains("extra `paths` and optional `user_skills_dir` still load"),
+            "implicit_roots field rustdoc must say extra paths still load when false (not an inverted sentence): {docs}"
         );
     }
 
