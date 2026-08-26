@@ -2709,6 +2709,35 @@ fn list_vendor_claude_loads_user_home_layout() {
 }
 
 #[test]
+fn list_vendor_cursor_loads_user_home_layout() {
+    let home = corpus().join("incumbent/cursor-user");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let out = cmd
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("cursor")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "home-rule"),
+        "cursor",
+        "vendor JSON source must be the wire token, not a vendor object: {stdout}"
+    );
+}
+
+#[test]
 fn list_help_names_vendor_path_examples() {
     let (_home, mut cmd) = bin();
     let stdout = String::from_utf8_lossy(
