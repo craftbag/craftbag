@@ -2623,9 +2623,12 @@ fn list_help_names_no_implicit_roots() {
             help.contains("Default is on"),
             "{cmd_name} --help must name implicit_roots default on: {help}"
         );
+        // `--path` / `--user-dir` also appear as their own flags, so
+        // a lone contains would pass if implicit-roots help said they
+        // do not load.
         assert!(
-            help.contains("--path") || help.contains("--user-dir"),
-            "{cmd_name} --help must say extra --path / --user-dir still load: {help}"
+            help.contains("Extra --path and --user-dir still load"),
+            "{cmd_name} --help must say extra --path / --user-dir still load (not an inverted sentence): {help}"
         );
     }
 }
