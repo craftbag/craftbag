@@ -49,3 +49,14 @@ fn corpus_incumbent_cursor_project_parses() {
     let skill = parse_skill(&read(rel)).expect("parse");
     assert_eq!(skill.name, "create-rule");
 }
+
+#[test]
+fn corpus_incumbent_cursor_user_parses() {
+    let rel = "incumbent/cursor-user/.cursor/skills/home-rule/SKILL.md";
+    assert!(
+        corpus().join(rel).is_file(),
+        "committed Cursor user-home fixture must exist: {rel}"
+    );
+    let skill = parse_skill(&read(rel)).expect("parse");
+    assert_eq!(skill.name, "home-rule");
+}
