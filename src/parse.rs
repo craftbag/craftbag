@@ -10,6 +10,14 @@ use crate::skill::{
     SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS, Skill,
 };
 
+/// Hyphen YAML spelling and the snake name hosts peel from parse errors.
+/// Parse arms look up this table; never pass the raw YAML `key` into
+/// [`require_bool_yaml`].
+const HYPHEN_BOOL_KEYS: &[(&str, &str)] = &[
+    ("user-invocable", "user_invocable"),
+    ("disable-model-invocation", "disable_model_invocation"),
+];
+
 /// Official agentskills fields plus host extensions this crate parses.
 pub(crate) fn is_known_frontmatter_key(key: &str) -> bool {
     matches!(
@@ -22,15 +30,20 @@ pub(crate) fn is_known_frontmatter_key(key: &str) -> bool {
             | "allowed-tools"
             | "allowed_tools"
             | "triggers"
-            | "user-invocable"
-            | "user_invocable"
-            | "disable-model-invocation"
-            | "disable_model_invocation"
             | "argument-hint"
             | "argument_hint"
             | "when-to-use"
             | "when_to_use"
-    )
+    ) || canonical_bool_yaml_key(key).is_some()
+}
+
+fn canonical_bool_yaml_key(key: &str) -> Option<&'static str> {
+    for &(hyphen, snake) in HYPHEN_BOOL_KEYS {
+        if key == hyphen || key == snake {
+            return Some(snake);
+        }
+    }
+    None
 }
 
 /// Top-level frontmatter keys that parse ignores (not known or host extensions).
@@ -331,6 +344,15 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
             if let Some(style) = yaml_block_scalar_style(raw_value) {
                 let block = take_yaml_block_scalar(&mut lines, style);
+                if let Some(canon) = canonical_bool_yaml_key(key) {
+                    assign_parsed_bool(
+                        canon,
+                        require_bool_yaml(canon, &block)?,
+                        &mut user_invocable,
+                        &mut disable_model_invocation,
+                    );
+                    continue;
+                }
                 if block.is_empty() {
                     return Err(ParseError::InvalidYaml(format!(
                         "{key} block scalar is empty"
@@ -387,20 +409,22 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 "metadata" if value.is_empty() => {
                     in_metadata = true;
                 }
-                "user-invocable" | "user_invocable" => {
-                    user_invocable = require_bool_yaml("user_invocable", value)?;
-                }
-                "disable-model-invocation" | "disable_model_invocation" => {
-                    disable_model_invocation =
-                        require_bool_yaml("disable_model_invocation", value)?;
-                }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
                     argument_hint = Some(value.to_owned());
                 }
                 "when-to-use" | "when_to_use" if !value.is_empty() => {
                     when_to_use = Some(value.to_owned());
                 }
-                _ => {}
+                _ => {
+                    if let Some(canon) = canonical_bool_yaml_key(key) {
+                        assign_parsed_bool(
+                            canon,
+                            require_bool_yaml(canon, value)?,
+                            &mut user_invocable,
+                            &mut disable_model_invocation,
+                        );
+                    }
+                }
             }
         } else {
             return Err(ParseError::InvalidYaml(format!(
@@ -504,6 +528,19 @@ fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
     }
 }
 
+fn assign_parsed_bool(
+    canon: &str,
+    parsed: bool,
+    user_invocable: &mut bool,
+    disable_model_invocation: &mut bool,
+) {
+    match canon {
+        "user_invocable" => *user_invocable = parsed,
+        "disable_model_invocation" => *disable_model_invocation = parsed,
+        _ => {}
+    }
+}
+
 fn parse_bool_yaml(value: &str) -> Option<bool> {
     match value.to_ascii_lowercase().as_str() {
         "true" | "yes" | "on" | "1" => Some(true),
@@ -514,13 +551,14 @@ fn parse_bool_yaml(value: &str) -> Option<bool> {
 
 /// Present bool key with empty / null / garbage is an error, not the
 /// omitted default. Same rule as MCP present-null.
-fn require_bool_yaml(key: &str, value: &str) -> Result<bool, ParseError> {
+/// `canon` is the table snake name, never the raw YAML key.
+fn require_bool_yaml(canon: &str, value: &str) -> Result<bool, ParseError> {
     parse_bool_yaml(value).ok_or_else(|| {
         let shown = crate::sanitize_error_token(value);
         if shown.trim().is_empty() {
-            ParseError::InvalidYaml(format!("{key} value is empty"))
+            ParseError::InvalidYaml(format!("{canon} value is empty"))
         } else {
-            ParseError::InvalidYaml(format!("{key} must be a boolean, got: {shown}"))
+            ParseError::InvalidYaml(format!("{canon} must be a boolean, got: {shown}"))
         }
     })
 }
@@ -557,8 +595,9 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_known_frontmatter_key, parse_frontmatter, parse_skill, peek_frontmatter_name,
-        skill_name_matches_directory, unknown_frontmatter_keys, validate_skill_name,
+        HYPHEN_BOOL_KEYS, is_known_frontmatter_key, parse_frontmatter, parse_skill,
+        peek_frontmatter_name, skill_name_matches_directory, unknown_frontmatter_keys,
+        validate_skill_name,
     };
     use crate::error::ParseError;
     use crate::skill::SKILL_DESCRIPTION_MAX_CHARS;
@@ -1075,5 +1114,87 @@ Should fail parse.
         )
         .expect("true must still load");
         assert!(ok.disable_model_invocation);
+    }
+
+    #[test]
+    fn hyphen_bool_errors_use_table_snake_not_raw_yaml_key() {
+        // Production table is the lock: a new hyphen/snake bool pair
+        // must land here and in both parse arms. A match arm that
+        // passes the raw YAML `key` into require_bool_yaml fails the
+        // hyphen-not-in-message check.
+        for &(hyphen, snake) in HYPHEN_BOOL_KEYS {
+            assert_ne!(hyphen, snake, "alias pair must differ");
+            assert!(
+                hyphen.contains('-') && snake.contains('_'),
+                "table is hyphen -> snake: {hyphen} / {snake}"
+            );
+
+            let scalar = format!("---\nname: demo\ndescription: d\n{hyphen}: maybe\n---\nbody\n");
+            let err = parse_skill(&scalar).expect_err(&scalar).to_string();
+            assert!(
+                err.contains(snake) && err.contains("boolean"),
+                "scalar garbage must peel {snake}: {err}"
+            );
+            assert!(
+                !err.contains(hyphen),
+                "scalar must not leak raw YAML key {hyphen}: {err}"
+            );
+
+            let empty_block = format!("---\nname: demo\ndescription: d\n{hyphen}: |\n---\nbody\n");
+            let err = parse_skill(&empty_block)
+                .expect_err(&empty_block)
+                .to_string();
+            assert!(
+                err.contains(snake),
+                "empty block scalar must peel {snake}: {err}"
+            );
+            assert!(
+                !err.contains(hyphen),
+                "empty block must not leak raw YAML key {hyphen}: {err}"
+            );
+
+            let garbage_block =
+                format!("---\nname: demo\ndescription: d\n{hyphen}: |\n  maybe\n---\nbody\n");
+            let err = parse_skill(&garbage_block)
+                .expect_err(&garbage_block)
+                .to_string();
+            assert!(
+                err.contains(snake) && err.contains("boolean"),
+                "garbage block scalar must peel {snake}, not stay omitted default: {err}"
+            );
+            assert!(
+                !err.contains(hyphen),
+                "garbage block must not leak raw YAML key {hyphen}: {err}"
+            );
+
+            // Opposite of the omitted default so assignment cannot hide.
+            let (raw, expect) = match snake {
+                "user_invocable" => ("false", false),
+                "disable_model_invocation" => ("true", true),
+                other => panic!("HYPHEN_BOOL_KEYS has unassigned field {other}"),
+            };
+            let ok = parse_skill(&format!(
+                "---\nname: demo\ndescription: d\n{hyphen}: |\n  {raw}\n---\nbody\n"
+            ))
+            .unwrap_or_else(|e| panic!("{hyphen} block {raw} must parse: {e}"));
+            let got = match snake {
+                "user_invocable" => ok.user_invocable,
+                "disable_model_invocation" => ok.disable_model_invocation,
+                other => panic!("HYPHEN_BOOL_KEYS has unassigned field {other}"),
+            };
+            assert_eq!(
+                got, expect,
+                "{hyphen} block {raw} must not stay the omitted default"
+            );
+        }
+
+        let prod = include_str!("parse.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("prod");
+        assert!(
+            !prod.contains("require_bool_yaml(key"),
+            "require_bool_yaml must receive the table snake name, not the raw YAML key"
+        );
     }
 }
