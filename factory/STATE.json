@@ -6,30 +6,35 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a8c3bb2e715d93ae437fe0b83491545119fb7094",
+  "ledger_sha": "f2cc730cbcb9734167d16a890f664b72ef6eb97a",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75",
-  "expand_cursor": 4,
+  "expand_cursor": 5,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi29-arch-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-26T18:13:30Z",
-    "finished_at": "2026-08-26T18:21:00Z",
-    "result": "noop",
-    "head": "3ef06b193aab393bd06d5a66a146b2cd66e14d75",
-    "pr": null,
-    "files": [],
-    "tests": "6min zero git diff; killed CONSTRAINT-4",
+    "id": "expand-4-prove-grok-user",
+    "work_source": "expand",
+    "started_at": "2026-08-26T18:21:00Z",
+    "finished_at": "2026-08-26T18:24:40Z",
+    "result": "landed",
+    "head": "22394288cc62912532ac34e6bae09507701bb0c7",
+    "pr": 204,
+    "files": [
+      "factory/BLINE_CONSUMER.md",
+      "src/discover.rs",
+      "tests/corpus.rs",
+      "tests/corpus/incumbent/grok-user/.grok/skills/home-grok/SKILL.md"
+    ],
+    "tests": "incumbent_grok_user_home_vendor_layout_loads",
     "review": "0"
   },
-  "last_sha": "3ef06b193aab393bd06d5a66a146b2cd66e14d75",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "last_sha": "22394288cc62912532ac34e6bae09507701bb0c7",
+  "next_work_source": "adversary",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-26T18:21:00Z",
+    "checked_at": "2026-08-26T18:24:40Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -53,9 +58,10 @@
       "tests/corpus/incumbent/claude-user (HOME + --vendor claude)",
       "tests/corpus/incumbent/vercel-npx/skills (--path collection)",
       "tests/corpus/incumbent/cursor-project (cwd + --vendor cursor)",
-      "tests/corpus/incumbent/cursor-user (HOME + --vendor cursor)"
+      "tests/corpus/incumbent/cursor-user (HOME + --vendor cursor)",
+      "tests/corpus/incumbent/grok-user (HOME + --vendor grok)"
     ],
-    "last_why_summary": "cursor-user HOME + --vendor cursor loads home-rule; vendor off omits it."
+    "last_why_summary": "grok-user HOME + --vendor grok loads home-grok; vendor off omits it."
   },
   "budgets": {
     "max_cycles": null,
