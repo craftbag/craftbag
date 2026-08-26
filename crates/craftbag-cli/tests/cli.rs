@@ -2125,21 +2125,50 @@ fn list_vendor_claude_loads_user_home_layout() {
 #[test]
 fn list_help_names_vendor_path_examples() {
     let (_home, mut cmd) = bin();
-    cmd.arg("list")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("--vendor"))
-        .stdout(predicates::str::contains("claude"))
-        .stdout(predicates::str::contains("--path"))
-        .stdout(predicates::str::contains("--format"))
-        .stdout(predicates::str::contains("json"))
-        .stdout(predicates::str::contains("xml"))
-        .stdout(predicates::str::contains("catalog"))
-        .stdout(predicates::str::contains("watch"))
-        .stdout(predicates::str::contains("watch-dirs"))
-        .stdout(predicates::str::contains("watch_dirs"))
-        .stdout(predicates::str::contains("Example:"));
+    let stdout = String::from_utf8_lossy(
+        &cmd.arg("list")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    assert!(stdout.contains("--vendor"), "{stdout}");
+    for token in craftbag::SkillSource::VENDOR_TOKENS {
+        assert!(
+            stdout.contains(token),
+            "list --help must name vendor token {token}: {stdout}"
+        );
+    }
+    assert!(stdout.contains("--path"), "{stdout}");
+    assert!(stdout.contains("--format"), "{stdout}");
+    assert!(stdout.contains("json"), "{stdout}");
+    assert!(stdout.contains("xml"), "{stdout}");
+    assert!(stdout.contains("catalog"), "{stdout}");
+    assert!(stdout.contains("watch"), "{stdout}");
+    assert!(stdout.contains("watch-dirs"), "{stdout}");
+    assert!(stdout.contains("watch_dirs"), "{stdout}");
+    assert!(stdout.contains("Example:"), "{stdout}");
+    for cmd_name in ["load", "why"] {
+        let (_home, mut cmd) = bin();
+        let help = String::from_utf8_lossy(
+            &cmd.arg(cmd_name)
+                .arg("--help")
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        )
+        .into_owned();
+        assert!(help.contains("--vendor"), "{cmd_name}: {help}");
+        for token in craftbag::SkillSource::VENDOR_TOKENS {
+            assert!(
+                help.contains(token),
+                "{cmd_name} --help must name vendor token {token}: {help}"
+            );
+        }
+    }
 }
 
 #[test]
