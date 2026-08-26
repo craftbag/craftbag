@@ -213,3 +213,4 @@
 {"ts":"2026-08-25T23:57:16Z","job_id":"improve-load-envelope-argument-hint-125","work_source":"improve","result":"landed","head":"620313f92bdffc5054ba7dfdbedfb5370f81c2b8","pr":125,"tests":"load envelope argument_hint","noop":false}
 {"ts":"2026-08-25T23:57:30Z","job_id":"adversary-after-125-noop","work_source":"adversary","result":"noop","head":"620313f92bdffc5054ba7dfdbedfb5370f81c2b8","pr":null,"tests":"125 envelope green","noop":true}
 {"ts":"2026-08-26T00:05:47Z","job_id":"improve-load-envelope-one-line-126","work_source":"improve","result":"landed","head":"a8c1ac8a3515dee9c96ec806fc69f20b7b158b0e","pr":126,"tests":"load envelope one line","noop":false}
+{"ts":"2026-08-26T00:06:00Z","job_id":"adversary-after-126-noop","work_source":"adversary","result":"noop","head":"a8c1ac8a3515dee9c96ec806fc69f20b7b158b0e","pr":null,"tests":"126 one-line green","noop":true}
