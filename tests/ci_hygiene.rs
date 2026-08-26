@@ -139,6 +139,10 @@ fn fuzz_smoke_runs_parse_skill_and_xml_catalog() {
         fuzz.contains("cargo fuzz run list_format"),
         "fuzz-smoke must run list_format so padded and empty tokens stay parsed: {fuzz}"
     );
+    assert!(
+        fuzz.contains("cargo fuzz run catalog_format"),
+        "fuzz-smoke must run catalog_format so list --catalog / MCP catalog items stay one line: {fuzz}"
+    );
 }
 
 #[test]
