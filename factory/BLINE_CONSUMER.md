@@ -124,7 +124,10 @@ newlines in a literal `|` or folded `>` description or
 `Use when: …`. List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serialize. Skill deserialize also accepts those
-snake_case keys so a list/why row is not silently defaulted. Omitted flags on old why JSON keep the
+snake_case keys so a list/why row is not silently defaulted, and
+list/why `source` tokens (`extra`, `claude`) so the row is not
+rejected. Skill serialize stays `extraPath` / `{vendor:{name}}`.
+Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`
 false). `filter_skills` / `why.activation` still use only
 `disable_model_invocation` for auto-inject.

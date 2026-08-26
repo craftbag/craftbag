@@ -39,6 +39,11 @@ pub struct Skill {
     /// The Markdown body content injected into the prompt.
     pub content: String,
     /// Where the skill was discovered.
+    ///
+    /// Serialize stays the lib enum (`extraPath`, `{vendor:{name}}`).
+    /// Deserialize also accepts list/why wire tokens (`extra`, `claude`)
+    /// so a host row is not rejected.
+    #[serde(deserialize_with = "SkillSource::deserialize_host")]
     pub source: SkillSource,
     /// Path to the SKILL.md file (set during discovery, None for in-memory skills).
     #[serde(skip)]
@@ -236,6 +241,76 @@ mod tests {
         assert!(
             !out.contains("\"user_invocable\""),
             "Skill serialize must not switch to snake_case: {out}"
+        );
+    }
+
+    #[test]
+    fn serde_accepts_list_why_source_tokens() {
+        // List / why JSON uses host wire tokens (`extra`, `claude`).
+        // Skill enum serde is still `extraPath` / `{vendor:{name}}`.
+        // A host that feeds a list/why row back into Skill must not
+        // reject the wire token (PR 150 leftover on `source`).
+        let extra = r#"{
+            "name": "x",
+            "description": "y",
+            "content": "z",
+            "source": "extra"
+        }"#;
+        let skill: Skill = serde_json::from_str(extra).expect("list/why extra source");
+        assert_eq!(skill.source, SkillSource::ExtraPath);
+        let snake = r#"{
+            "name": "x",
+            "description": "y",
+            "content": "z",
+            "source": "extra_path"
+        }"#;
+        let skill: Skill = serde_json::from_str(snake).expect("list/why extra_path source");
+        assert_eq!(skill.source, SkillSource::ExtraPath);
+        let vendor = r#"{
+            "name": "x",
+            "description": "y",
+            "content": "z",
+            "source": "claude"
+        }"#;
+        let skill: Skill = serde_json::from_str(vendor).expect("list/why vendor source");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "claude".to_owned()
+            }
+        );
+        let old_extra: Skill = serde_json::from_str(
+            r#"{"name":"x","description":"y","content":"z","source":"extraPath"}"#,
+        )
+        .expect("old Skill extraPath");
+        assert_eq!(old_extra.source, SkillSource::ExtraPath);
+        let old_vendor: Skill = serde_json::from_str(
+            r#"{"name":"x","description":"y","content":"z","source":{"vendor":{"name":"claude"}}}"#,
+        )
+        .expect("old Skill vendor object");
+        assert_eq!(
+            old_vendor.source,
+            SkillSource::Vendor {
+                name: "claude".to_owned()
+            }
+        );
+        let out = serde_json::to_string(&old_extra).expect("ser extra");
+        assert!(
+            out.contains("\"extraPath\""),
+            "Skill serialize stays extraPath, not the list/why extra token: {out}"
+        );
+        assert!(
+            !out.contains("\"extra\""),
+            "Skill serialize must not switch ExtraPath to extra: {out}"
+        );
+        let out = serde_json::to_string(&old_vendor).expect("ser vendor");
+        assert!(
+            out.contains("\"vendor\"") && out.contains("\"claude\""),
+            "Skill serialize stays externally tagged vendor: {out}"
+        );
+        assert!(
+            !out.contains("\"source\":\"claude\""),
+            "Skill serialize must not switch vendor to the list/why string: {out}"
         );
     }
 }
