@@ -325,3 +325,4 @@
 {"ts": "2026-08-26T13:28:40Z", "job_id": "adversary-after-186-load-help-sibling-green", "work_source": "adversary", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": null, "tests": "load --help and MCP skills_load already match", "noop": true}
 {"ts": "2026-08-26T13:35:20Z", "job_id": "improve-mpi28-perf-noop", "work_source": "improve", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": null, "tests": "zero git diff; parse-once already landed", "noop": true}
 {"ts": "2026-08-26T13:42:20Z", "job_id": "improve-mpi28-compat-noop", "work_source": "improve", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": null, "tests": "zero git diff", "noop": true}
+{"ts": "2026-08-26T13:52:00Z", "job_id": "expand-corpus-0-noop", "work_source": "expand", "result": "noop", "head": "3f2d41a1751effb474f5c235bc1744ffeed5465f", "pr": 187, "tests": "closed 187 one-level skills roots", "noop": true}
