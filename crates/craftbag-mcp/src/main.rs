@@ -476,6 +476,10 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/claude-user")
     }
 
+    fn corpus_cursor_user() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/cursor-user")
+    }
+
     fn call(id: i64, name: &str, arguments: serde_json::Value) -> serde_json::Value {
         handle(RpcRequest {
             jsonrpc: Some("2.0".into()),
@@ -706,6 +710,48 @@ mod tests {
         assert!(
             on.contains("home-note"),
             "MCP list must find HOME/.claude/skills when vendor claude is on: {on}"
+        );
+    }
+
+    #[test]
+    fn list_watch_vendor_cursor_lists_user_home() {
+        let home = corpus_cursor_user();
+        let want = home.join(".cursor").join("skills");
+        let out = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["cursor".to_owned()],
+                format: Some("watch".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            out.lines()
+                .any(|l| std::path::Path::new(l) == want.as_path()),
+            "must watch HOME/.cursor/skills when vendor cursor is on: {out}"
+        );
+    }
+
+    #[test]
+    fn list_json_vendor_cursor_loads_user_home_layout() {
+        let home = corpus_cursor_user();
+        let off = craftbag::with_home_override(Some(home.clone()), || {
+            list_json(DiscoverArgs::default()).expect("list")
+        });
+        assert!(
+            !off.contains("home-rule"),
+            "cursor vendor is opt-in at HOME too: {off}"
+        );
+        let on = craftbag::with_home_override(Some(home), || {
+            list_json(DiscoverArgs {
+                vendor: vec!["cursor".to_owned()],
+                ..DiscoverArgs::default()
+            })
+            .expect("list")
+        });
+        assert!(
+            on.contains("home-rule"),
+            "MCP list must find HOME/.cursor/skills when vendor cursor is on: {on}"
         );
     }
 
