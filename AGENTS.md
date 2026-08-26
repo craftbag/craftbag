@@ -3,12 +3,13 @@
 MSRV 1.85 (`rust-toolchain.toml`). No let-chains.
 
 `rust-toolchain.toml` installs rustfmt and clippy. The local gate also
-needs cargo-nextest, cargo-deny, and `gh` (stealth runs `gh repo view`):
+needs cargo-nextest, cargo-deny, and `gh` (stealth runs `gh repo view`).
+Use prebuilt binaries. Do not `cargo install` those two on rustc 1.85
+(they need a newer compiler than this crate's MSRV).
 
-```bash
-cargo install cargo-nextest --locked
-cargo install cargo-deny --locked
-```
+- nextest: https://nexte.st/docs/installation/pre-built-binaries/
+- cargo-deny: https://github.com/EmbarkStudios/cargo-deny#install
+- gh: https://cli.github.com/
 
 Hosted CI also runs fuzz-smoke, gitleaks, actionlint, and zizmor.
 
