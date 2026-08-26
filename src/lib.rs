@@ -5,6 +5,11 @@
 //! `$HOME/.agents` / vendor trees.
 //! CLI `--no-implicit-roots` and MCP `implicit_roots: false` turn that
 //! walk off; extra `paths` and `user_skills_dir` still load.
+//!
+//! List JSON, why JSON, and list XML share [`SkillSummary`]. A new
+//! field on that type must land in all three wires
+//! (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap.
+//! [`format_load_message`] is the text envelope.
 
 mod activate;
 mod discover;
@@ -92,6 +97,35 @@ mod tests {
         assert!(
             super::DiscoveryOptions::default().implicit_roots,
             "documented default must stay true"
+        );
+    }
+
+    /// A host adding a [`super::SkillSummary`] field should see the
+    /// sibling lock on the crate root, not only in why.rs. List JSON,
+    /// why JSON, and list XML share that type. Catalog stays cheap.
+    /// Load is the text envelope.
+    #[test]
+    fn crate_root_docs_name_skill_summary_siblings() {
+        let docs: String = include_str!("lib.rs")
+            .lines()
+            .filter(|line| line.starts_with("//!"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            docs.contains("List JSON, why JSON, and list XML share [`SkillSummary`]"),
+            "crate-root rustdoc must say list/why JSON + list XML share SkillSummary: {docs}"
+        );
+        assert!(
+            docs.contains("skill_summary_json_keys_have_list_xml_siblings"),
+            "crate-root rustdoc must name the sibling-lock test: {docs}"
+        );
+        assert!(
+            docs.contains("Catalog stays cheap"),
+            "crate-root rustdoc must say catalog stays cheap (not SkillSummary JSON): {docs}"
+        );
+        assert!(
+            docs.contains("text envelope"),
+            "crate-root rustdoc must say load is the text envelope: {docs}"
         );
     }
 }
