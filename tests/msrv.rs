@@ -59,6 +59,29 @@ fn local_gate_commands_run_in_ci() {
     }
 }
 
+/// rust-toolchain does not install nextest, cargo-deny, or gh. A first
+/// clone that only rustups 1.85 cannot run the documented local gate.
+/// Latest nextest/cargo-deny do not build on rustc 1.85.
+#[test]
+fn local_gate_names_extra_tools() {
+    let agents = repo_file("AGENTS.md");
+    for needle in ["cargo-nextest", "cargo-deny", "`gh`"] {
+        assert!(
+            agents.contains(needle),
+            "AGENTS.md must name extra gate tool {needle} (not rust-toolchain)"
+        );
+    }
+    assert!(
+        agents.contains("prebuilt"),
+        "AGENTS.md must send a first clone to prebuilt binaries, not cargo install on 1.85"
+    );
+    assert!(
+        !agents.contains("cargo install cargo-nextest")
+            && !agents.contains("cargo install cargo-deny"),
+        "AGENTS.md must not cargo-install nextest/deny on this crate's rustc 1.85"
+    );
+}
+
 /// Bline host notes must name the SkillMiss peel that landed in #132-#134.
 #[test]
 fn bline_consumer_host_table_names_skill_miss() {
