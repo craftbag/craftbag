@@ -1202,6 +1202,69 @@ BODY
     }
 
     #[test]
+    fn parse_skill_inline_flow_triggers_are_kept() {
+        // Comma-split inline triggers are already collected. After
+        // SkillSummary emits the list, a flow `[a, b]` form must not
+        // keep the brackets as tokens (leftover analog of PR 183).
+        let input = "\
+---
+name: triggered
+description: docs
+triggers: [git, rebase]
+---
+BODY
+";
+        let skill = parse_skill(input).expect("flow-list triggers must load");
+        assert_eq!(
+            skill.triggers,
+            vec!["git", "rebase"],
+            "flow-list triggers must peel brackets: {:?}",
+            skill.triggers
+        );
+        let load = crate::activate::format_load_message(
+            &skill,
+            "",
+            crate::activate::FormatOptions::default(),
+        );
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Triggers: git, rebase\n"),
+            "load must print flow-list triggers: {load}"
+        );
+
+        let quoted = "\
+---
+name: triggered
+description: docs
+triggers: [\"A & B\", 'own CI']
+---
+BODY
+";
+        let quoted_skill = parse_skill(quoted).expect("quoted flow-list items must load");
+        assert_eq!(
+            quoted_skill.triggers,
+            vec!["A & B", "own CI"],
+            "quoted flow-list items must peel quotes: {:?}",
+            quoted_skill.triggers
+        );
+
+        let empty = "\
+---
+name: triggered
+description: docs
+triggers: []
+---
+BODY
+";
+        let empty_skill = parse_skill(empty).expect("empty flow-list must load");
+        assert!(
+            empty_skill.triggers.is_empty(),
+            "empty flow-list must not invent a token: {:?}",
+            empty_skill.triggers
+        );
+    }
+
+    #[test]
     fn peek_frontmatter_name_ignores_indented_name() {
         let input = "\
 ---
