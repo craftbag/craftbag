@@ -2294,6 +2294,32 @@ fn list_vendor_leading_dot_loads_claude() {
 }
 
 #[test]
+fn list_vendor_cursor_loads_project_layout() {
+    let cwd = corpus().join("incumbent/cursor-project");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("list")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("cursor")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "create-rule"),
+        "cursor",
+        "vendor JSON source must be the wire token: {stdout}"
+    );
+}
+
+#[test]
 fn list_vendor_claude_loads_user_home_layout() {
     let home = corpus().join("incumbent/claude-user");
     let cwd = tempfile::tempdir().expect("cwd");

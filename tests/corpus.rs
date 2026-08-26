@@ -38,3 +38,14 @@ fn corpus_package_full_parses_license() {
             .is_file()
     );
 }
+
+#[test]
+fn corpus_incumbent_cursor_project_parses() {
+    let rel = "incumbent/cursor-project/.cursor/skills/create-rule/SKILL.md";
+    assert!(
+        corpus().join(rel).is_file(),
+        "committed Cursor project fixture must exist: {rel}"
+    );
+    let skill = parse_skill(&read(rel)).expect("parse");
+    assert_eq!(skill.name, "create-rule");
+}
