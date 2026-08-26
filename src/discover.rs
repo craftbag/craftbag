@@ -496,7 +496,8 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         // Classify user_dir/skills/SKILL.md once (same ExtraPathMd as
         // extra-path) so leftover is RootFile, not a package
         // name_directory_mismatch, and a named skills package reuses
-        // the parse.
+        // the parse. FIFO leftover is Unreadable (no extra/skills
+        // signal); still walk sibling packages.
         let skills_subdir = user_dir.join("skills");
         let handle_skills =
             extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips);
@@ -530,6 +531,25 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                             &ignore,
                             peeked_name,
                             read_err,
+                            &mut skips,
+                        );
+                        load_skills_from_dir(
+                            &skills_subdir,
+                            &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                            Some(skill_file.as_path()),
+                            &mut skills,
+                            &mut skips,
+                        );
+                    }
+                    ExtraPathMd::Unreadable(detail) => {
+                        // FIFO / socket / chmod leftover has no extra/skills
+                        // collection signal. user_dir is still a skills root.
+                        skip_loose_extra_path_root_skill_md(
+                            &skill_file,
+                            &skills_subdir,
+                            &ignore,
+                            None,
+                            Some(detail),
                             &mut skips,
                         );
                         load_skills_from_dir(
@@ -769,13 +789,19 @@ fn extra_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
 
 /// True when `user_dir/skills` is a leftover collection, not the skill
 /// named `skills`. Named packages keep nested `SKILL.md` as assets.
+/// A leftover that cannot be peeked (FIFO, socket, chmod) has no
+/// extra/skills signal, so [`classify_extra_path_md`] is Unreadable;
+/// user_dir still walks sibling packages.
 fn user_dir_skills_subdir_is_loose_collection(skills_subdir: &Path, ascii_names: bool) -> bool {
     let package_md = ["SKILL.md", "skill.md"]
         .into_iter()
         .map(|name| skills_subdir.join(name))
         .find(|p| skill_md_inode_exists(p));
     match package_md.as_ref() {
-        Some(skill_file) => extra_path_is_loose_collection(skills_subdir, skill_file, ascii_names),
+        Some(skill_file) => match classify_extra_path_md(skills_subdir, skill_file, ascii_names) {
+            ExtraPathMd::Collection { .. } | ExtraPathMd::Unreadable(_) => true,
+            ExtraPathMd::Package(_) | ExtraPathMd::Parsed(_) => false,
+        },
         None => true,
     }
 }
@@ -8002,6 +8028,86 @@ mod tests {
         assert_eq!(
             leftover_opens, 1,
             "classify leftover user_dir/skills/SKILL.md must not be opened again: leftover={leftover:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leftover_user_dir_skills_fifo_skill_md_does_not_hide_sibling() {
+        // ExtraPathMd leftover FIFO at extra/SKILL.md plus extra/skills is a
+        // collection. user_dir/skills/SKILL.md FIFO has no extra/skills
+        // signal, so classify is Unreadable. user_dir is still a skills
+        // root: leftover must not hide user/skills/public.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let user = tempfile::tempdir().expect("user");
+        let leftover = user.path().join("skills").join("SKILL.md");
+        fs::create_dir_all(leftover.parent().expect("parent")).expect("mkdir");
+        mkfifo(&leftover);
+        write_skill(&user.path().join("skills").join("public"), "public", "ok");
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(user.path().to_path_buf()),
+            ..DiscoveryOptions::default()
+        };
+        let home = tempfile::tempdir().expect("home");
+        let cwd_path = cwd.path().to_path_buf();
+        let home_path = home.path().to_path_buf();
+        let opts_thread = opts.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let report = with_home_override(Some(home_path), || {
+                discover(&cwd_path, &opts_thread).expect("discover")
+            });
+            let _ = tx.send(report);
+        });
+        let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(r) => r,
+            Err(_) => {
+                unblock_fifo(&leftover);
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(2));
+                panic!("discover must not block on leftover user_dir/skills FIFO SKILL.md");
+            }
+        };
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["public"],
+            "user/skills/public must still load when leftover user_dir/skills/SKILL.md is a FIFO: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert_eq!(
+            report.skills[0].source,
+            SkillSource::User,
+            "user/skills collection must stay User: {:?}",
+            report.skills[0]
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path == leftover
+                    && s.name.is_none()
+                    && s.detail.contains("regular file")
+            }),
+            "leftover user_dir/skills FIFO SKILL.md must be unreadable, not peeked: {:?}",
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "FIFO leftover SKILL.md must not become a root_file peek: {:?}",
+            report.skips
+        );
+        let why = crate::why(&report, Some("public"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why loaded={:?}", why.loaded);
+        assert!(why.unknown_skill_message().is_none());
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, &user.path().join("skills")),
+            "watch_dirs must list user/skills when leftover user_dir/skills/SKILL.md is a FIFO: {dirs:?}"
         );
     }
 
