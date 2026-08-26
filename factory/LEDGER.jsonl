@@ -329,3 +329,4 @@
 {"ts": "2026-08-26T14:02:00Z", "job_id": "expand-prop-1-present-null-bool", "work_source": "expand", "result": "landed", "head": "db9dae64175b31feb1e982311a84c26587baf270", "pr": 188, "tests": "prop_parse 12 passed", "noop": false}
 {"ts": "2026-08-26T14:03:10Z", "job_id": "adversary-after-188-hyphen-prop-green", "work_source": "adversary", "result": "noop", "head": "db9dae64175b31feb1e982311a84c26587baf270", "pr": null, "tests": "hyphen aliases stay in unit table", "noop": true}
 {"ts": "2026-08-26T14:09:30Z", "job_id": "improve-mpi28-adv-noop", "work_source": "improve", "result": "noop", "head": "db9dae64175b31feb1e982311a84c26587baf270", "pr": null, "tests": "zero git diff", "noop": true}
+{"ts": "2026-08-26T14:16:00Z", "job_id": "improve-mpi28-arch-noop", "work_source": "improve", "result": "noop", "head": "db9dae64175b31feb1e982311a84c26587baf270", "pr": null, "tests": "zero git diff", "noop": true}
