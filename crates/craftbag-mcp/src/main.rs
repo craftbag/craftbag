@@ -46,6 +46,9 @@ struct DiscoverArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
+    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    #[serde(default, deserialize_with = "present_non_null")]
+    implicit_roots: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,6 +65,9 @@ struct LoadArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
+    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    #[serde(default, deserialize_with = "present_non_null")]
+    implicit_roots: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -81,6 +87,9 @@ struct WhyArgs {
     /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
     #[serde(default)]
     ascii_names: bool,
+    /// Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true.
+    #[serde(default, deserialize_with = "present_non_null")]
+    implicit_roots: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +104,7 @@ fn opts_from(
     vendor: Vec<String>,
     user_dir: Option<String>,
     ascii_names: bool,
+    implicit_roots: Option<bool>,
 ) -> Result<DiscoveryOptions, String> {
     // CLI clap rejects `--user-dir` with no value. Present empty or
     // whitespace is the same miss, not discover-cwd as User.
@@ -108,13 +118,20 @@ fn opts_from(
         vendor_roots: SkillSource::parse_vendor_roots(vendor)?,
         user_skills_dir: user_dir.map(PathBuf::from),
         ascii_names,
+        implicit_roots: implicit_roots.unwrap_or(true),
         ..DiscoveryOptions::default()
     })
 }
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let opts = opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?;
+    let opts = opts_from(
+        args.paths,
+        args.vendor,
+        args.user_dir,
+        args.ascii_names,
+        args.implicit_roots,
+    )?;
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
     if format == ListFormat::Watch {
@@ -171,7 +188,13 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(
         &cwd,
-        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
+        &opts_from(
+            args.paths,
+            args.vendor,
+            args.user_dir,
+            args.ascii_names,
+            args.implicit_roots,
+        )?,
     )
     .map_err(|e| e.to_string())?;
     match find_skill_by_name(&report.skills, &args.name) {
@@ -188,7 +211,13 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(
         &cwd,
-        &opts_from(args.paths, args.vendor, args.user_dir, args.ascii_names)?,
+        &opts_from(
+            args.paths,
+            args.vendor,
+            args.user_dir,
+            args.ascii_names,
+            args.implicit_roots,
+        )?,
     )
     .map_err(|e| e.to_string())?;
     let budgets = progressive_budgets(args.context_tokens.unwrap_or(8_000));
@@ -228,7 +257,8 @@ fn discover_properties() -> Value {
             "description": "Opt-in vendor trees: bline, claude, cursor, grok. Example: [\"claude\"] or [\".claude\"]."
         },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
-        "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."}
+        "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
+        "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git and HOME .agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."}
     })
 }
 
@@ -396,6 +426,7 @@ fn main() {
 mod tests {
     use super::{DiscoverArgs, RpcRequest, handle, list_json};
     use serde_json::json;
+    use std::fs;
     use std::path::PathBuf;
 
     fn corpus_pkg() -> String {
@@ -2654,5 +2685,103 @@ mod tests {
                 tool["name"]
             );
         }
+    }
+
+    #[test]
+    fn tools_list_advertises_implicit_roots() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(141)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let props = &tool["inputSchema"]["properties"];
+            assert!(
+                props.get("implicit_roots").is_some(),
+                "{} must advertise implicit_roots like CLI --no-implicit-roots: {props}",
+                tool["name"]
+            );
+            assert_eq!(
+                props["implicit_roots"]["type"], "boolean",
+                "{} implicit_roots type: {props}",
+                tool["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn skills_list_null_implicit_roots_is_error() {
+        empty_home(|| {
+            let resp = call(142, "skills_list", json!({"implicit_roots": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says implicit_roots is boolean; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"skills\""),
+                "must not return default catalog for null implicit_roots: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_implicit_roots_false_skips_home() {
+        let extra = tempfile::tempdir().expect("extra");
+        let wanted = extra.path().join("wanted");
+        fs::create_dir_all(&wanted).expect("wanted");
+        fs::write(
+            wanted.join("SKILL.md"),
+            "---\nname: wanted\ndescription: from-extra\n---\nFROM_EXTRA\n",
+        )
+        .expect("write wanted");
+        let home = tempfile::tempdir().expect("home");
+        let homeskill = home.path().join(".agents").join("skills").join("homeskill");
+        fs::create_dir_all(&homeskill).expect("homeskill");
+        fs::write(
+            homeskill.join("SKILL.md"),
+            "---\nname: homeskill\ndescription: from-home\n---\nFROM_HOME\n",
+        )
+        .expect("write homeskill");
+        let listed = craftbag::with_home_override(Some(home.path().to_path_buf()), || {
+            call(
+                143,
+                "skills_list",
+                json!({
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }),
+            )
+        });
+        let text = call_text(&listed);
+        assert!(
+            text.contains("wanted"),
+            "collection-only list must include extra wanted: {text}"
+        );
+        assert!(
+            !text.contains("homeskill"),
+            "collection-only list must omit HOME .agents: {text}"
+        );
+        let defaulted = craftbag::with_home_override(Some(home.path().to_path_buf()), || {
+            call(
+                144,
+                "skills_list",
+                json!({"paths": [extra.path().display().to_string()]}),
+            )
+        });
+        let default_text = call_text(&defaulted);
+        assert!(
+            default_text.contains("homeskill"),
+            "omitted implicit_roots must still load HOME .agents: {default_text}"
+        );
     }
 }

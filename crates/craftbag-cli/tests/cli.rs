@@ -2215,6 +2215,154 @@ fn validate_help_names_json_error_kind() {
 }
 
 #[test]
+fn list_help_names_no_implicit_roots() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("list")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--no-implicit-roots"))
+        .stdout(predicates::str::contains("cwd-to-git"))
+        .stdout(predicates::str::contains("--path"));
+}
+
+#[test]
+fn list_no_implicit_roots_skips_cwd_and_home() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::create_dir_all(cwd.path().join(".git")).expect("git");
+    let leaked = cwd.path().join(".agents").join("skills").join("leaked");
+    fs::create_dir_all(&leaked).expect("leaked");
+    fs::write(
+        leaked.join("SKILL.md"),
+        "---\nname: leaked\ndescription: from-cwd\n---\nFROM_CWD\n",
+    )
+    .expect("write leaked");
+    let extra = tempfile::tempdir().expect("extra");
+    let wanted = extra.path().join("wanted");
+    fs::create_dir_all(&wanted).expect("wanted");
+    fs::write(
+        wanted.join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-extra\n---\nFROM_EXTRA\n",
+    )
+    .expect("write wanted");
+    let home = tempfile::tempdir().expect("home");
+    let homeskill = home.path().join(".agents").join("skills").join("homeskill");
+    fs::create_dir_all(&homeskill).expect("homeskill");
+    fs::write(
+        homeskill.join("SKILL.md"),
+        "---\nname: homeskill\ndescription: from-home\n---\nFROM_HOME\n",
+    )
+    .expect("write homeskill");
+
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let off = cmd
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert!(
+        off.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&off.stderr)
+    );
+    let off_out = String::from_utf8_lossy(&off.stdout);
+    assert_eq!(
+        list_json_source(&off_out, "wanted"),
+        "extra",
+        "collection-only must load extra wanted: {off_out}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&off_out).expect("json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "collection-only must not leak cwd/HOME: {off_out}"
+    );
+
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let on = cmd
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert!(
+        on.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&on.stderr)
+    );
+    let on_out = String::from_utf8_lossy(&on.stdout);
+    assert!(
+        on_out.contains("leaked") && on_out.contains("homeskill") && on_out.contains("wanted"),
+        "default list --path must stay additive: {on_out}"
+    );
+}
+
+#[test]
+fn list_watch_dirs_no_implicit_roots_omits_cwd_and_home() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::create_dir_all(cwd.path().join(".git")).expect("git");
+    let agents = cwd.path().join(".agents").join("skills");
+    fs::create_dir_all(&agents).expect("agents");
+    let extra = tempfile::tempdir().expect("extra");
+    fs::create_dir_all(extra.path().join("wanted")).expect("wanted");
+    fs::write(
+        extra.path().join("wanted").join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-extra\n---\nFROM_EXTRA\n",
+    )
+    .expect("write");
+    let home = tempfile::tempdir().expect("home");
+    let home_agents = home.path().join(".agents").join("skills");
+    fs::create_dir_all(&home_agents).expect("home agents");
+
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let out = cmd
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, extra.path()),
+        "watch-dirs must still list extra collection: {stdout}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, &agents),
+        "watch-dirs --no-implicit-roots must omit cwd .agents: {stdout}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, &home_agents),
+        "watch-dirs --no-implicit-roots must omit HOME .agents: {stdout}"
+    );
+}
+
+#[test]
 fn load_help_names_args_and_argument_hint() {
     let (_home, mut cmd) = bin();
     cmd.arg("load")
