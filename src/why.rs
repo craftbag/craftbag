@@ -98,6 +98,11 @@ pub struct SkillSummary {
     /// Omitted on cached pre-this-PR why JSON (`None`).
     #[serde(rename = "when_to_use", default)]
     pub when_to_use: Option<String>,
+    /// Same snake_case key as list JSON / list XML (not Skill camelCase).
+    /// Official agentskills `allowed-tools`. Omitted on cached pre-this-PR
+    /// why JSON (`None`).
+    #[serde(rename = "allowed_tools", default)]
+    pub allowed_tools: Option<String>,
 }
 
 impl From<&Skill> for SkillSummary {
@@ -111,6 +116,7 @@ impl From<&Skill> for SkillSummary {
             disable_model_invocation: skill.disable_model_invocation,
             argument_hint: skill.argument_hint.clone(),
             when_to_use: skill.when_to_use.clone(),
+            allowed_tools: skill.allowed_tools.clone(),
         }
     }
 }
@@ -152,8 +158,8 @@ impl WhyReport {
 /// Explain loaded vs skipped skills and optional activation decisions.
 ///
 /// Loaded rows include `description`, `user_invocable`,
-/// `disable_model_invocation`, `argument_hint`, and `when_to_use`
-/// (same keys as list JSON / list XML).
+/// `disable_model_invocation`, `argument_hint`, `when_to_use`,
+/// and `allowed_tools` (same keys as list JSON / list XML).
 /// Does not take [`crate::DiscoveryOptions`], so disabled-by-name and
 /// vendor denylist are not activation reasons.
 pub fn why(
@@ -691,6 +697,32 @@ mod tests {
     }
 
     #[test]
+    fn why_json_includes_allowed_tools() {
+        let mut hinted = Skill::new("tools-ok", "d", "body");
+        hinted.allowed_tools = Some("Read Bash(git:*)".to_owned());
+        let bare = Skill::new("no-tools", "d", "body");
+        let report = DiscoveryReport {
+            skills: vec![hinted, bare],
+            skips: vec![],
+        };
+        let why = why(&report, None, None, None);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert_eq!(
+            v["loaded"][0]["allowed_tools"], "Read Bash(git:*)",
+            "why JSON must carry allowed_tools like list JSON/XML: {json}"
+        );
+        assert!(
+            v["loaded"][1]["allowed_tools"].is_null(),
+            "omitted allowed_tools is null, not a camelCase key: {json}"
+        );
+        assert!(
+            v["loaded"][0].get("allowedTools").is_none(),
+            "why JSON allowed_tools must match list snake_case, not Skill camelCase: {json}"
+        );
+    }
+
+    #[test]
     fn why_json_omitted_invocation_flags_keep_pre90_defaults() {
         // Cached why JSON from before PR 90 has no invocation flags.
         let json = r#"{
@@ -719,6 +751,10 @@ mod tests {
         assert!(
             report.loaded[0].when_to_use.is_none(),
             "omitted when_to_use must stay None: {json}"
+        );
+        assert!(
+            report.loaded[0].allowed_tools.is_none(),
+            "omitted allowed_tools must stay None: {json}"
         );
     }
 

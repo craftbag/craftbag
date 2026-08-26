@@ -367,8 +367,9 @@ pub fn unknown_list_format(format: &str) -> String {
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
 /// Also emits `user_invocable`, `disable_model_invocation`,
-/// `argument_hint`, and `when_to_use` so a host that lists via XML
-/// can build a slash palette or catalog without re-parsing.
+/// `argument_hint`, `when_to_use`, and `allowed_tools` so a host
+/// that lists via XML can build a slash palette or apply
+/// pre-approved tools without re-parsing.
 pub fn format_available_skills_xml(skills: &[Skill]) -> String {
     let mut out = String::from("<available_skills>\n");
     for skill in skills {
@@ -414,6 +415,11 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
             out.push_str(&xml_escape(when));
         }
         out.push_str("</when_to_use>\n");
+        out.push_str("<allowed_tools>");
+        if let Some(tools) = skill.allowed_tools.as_deref() {
+            out.push_str(&xml_escape(tools));
+        }
+        out.push_str("</allowed_tools>\n");
         out.push_str("</skill>\n");
     }
     out.push_str("</available_skills>\n");
@@ -592,6 +598,9 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     }
     if let Some(compat) = &skill.compatibility {
         push_envelope_line(&mut out, "Compatibility", compat);
+    }
+    if let Some(tools) = skill.allowed_tools.as_deref() {
+        push_envelope_line(&mut out, "Allowed tools", tools);
     }
     if let Some(hint) = skill.argument_hint.as_deref() {
         push_envelope_line(&mut out, "Argument hint", hint);
@@ -1021,6 +1030,29 @@ mod tests {
     }
 
     #[test]
+    fn format_available_skills_xml_includes_allowed_tools() {
+        let mut hinted = make_skill("tools-ok", &[], 10);
+        hinted.allowed_tools = Some("Read & Bash <git>".to_owned());
+        hinted.source_path = Some(PathBuf::from("/tmp/tools-ok/SKILL.md"));
+        let mut bare = make_skill("no-tools", &[], 10);
+        bare.source_path = Some(PathBuf::from("/tmp/no-tools/SKILL.md"));
+        let xml = format_available_skills_xml(&[hinted, bare]);
+        assert!(
+            xml.contains("<allowed_tools>Read &amp; Bash &lt;git&gt;</allowed_tools>"),
+            "list XML must carry escaped allowed_tools: {xml}"
+        );
+        let after_bare = xml
+            .split("<name>no-tools</name>")
+            .nth(1)
+            .expect("no-tools skill");
+        let skill_block = after_bare.split("</skill>").next().expect("block");
+        assert!(
+            skill_block.contains("<allowed_tools></allowed_tools>"),
+            "omitted allowed_tools must still emit an empty XML tag: {xml}"
+        );
+    }
+
+    #[test]
     fn format_available_skills_xml_strips_invalid_xml_chars() {
         let mut skill = make_skill("ctrl", &[], 10);
         skill.name = "n\u{0000}ame".to_owned();
@@ -1142,6 +1174,32 @@ mod tests {
     }
 
     #[test]
+    fn format_load_message_includes_allowed_tools() {
+        let mut hinted = Skill::new("tools-ok", "hinted", "body");
+        hinted.allowed_tools = Some("Read\nBash(git:*)".to_owned());
+        let load = format_load_message(&hinted, "", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Allowed tools: Read Bash(git:*)\n"),
+            "load must carry flattened allowed_tools like list JSON/XML: {load}"
+        );
+        assert!(
+            !header.contains("Read\nBash(git:*)"),
+            "folded allowed_tools must stay one envelope line: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-tools", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Allowed tools:"),
+            "omitted allowed_tools must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
     fn format_load_message_flattens_multiline_envelope_fields() {
         let mut skill = Skill::new(
             "lit-skill",
@@ -1150,6 +1208,7 @@ mod tests {
         );
         skill.license = Some("Apache\n2.0".to_owned());
         skill.compatibility = Some("rust\ncargo".to_owned());
+        skill.allowed_tools = Some("Read\nBash(git:*)".to_owned());
         skill.argument_hint = Some("[name]\n[id]".to_owned());
         skill.when_to_use = Some("after\nrebase".to_owned());
         let load = format_load_message(
@@ -1171,6 +1230,10 @@ mod tests {
         assert!(
             header.contains("Compatibility: rust cargo\n"),
             "compatibility block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Allowed tools: Read Bash(git:*)\n"),
+            "allowed_tools block scalar must stay one envelope line: {load}"
         );
         assert!(
             header.contains("When to use: after rebase\n"),

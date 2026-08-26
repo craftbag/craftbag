@@ -24,6 +24,7 @@ fuzz_target!(|data: &[u8]| {
     skill.disable_model_invocation = data.get(1).is_some_and(|b| b & 1 == 1);
     skill.argument_hint = Some(text.as_ref().to_owned());
     skill.when_to_use = Some(text.as_ref().to_owned());
+    skill.allowed_tools = Some(text.as_ref().to_owned());
     let xml = craftbag::format_available_skills_xml(&[skill]);
     assert!(
         xml.chars().all(is_xml10_char),
