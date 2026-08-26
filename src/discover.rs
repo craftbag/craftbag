@@ -23,7 +23,7 @@ thread_local! {
 }
 
 /// Options for multi-root skill discovery.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryOptions {
     /// Extra paths (`~` expanded). Relative paths join the discover `cwd`.
     /// Empty or whitespace-only items are ignored (not cwd).
@@ -43,6 +43,25 @@ pub struct DiscoveryOptions {
     /// When true, names outside `a-z0-9-` are a `parse_error` skip.
     /// Default is off: Unicode / NFKC names still load.
     pub ascii_names: bool,
+    /// Walk cwd-to-git `.agents` / vendor trees and `$HOME/.agents` /
+    /// vendor trees. Default is true. When false, only extra `paths`
+    /// and optional `user_skills_dir` load (collection-only). Empty
+    /// `paths` plus no user dir returns an empty report, not an error.
+    pub implicit_roots: bool,
+}
+
+impl Default for DiscoveryOptions {
+    fn default() -> Self {
+        Self {
+            paths: Vec::new(),
+            ignore: Vec::new(),
+            disabled: Vec::new(),
+            vendor_roots: Vec::new(),
+            user_skills_dir: None,
+            ascii_names: false,
+            implicit_roots: true,
+        }
+    }
 }
 
 /// Discover skills for `cwd` using the host-neutral root matrix.
@@ -60,15 +79,18 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// socket, device, or regular file at a directory root is omitted
 /// (`notify` can hang on a FIFO; discover does not walk it). Empty
 /// `user_skills_dir` is omitted. `project` / `community` are not
-/// listed (host-only). Nearest git root first via
-/// [`walk_cwd_to_git_root`]. Extra-path `dir/skills` is listed only
-/// when [`discover`] would walk that collection (leftover or
-/// Vercel-style). A named extra-path package, or an escaped /
-/// unreadable `skills/` tree, is omitted. Escaped project or home
-/// `.agents/skills` / `.{vendor}/skills` (symlink out of that walk
-/// root) is omitted, same as [`discover`]. Host `user_skills_dir` is
-/// a skills root: leftover `SKILL.md` / `skill.md` must not hide
-/// `user_dir/skills` (same collection walk as extra-path leftover).
+/// listed (host-only). When [`DiscoveryOptions::implicit_roots`] is
+/// true (the default), nearest git root first via
+/// [`walk_cwd_to_git_root`]. When it is false, cwd-to-git and `$HOME`
+/// `.agents` / vendor trees are omitted (same as [`discover`]).
+/// Extra-path `dir/skills` is listed only when [`discover`] would walk
+/// that collection (leftover or Vercel-style). A named extra-path
+/// package, or an escaped / unreadable `skills/` tree, is omitted.
+/// Escaped project or home `.agents/skills` / `.{vendor}/skills`
+/// (symlink out of that walk root) is omitted, same as [`discover`].
+/// Host `user_skills_dir` is a skills root: leftover `SKILL.md` /
+/// `skill.md` must not hide `user_dir/skills` (same collection walk
+/// as extra-path leftover).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
@@ -79,15 +101,17 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     // the parent instead. A FIFO / socket / device / file is not a
     // walk root (listing a FIFO for notify can hang).
 
-    for dir in walk_cwd_to_git_root(&cwd) {
-        push_watch_confined_dir(&mut out, dir.join(".agents").join("skills"), &dir);
-        for name in ["bline", "claude", "cursor", "grok"] {
-            if vendor_enabled(opts, name) {
-                push_watch_confined_dir(
-                    &mut out,
-                    dir.join(format!(".{name}")).join("skills"),
-                    &dir,
-                );
+    if opts.implicit_roots {
+        for dir in walk_cwd_to_git_root(&cwd) {
+            push_watch_confined_dir(&mut out, dir.join(".agents").join("skills"), &dir);
+            for name in ["bline", "claude", "cursor", "grok"] {
+                if vendor_enabled(opts, name) {
+                    push_watch_confined_dir(
+                        &mut out,
+                        dir.join(format!(".{name}")).join("skills"),
+                        &dir,
+                    );
+                }
             }
         }
     }
@@ -102,15 +126,17 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         }
     }
 
-    if let Some(home) = home_dir() {
-        push_watch_confined_dir(&mut out, home.join(".agents").join("skills"), &home);
-        for name in ["bline", "claude", "cursor", "grok"] {
-            if vendor_enabled(opts, name) {
-                push_watch_confined_dir(
-                    &mut out,
-                    home.join(format!(".{name}")).join("skills"),
-                    &home,
-                );
+    if opts.implicit_roots {
+        if let Some(home) = home_dir() {
+            push_watch_confined_dir(&mut out, home.join(".agents").join("skills"), &home);
+            for name in ["bline", "claude", "cursor", "grok"] {
+                if vendor_enabled(opts, name) {
+                    push_watch_confined_dir(
+                        &mut out,
+                        home.join(format!(".{name}")).join("skills"),
+                        &home,
+                    );
+                }
             }
         }
     }
@@ -415,20 +441,22 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     let mut skills = Vec::new();
     let mut skips = Vec::new();
 
-    for dir in walk_cwd_to_git_root(&cwd) {
-        let agents = dir.join(".agents").join("skills");
-        if !skip_if_dir_escapes(&agents, &dir, &mut skips) {
-            load_skills_from_dir(
-                &agents,
-                &SkillSource::Agents,
-                &ignore,
-                opts,
-                &[],
-                &mut skills,
-                &mut skips,
-            );
+    if opts.implicit_roots {
+        for dir in walk_cwd_to_git_root(&cwd) {
+            let agents = dir.join(".agents").join("skills");
+            if !skip_if_dir_escapes(&agents, &dir, &mut skips) {
+                load_skills_from_dir(
+                    &agents,
+                    &SkillSource::Agents,
+                    &ignore,
+                    opts,
+                    &[],
+                    &mut skills,
+                    &mut skips,
+                );
+            }
+            load_vendor_tree(&dir, opts, &ignore, &mut skills, &mut skips);
         }
-        load_vendor_tree(&dir, opts, &ignore, &mut skills, &mut skips);
     }
 
     if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
@@ -460,20 +488,22 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         }
     }
 
-    if let Some(home) = home_dir() {
-        let agents = home.join(".agents").join("skills");
-        if !skip_if_dir_escapes(&agents, &home, &mut skips) {
-            load_skills_from_dir(
-                &agents,
-                &SkillSource::Agents,
-                &ignore,
-                opts,
-                &[],
-                &mut skills,
-                &mut skips,
-            );
+    if opts.implicit_roots {
+        if let Some(home) = home_dir() {
+            let agents = home.join(".agents").join("skills");
+            if !skip_if_dir_escapes(&agents, &home, &mut skips) {
+                load_skills_from_dir(
+                    &agents,
+                    &SkillSource::Agents,
+                    &ignore,
+                    opts,
+                    &[],
+                    &mut skills,
+                    &mut skips,
+                );
+            }
+            load_vendor_tree(&home, opts, &ignore, &mut skills, &mut skips);
         }
-        load_vendor_tree(&home, opts, &ignore, &mut skills, &mut skips);
     }
 
     for raw in &opts.paths {
@@ -7088,6 +7118,214 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &user.path().join("skills")),
             "watch_dirs must not list user/skills when it is a named package: {dirs:?}"
+        );
+    }
+
+    fn names_in(report: &crate::skip::DiscoveryReport) -> Vec<&str> {
+        report.skills.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    fn skip_names(report: &crate::skip::DiscoveryReport) -> Vec<String> {
+        report.skips.iter().filter_map(|s| s.name.clone()).collect()
+    }
+
+    #[test]
+    fn implicit_roots_defaults_on() {
+        assert!(
+            DiscoveryOptions::default().implicit_roots,
+            "implicit_roots must default true so existing discover stays additive"
+        );
+    }
+
+    #[test]
+    fn implicit_roots_off_loads_only_extra_path_collection() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        fs::create_dir_all(cwd.path().join(".git")).expect("git");
+        write_skill(
+            &cwd.path().join(".agents").join("skills").join("leaked"),
+            "leaked",
+            "FROM_CWD",
+        );
+        let home = tempfile::tempdir().expect("home");
+        write_skill(
+            &home.path().join(".agents").join("skills").join("homeskill"),
+            "homeskill",
+            "FROM_HOME",
+        );
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("wanted"), "wanted", "FROM_EXTRA");
+        let collection_only = DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(cwd.path(), &collection_only).expect("discover")
+        });
+        assert_eq!(
+            names_in(&report),
+            ["wanted"],
+            "collection-only must load extra wanted, not cwd/HOME: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        let skips = skip_names(&report);
+        assert!(
+            !skips.iter().any(|n| n == "leaked" || n == "homeskill"),
+            "cwd/HOME leaks must not appear as collision losers: skips={:?}",
+            report.skips
+        );
+
+        let defaulted = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        assert!(
+            find_skill_by_name(&defaulted.skills, "leaked").is_some(),
+            "default discover must still load cwd .agents: {:?}",
+            defaulted.skills
+        );
+        assert!(
+            find_skill_by_name(&defaulted.skills, "homeskill").is_some(),
+            "default discover must still load HOME .agents: {:?}",
+            defaulted.skills
+        );
+    }
+
+    #[test]
+    fn implicit_roots_off_empty_paths_is_empty_report() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        fs::create_dir_all(cwd.path().join(".git")).expect("git");
+        write_skill(
+            &cwd.path().join(".agents").join("skills").join("leaked"),
+            "leaked",
+            "FROM_CWD",
+        );
+        let home = tempfile::tempdir().expect("home");
+        write_skill(
+            &home.path().join(".agents").join("skills").join("homeskill"),
+            "homeskill",
+            "FROM_HOME",
+        );
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("empty collection-only is not an error")
+        });
+        assert!(
+            report.skills.is_empty() && report.skips.is_empty(),
+            "empty paths + no user dir + implicit_roots false must be empty: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+    }
+
+    #[test]
+    fn implicit_roots_off_still_loads_user_skills_dir() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(
+            &cwd.path().join(".agents").join("skills").join("leaked"),
+            "leaked",
+            "FROM_CWD",
+        );
+        let user = tempfile::tempdir().expect("user");
+        write_skill(&user.path().join("mine"), "mine", "FROM_USER");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                user_skills_dir: Some(user.path().to_path_buf()),
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            names_in(&report),
+            ["mine"],
+            "user_skills_dir must still load when implicit roots are off: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "leaked").is_none(),
+            "cwd .agents must stay off: {:?}",
+            report.skills
+        );
+    }
+
+    #[test]
+    fn watch_dirs_omits_implicit_roots_when_off() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        fs::create_dir_all(cwd.path().join(".git")).expect("git");
+        let agents = cwd.path().join(".agents").join("skills");
+        fs::create_dir_all(&agents).expect("agents");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("wanted"), "wanted", "FROM_EXTRA");
+        let home = tempfile::tempdir().expect("home");
+        let home_agents = home.path().join(".agents").join("skills");
+        fs::create_dir_all(&home_agents).expect("home agents");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            !watch_paths_contain(&dirs, &agents),
+            "watch_dirs must not list cwd .agents when implicit roots are off: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &home_agents),
+            "watch_dirs must not list HOME .agents when implicit roots are off: {dirs:?}"
+        );
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "watch_dirs must still list the extra collection: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn implicit_roots_off_still_walks_leftover_extra_collection() {
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: leftover\ndescription: leftover extra root\n---\nLEFTOVER\n",
+        )
+        .expect("leftover");
+        write_skill(
+            &extra.path().join("skills").join("public"),
+            "public",
+            "from-skills",
+        );
+        let cwd = tempfile::tempdir().expect("cwd");
+        write_skill(
+            &cwd.path().join(".agents").join("skills").join("leaked"),
+            "leaked",
+            "FROM_CWD",
+        );
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "public").is_some(),
+            "leftover extra/SKILL.md + extra/skills must still load public: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "leaked").is_none(),
+            "implicit roots stay off for leftover extra collections: {:?}",
+            report.skills
         );
     }
 }

@@ -57,7 +57,8 @@ Bline owns host paths. craftbag stays host-neutral.
 | `config_dir()/bline/skills` | `user_skills_dir` (`SkillSource::User`) |
 | opt-in `.bline/skills` | `vendor_roots` includes `"bline"` |
 | extra roots | `paths` (`SkillSource::ExtraPath`) |
-| repo `.agents/skills` | walked from cwd (no `Project` variant) |
+| leftover-only collection (`discover_skills(project_dir, dummy_user)`) | `paths = [project_dir]`, `implicit_roots = false` |
+| repo `.agents/skills` | walked from cwd when `implicit_roots` is true (no `Project` variant) |
 
 There is no `SkillSource::Project` in v1. Repo-local `.agents/skills`
 is `Agents`.
@@ -115,6 +116,15 @@ Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`, MCP
 Default discover still loads `café` / `перевод`. With the option those
 names are a `parse_error` skip (`lowercase alphanumeric and hyphens
 only`) and do not appear in `skills`.
+
+Set `DiscoveryOptions.implicit_roots` to `false` (CLI
+`--no-implicit-roots`, MCP `implicit_roots: false`) for leftover
+`discover_skills(project_dir, dummy_user)` callers (curator / skill
+learn). Extra `paths` and optional `user_skills_dir` still load.
+Cwd-to-git `.agents` / vendor trees and `$HOME/.agents` / vendor
+trees do not. Omitted MCP `implicit_roots` stays true. Do not fake
+an empty `HOME` for that freeze; `with_home_override` does not turn
+off the cwd walk. `watch_dirs` uses the same switch.
 
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
 same list (one path per line) without loading SKILL.md. An extra-path
