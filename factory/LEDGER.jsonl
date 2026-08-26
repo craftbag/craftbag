@@ -367,3 +367,4 @@
 {"ts": "2026-08-26T18:38:40Z", "job_id": "improve-mpi29-contrib-deny-prebuilt", "work_source": "improve", "result": "landed", "head": "027005336bb34fd2046394f64e4137ac887587a2", "pr": 206, "tests": "local_gate_names_extra_tools", "noop": false}
 {"ts": "2026-08-26T18:39:00Z", "job_id": "adversary-after-206-deny-prebuilt-green", "work_source": "adversary", "result": "noop", "head": "027005336bb34fd2046394f64e4137ac887587a2", "pr": null, "tests": "no leftover cargo-deny#install", "noop": true}
 {"ts": "2026-08-26T18:44:30Z", "job_id": "improve-mpi29-obs-noop", "work_source": "improve", "result": "noop", "head": "027005336bb34fd2046394f64e4137ac887587a2", "pr": null, "tests": "obs peel already locked", "noop": true}
+{"ts": "2026-08-26T18:54:50Z", "job_id": "improve-mpi30-ta-flow-triggers", "work_source": "improve", "result": "landed", "head": "42ae01a0547bc5dd771386043055252509d49c17", "pr": 207, "tests": "parse_skill_inline_flow_triggers_are_kept", "noop": false}
