@@ -221,3 +221,4 @@
 {"ts":"2026-08-26T00:52:02Z","job_id":"improve-when-to-use-129","work_source":"improve","result":"landed","head":"8f61f3a4727244d09fa64599007e367b31e0cf04","pr":129,"tests":"when_to_use list why catalog load","noop":false}
 {"ts":"2026-08-26T00:52:20Z","job_id":"adversary-after-129-noop","work_source":"adversary","result":"noop","head":"8f61f3a4727244d09fa64599007e367b31e0cf04","pr":null,"tests":"129 when_to_use green","noop":true}
 {"ts":"2026-08-26T01:01:09Z","job_id":"improve-allowed-tools-130","work_source":"improve","result":"landed","head":"3ec01dd13cd00f0c3d0fcd66179a8c11f160f679","pr":130,"tests":"allowed_tools list why xml load","noop":false}
+{"ts":"2026-08-26T01:01:20Z","job_id":"adversary-after-130-noop","work_source":"adversary","result":"noop","head":"3ec01dd13cd00f0c3d0fcd66179a8c11f160f679","pr":null,"tests":"130 allowed_tools green","noop":true}
