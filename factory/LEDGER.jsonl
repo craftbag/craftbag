@@ -215,3 +215,4 @@
 {"ts":"2026-08-26T00:05:47Z","job_id":"improve-load-envelope-one-line-126","work_source":"improve","result":"landed","head":"a8c1ac8a3515dee9c96ec806fc69f20b7b158b0e","pr":126,"tests":"load envelope one line","noop":false}
 {"ts":"2026-08-26T00:06:00Z","job_id":"adversary-after-126-noop","work_source":"adversary","result":"noop","head":"a8c1ac8a3515dee9c96ec806fc69f20b7b158b0e","pr":null,"tests":"126 one-line green","noop":true}
 {"ts":"2026-08-26T00:18:00Z","job_id":"improve-watch-dirs-omit-non-dir-127","work_source":"improve","result":"landed","head":"fd19066b857b10d1e5556dbec0a6e9bf9ad65581","pr":127,"tests":"watch_dirs omit FIFO file roots","noop":false}
+{"ts":"2026-08-26T00:18:20Z","job_id":"adversary-after-127-noop","work_source":"adversary","result":"noop","head":"fd19066b857b10d1e5556dbec0a6e9bf9ad65581","pr":null,"tests":"127 watch omit green","noop":true}
