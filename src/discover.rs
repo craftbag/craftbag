@@ -4145,6 +4145,53 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_cursor_user_home_vendor_layout_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = corpus_dir().join("incumbent/cursor-user");
+        let off = with_home_override(Some(home.clone()), || {
+            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        assert!(
+            off.skills.iter().all(|s| s.name != "home-rule"),
+            "cursor vendor is opt-in at HOME too"
+        );
+        let on = with_home_override(Some(home.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["cursor".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "home-rule")
+            .expect("home-rule");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "cursor".to_owned()
+            }
+        );
+        let dirs = with_home_override(Some(home.clone()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["cursor".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, &home.join(".cursor").join("skills")),
+            "watch_dirs must list HOME/.cursor/skills when vendor cursor is on: {dirs:?}"
+        );
+    }
+
+    #[test]
     fn incumbent_vercel_skills_dir_as_extra_path() {
         let cwd = tempfile::tempdir().expect("cwd");
         let extra = corpus_dir().join("incumbent/vercel-npx");
