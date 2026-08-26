@@ -103,9 +103,10 @@ JSON both serialize `SkillSummary` so those keys cannot drift. A new
 (name + description, plus `Use when:` when set). CLI `load` /
 MCP `skills_load` is the text envelope, not that JSON object. CLI
 `load` and MCP `skills_load` print `Argument hint: …`,
-`When to use: …`, `Allowed tools: …`, `License: …`, and
+`When to use: …`, `Triggers: …`, `Allowed tools: …`, `License: …`, and
 `Compatibility: …` in the envelope when those frontmatter fields
-are set (same text as list/why JSON). Omitted fields add no line. Description, When to use, License, Compatibility,
+are set (same text as list/why JSON). Empty `triggers` add no line.
+Omitted fields add no line. Description, When to use, Triggers, License, Compatibility,
 Allowed tools, Argument hint, User arguments, and Activate hint fold
 Unicode whitespace to spaces so each stays one envelope
 line. Package root and `scripts/` / `references/` / `assets/`

@@ -656,6 +656,9 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     if let Some(when) = skill.when_to_use.as_deref() {
         push_envelope_line(&mut out, "When to use", when);
     }
+    if !skill.triggers.is_empty() {
+        push_envelope_line(&mut out, "Triggers", &skill.triggers.join(", "));
+    }
     if let Some(lic) = &skill.license {
         push_envelope_line(&mut out, "License", lic);
     }
@@ -974,6 +977,10 @@ mod tests {
         assert!(
             !bare.contains("Use when:"),
             "omitted when_to_use must keep the cheap name + description line: {bare}"
+        );
+        assert!(
+            !cat.contains("Triggers:"),
+            "catalog must stay cheap (no trigger dump): {cat}"
         );
     }
 
@@ -1368,6 +1375,36 @@ mod tests {
     }
 
     #[test]
+    fn format_load_message_includes_triggers() {
+        let mut hinted = Skill::new("triggered", "hinted", "body");
+        hinted.triggers = vec!["git".to_owned(), "A &\nB".to_owned()];
+        let load = format_load_message(&hinted, "", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        assert!(
+            header.contains("Triggers: git, A & B\n"),
+            "load must carry flattened triggers like list JSON/XML: {load}"
+        );
+        assert!(
+            header.contains("Description: hinted\n"),
+            "triggers follow description: {load}"
+        );
+        assert!(
+            !header.contains("A &\nB"),
+            "folded triggers must stay one envelope line: {load}"
+        );
+
+        let bare = format_load_message(
+            &Skill::new("no-triggers", "bare", "body"),
+            "",
+            FormatOptions::default(),
+        );
+        assert!(
+            !bare.contains("Triggers:"),
+            "empty triggers must not add a load line: {bare}"
+        );
+    }
+
+    #[test]
     fn format_load_message_includes_argument_hint() {
         let mut hinted = Skill::new("slash-hint", "hinted", "body");
         hinted.argument_hint = Some("name &\nid".to_owned());
@@ -1435,6 +1472,7 @@ mod tests {
         skill.allowed_tools = Some("Read\nBash(git:*)".to_owned());
         skill.argument_hint = Some("[name]\n[id]".to_owned());
         skill.when_to_use = Some("after\nrebase".to_owned());
+        skill.triggers = vec!["git".to_owned(), "A &\nB".to_owned()];
         let load = format_load_message(
             &skill,
             "--fix\n--dry-run",
@@ -1462,6 +1500,10 @@ mod tests {
         assert!(
             header.contains("When to use: after rebase\n"),
             "when_to_use block scalar must stay one envelope line: {load}"
+        );
+        assert!(
+            header.contains("Triggers: git, A & B\n"),
+            "triggers list must stay one envelope line: {load}"
         );
         assert!(
             header.contains("Argument hint: [name] [id]\n"),
