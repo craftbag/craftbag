@@ -236,7 +236,7 @@ fn tools() -> Value {
     list_props["format"] = json!({
         "type": "string",
         "enum": ["json", "xml", "catalog", "watch"],
-        "description": "json (default), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md)."
+        "description": "json (default), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). watch-dirs and watch_dirs are the same walk as watch."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -257,7 +257,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies.",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, and allowed-tools when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error (same as why --json).",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -266,7 +266,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions.",
+            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error.",
             "inputSchema": {"type": "object", "properties": why_props}
         }
     ])
@@ -2446,6 +2446,49 @@ mod tests {
                 "must not return default catalog for null ascii_names: {text}"
             );
         });
+    }
+
+    #[test]
+    fn tools_list_load_why_describe_error_kind() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(52)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for name in ["skills_load", "skills_why"] {
+            let tool = tools.iter().find(|t| t["name"] == name).expect(name);
+            let desc = tool["description"].as_str().unwrap_or("");
+            assert!(
+                desc.contains("error_kind") && desc.contains("error"),
+                "{name} must name SkillMiss.error / error_kind like CLI why --json: {desc}"
+            );
+        }
+    }
+
+    #[test]
+    fn tools_list_format_describes_watch_dirs_alias() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(53)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let desc = list["inputSchema"]["properties"]["format"]["description"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            desc.contains("watch-dirs") && desc.contains("watch_dirs"),
+            "skills_list format must name live watch-dirs aliases: {desc}"
+        );
     }
 
     #[test]

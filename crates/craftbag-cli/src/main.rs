@@ -35,7 +35,7 @@ enum Cmd {
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
         /// Same tokens as MCP skills_list format: json, xml, catalog, watch.
-        /// `watch-dirs` is the `--watch-dirs` flag name.
+        /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
         /// Extra package or collection root (not a project walk). Example: --path ./my-skill
@@ -73,6 +73,7 @@ enum Cmd {
     /// Explain loaded, skipped, and activation decisions.
     Why {
         name: Option<String>,
+        /// Print `{ error_kind, error }` on a miss (same peel as `validate --json`).
         #[arg(long)]
         json: bool,
         /// Activation context text. Example: --context rebase

@@ -27,6 +27,13 @@ CLI `validate --json` uses the same peel on a failed path.
 (no `error_kind`). Call `ValidationReport::miss`. Echoed keys and
 names go through `sanitize_error_token` so stderr stays one line.
 
+| Host surface | Miss peel |
+|--------------|-----------|
+| CLI `why --json` | stdout `{ error_kind, error }`; stderr one-line `error` |
+| CLI `validate --json` | same peel on failure; success is `ValidationReport` (no `error_kind`) |
+| CLI `load` | stderr `error` only (no JSON peel) |
+| MCP `skills_load` / `skills_why` | `SkillMiss.error` and `SkillMiss.error_kind` next to `isError`; `content[0].text` is `error` |
+
 ## Path-dep (separate worktree)
 
 Use a Bline worktree that is not findbug and not the durable
