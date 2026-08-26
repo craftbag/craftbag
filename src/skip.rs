@@ -71,7 +71,10 @@ pub struct SkillSkip {
     /// Human-readable reason (parse error text, etc.).
     pub detail: String,
     /// Winning path when `kind` is [`SkipKind::NameCollision`].
-    #[serde(default)]
+    ///
+    /// Serialize stays `winnerPath`. Deserialize also accepts
+    /// `winner_path` so a `SkillMiss` row is not silently winner-less.
+    #[serde(default, alias = "winner_path")]
     pub winner_path: Option<PathBuf>,
 }
 
@@ -228,6 +231,29 @@ mod tests {
                 "v1 must reject {wire}"
             );
         }
+    }
+
+    #[test]
+    fn serde_accepts_snake_winner_path() {
+        // SkillMiss JSON uses `winner_path`. SkillSkip serialize uses
+        // `winnerPath`. A host that feeds a miss row back into SkillSkip
+        // must not stay winner-less (PR 213 leftover on skip wire).
+        let json = r#"{"path":"/x/SKILL.md","kind":"name_collision","detail":"d","winner_path":"/a/foo/SKILL.md"}"#;
+        let skip: SkillSkip = serde_json::from_str(json).expect("snake winner_path");
+        assert_eq!(
+            skip.winner_path.as_deref(),
+            Some(std::path::Path::new("/a/foo/SKILL.md")),
+            "snake winner_path must populate SkillSkip, not stay skipped None"
+        );
+        let out = serde_json::to_string(&skip).expect("ser");
+        assert!(
+            out.contains("winnerPath"),
+            "SkillSkip serialize must still emit winnerPath: {out}"
+        );
+        assert!(
+            !out.contains("winner_path"),
+            "SkillSkip serialize must not switch to snake winner_path: {out}"
+        );
     }
 
     #[test]
