@@ -6,37 +6,33 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "365d70288c9dfc7e6d12644436d72a04583f37c6",
+  "ledger_sha": "a77c1994c443c0204647e068c07234c2f3e21940",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-skills-named-package-list-cli-mcp",
+    "id": "leftover-skills-named-package-why-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T01:06:00Z",
-    "finished_at": "2026-08-27T01:14:43Z",
+    "started_at": "2026-08-27T01:15:00Z",
+    "finished_at": "2026-08-27T01:19:41Z",
     "result": "landed",
-    "head": "3c76041c5cca6186843a4be20c62f0769bff14dd",
-    "pr": 230,
+    "head": "4a193c8507bcc445a07bb34ce45b49e2365a41cc",
+    "pr": 231,
     "files": [
       "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs",
-      "factory/BLINE_CONSUMER.md",
-      "tests/corpus/leftover/skills-named-package/skills/SKILL.md",
-      "tests/corpus/leftover/skills-named-package/skills/evil/SKILL.md",
-      "tests/corpus/leftover/skills-named-package/wanted/SKILL.md"
+      "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "list_leftover_skills_named_package_names_wanted,stdio_skills_list_leftover_skills_named_package_names_wanted",
+    "tests": "why_leftover_skills_named_package_names_wanted,stdio_skills_why_leftover_skills_named_package_names_wanted",
     "review": "0"
   },
-  "last_sha": "3c76041c5cca6186843a4be20c62f0769bff14dd",
+  "last_sha": "4a193c8507bcc445a07bb34ce45b49e2365a41cc",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T01:14:43Z",
+    "checked_at": "2026-08-27T01:19:41Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -64,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP list names leftover extra/skills named package plus wanted."
+    "last_why_summary": "CLI/MCP why names leftover extra/skills named package plus wanted."
   },
   "budgets": {
     "max_cycles": null,
