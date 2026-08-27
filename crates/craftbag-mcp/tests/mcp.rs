@@ -562,10 +562,19 @@ fn stdio_skills_list_watch_newline_extra_path_omits_root() {
 #[test]
 fn stdio_skills_list_watch_whitespace_extra_path_omits_root() {
     // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
-    // on the MCP watch door. paths: [" /.."] must not notify-watch `/`.
+    // on the MCP watch door. paths: [" /.."] and ["/ .."] must not
+    // notify-watch `/`.
     let cwd = tempfile::tempdir().expect("cwd");
     let home = tempfile::tempdir().expect("home");
-    for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/.."] {
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
         let resp = rpc_in(
             cwd.path(),
             home.path(),
