@@ -6,27 +6,28 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "45679c2cf0ae22299840c79abbf888221d594b87",
+  "ledger_sha": "a6eca3aab6c71df97813b2e3ba46a878ff661cc2",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 3,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi38-maint-truncate",
+    "id": "improve-mpi38-ops-rustflags",
     "work_source": "improve",
-    "started_at": "2026-08-27T16:24:39Z",
-    "finished_at": "2026-08-27T16:24:39Z",
+    "started_at": "2026-08-27T16:36:43Z",
+    "finished_at": "2026-08-27T16:36:43Z",
     "result": "landed",
-    "head": "dac281620ee96c9f80556245f67b42ade0ce4a44",
-    "pr": 293,
+    "head": "f3b2121a855340fb604baa04be9a174dc76cf17e",
+    "pr": 294,
     "files": [
-      "src/activate.rs",
-      "src/lib.rs"
+      "AGENTS.md",
+      "Makefile",
+      "tests/msrv.rs"
     ],
-    "tests": "crate_root_does_not_export_unused_truncate_skill_body_for_budget",
+    "tests": "local_gate_denies_rustc_warnings_like_ci",
     "review": "0"
   },
-  "last_sha": "dac281620ee96c9f80556245f67b42ade0ce4a44",
+  "last_sha": "f3b2121a855340fb604baa04be9a174dc76cf17e",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
@@ -38,7 +39,7 @@
   },
   "mpi": {
     "cycle": 38,
-    "next_perspective": 6,
+    "next_perspective": 7,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
