@@ -474,3 +474,4 @@
 {"ts": "2026-08-27T08:33:29Z", "job_id": "mpi34-adv-validate-hostile-token", "work_source": "improve", "result": "landed", "head": "fbecba5a5fe1f9a92d776cc58d655bd380586c49", "pr": 265, "tests": "validate hostile token refuse", "noop": false}
 {"ts": "2026-08-27T08:47:26Z", "job_id": "mpi34-arch-collapse-padded-dot", "work_source": "improve", "result": "landed", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": 266, "tests": "padded / .. refuse", "noop": false}
 {"ts": "2026-08-27T08:50:13Z", "job_id": "mpi34-contrib-noop", "work_source": "improve", "result": "noop", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": null, "tests": "gate + BLINE current", "noop": true}
+{"ts": "2026-08-27T08:52:11Z", "job_id": "mpi34-obs-noop", "work_source": "improve", "result": "noop", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": null, "tests": "SkillMiss peel present", "noop": true}
