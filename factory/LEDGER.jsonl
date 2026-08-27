@@ -662,3 +662,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:14:49Z","job_id":"expand1-prop-gap-noop-r4","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"prop gap still empty; back to PM"}
 {"ts":"2026-08-27T22:15:56Z","job_id":"improve-mpi46-pm-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"PM steal list still live"}
 {"ts":"2026-08-27T22:16:53Z","job_id":"improve-mpi46-spec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Spec REVIEW 0"}
+{"ts":"2026-08-27T22:17:42Z","job_id":"improve-mpi46-perf-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Perf REVIEW 0; expand2 fuzz already 6 targets"}
