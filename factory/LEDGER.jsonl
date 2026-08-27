@@ -642,3 +642,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:03:03Z","job_id":"improve-mpi45-sec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Security REVIEW 0; expand3 incumbents already present"}
 {"ts":"2026-08-27T22:03:08Z","job_id":"expand3-incumbent-noop-r3","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"incumbents complete; back to PM"}
 {"ts":"2026-08-27T22:04:20Z","job_id":"improve-mpi45-pm-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"PM steal list still live"}
+{"ts":"2026-08-27T22:05:00Z","job_id":"improve-mpi45-spec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Spec REVIEW 0"}
