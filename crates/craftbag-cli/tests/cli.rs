@@ -305,6 +305,66 @@ fn list_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn list_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the CLI door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus().join("leftover/skills-named-package");
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "wanted"),
+        "extra",
+        "named extra/skills must not hide leftover sibling wanted: {stdout}"
+    );
+    assert_eq!(
+        list_json_source(&stdout, "skills"),
+        "extra",
+        "named extra/skills package must load: {stdout}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let mut names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        ["skills", "wanted"],
+        "named extra/skills must not hide leftover sibling or scan nested evil: {stdout}"
+    );
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "named extra/skills is not a leftover root file: {stdout}"
+    );
+}
+
+#[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
     let pkg = home.path().join("myskills").join("mine");
