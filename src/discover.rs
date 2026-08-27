@@ -38,8 +38,8 @@ pub struct DiscoveryOptions {
     /// A prefix whose component contains a line separator is dropped
     /// (same refuse as extra-path / user_dir). Lexical `evil\n/..`
     /// must not collapse to cwd and hide the walk. A token that
-    /// collapses after whitespace trim (` /..`, `evil /..`) is dropped
-    /// the same way.
+    /// collapses after whitespace trim (` /..`, `/ ..`, `evil /..`) is
+    /// dropped the same way.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
@@ -1464,6 +1464,23 @@ fn nfkc_dot_path_components(path: &Path) -> PathBuf {
     out
 }
 
+/// True when NFKC / trim rewrite turns an absolute token into `/`
+/// (`/ ..`, `/\t..`). Explicit `/` and `/..` stay host-chosen roots.
+/// Relative `foo/ ‥` still rewrites to parent, not this refuse.
+fn nfkc_absolute_rewrites_to_fs_root(raw: &str) -> bool {
+    if raw == "/" || raw == "/.." {
+        return false;
+    }
+    let rewritten = nfkc_dot_path_components(Path::new(raw));
+    let mut comps = rewritten.components();
+    match (comps.next(), comps.next(), comps.next()) {
+        (Some(Component::RootDir), None, _) => true,
+        (Some(Component::RootDir), Some(Component::ParentDir), None) => true,
+        (Some(Component::RootDir), Some(Component::Normal(s)), None) if s == ".." => true,
+        _ => false,
+    }
+}
+
 fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf> {
     // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
     // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
@@ -1512,8 +1529,9 @@ fn host_token_collapses_after_whitespace(raw: &str) -> bool {
     if trimmed.is_empty() {
         return false;
     }
-    // Padded `.` / `..` (including NFKC) still mean cwd. Extra-path
-    // and ignore already treat those as cwd.
+    // Whole-token padded `.` / `..` (including NFKC) still mean cwd.
+    // Relative `foo/ ‥` is still an extra-path / ignore rewrite.
+    // Absolute `/ ..` nfkc-rewrites to `/` and must collapse.
     let n = crate::parse::normalize_skill_name(trimmed);
     let n = n.trim();
     if n == "." || n == ".." {
@@ -1522,7 +1540,7 @@ fn host_token_collapses_after_whitespace(raw: &str) -> bool {
     if trimmed != raw && Path::new(trimmed).is_absolute() {
         return true;
     }
-    Path::new(raw).components().any(|c| match c {
+    if Path::new(raw).components().any(|c| match c {
         Component::Normal(s) => s.to_str().is_some_and(|t| {
             let inner = t.trim();
             if inner.is_empty() {
@@ -1536,7 +1554,10 @@ fn host_token_collapses_after_whitespace(raw: &str) -> bool {
             t != inner
         }),
         _ => false,
-    })
+    }) {
+        return true;
+    }
+    nfkc_absolute_rewrites_to_fs_root(raw)
 }
 
 /// True when a path component contains a line separator (U+000A, U+000D,
@@ -2118,10 +2139,10 @@ pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T 
 mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
-        extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
-        path_has_line_separator, str_has_line_separator, unknown_or_skipped_skill,
-        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-        walk_cwd_to_git_root, watch_dirs, with_home_override,
+        extra_path_is_loose_collection, find_skill_by_name, host_token_collapses_after_whitespace,
+        load_classified_extra_path_package, path_has_line_separator, str_has_line_separator,
+        unknown_or_skipped_skill, unknown_or_skipped_skill_message, validate_path,
+        validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -3327,6 +3348,35 @@ mod tests {
         assert!(str_has_line_separator("evil\r/.."));
         assert!(str_has_line_separator("evil\u{2028}/.."));
         assert!(!str_has_line_separator("evil/.."));
+    }
+
+    #[test]
+    fn host_token_collapses_padded_slash_dotdot_like_validate() {
+        // validate already refuses `/ ..`. Extra-path and ignore must
+        // share the rewrite-to-`/` case so they do not walk or hide
+        // under filesystem root. Relative padded NFKC `‥` stays a rewrite.
+        for raw in ["/ ..", "/\t..", "/\u{00a0}.."] {
+            assert!(
+                host_token_collapses_after_whitespace(raw),
+                "padded-slash token {raw:?} must collapse like validate"
+            );
+        }
+        assert!(
+            !host_token_collapses_after_whitespace(".."),
+            "bare .. is cwd parent, not a collapse"
+        );
+        assert!(
+            !host_token_collapses_after_whitespace("‥"),
+            "NFKC ‥ stays an extra-path rewrite"
+        );
+        assert!(
+            !host_token_collapses_after_whitespace("/"),
+            "explicit / is a host-chosen root"
+        );
+        assert!(
+            !host_token_collapses_after_whitespace(".agents/skills/secret/evil/ ‥ "),
+            "relative padded NFKC ‥ stays an ignore rewrite"
+        );
     }
 
     #[test]
@@ -7827,6 +7877,9 @@ mod tests {
             "\u{00a0}/..",
             "evil\u{85}/..",
             "evil\u{0b}/..",
+            "/ ..",
+            "/\t..",
+            "/\u{00a0}..",
         ] {
             let opts = DiscoveryOptions {
                 ignore: vec![raw.to_owned()],
@@ -7859,11 +7912,20 @@ mod tests {
 
     #[test]
     fn extra_path_whitespace_dotdot_does_not_scan_filesystem_root() {
-        // ` /..`.trim() is `/..`, which is `/`. A host token that is
-        // not `/` must not walk or watch the filesystem root.
+        // ` /..`.trim() is `/..`, which is `/`. `/ ..` nfkc-rewrites
+        // to `/` the same way unless collapse owns the padded component.
+        // A host token that is not `/` must not walk or watch root.
         let cwd = tempfile::tempdir().expect("cwd");
         let home = tempfile::tempdir().expect("home");
-        for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/.."] {
+        for raw in [
+            " /..",
+            "\t/..",
+            "\u{85}/..",
+            "\u{00a0}/..",
+            "/ ..",
+            "/\t..",
+            "/\u{00a0}..",
+        ] {
             let opts = DiscoveryOptions {
                 paths: vec![raw.to_owned()],
                 implicit_roots: false,
