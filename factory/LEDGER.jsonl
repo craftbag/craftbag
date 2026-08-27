@@ -485,3 +485,4 @@
 {"ts": "2026-08-27T09:38:46Z", "job_id": "mpi35-pm-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "steal-list live", "noop": true}
 {"ts": "2026-08-27T09:41:23Z", "job_id": "mpi35-spec-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "help unnamed both doors", "noop": true}
 {"ts": "2026-08-27T09:42:58Z", "job_id": "mpi35-perf-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "consecutive_noop=3 expand incumbent", "noop": true}
+{"ts": "2026-08-27T09:53:29Z", "job_id": "expand-incumbent-vercel-why-load", "work_source": "expand", "result": "landed", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": 270, "tests": "vercel why/load", "noop": false}
