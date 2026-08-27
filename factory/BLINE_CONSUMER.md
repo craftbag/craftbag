@@ -131,8 +131,14 @@ rejected. List/why `path` populates `source_path` (serialize still
 omits it). Skill serialize stays `extraPath` / `{vendor:{name}}`.
 Omitted flags on old why JSON keep the
 pre-90 defaults (`user_invocable` true, `disable_model_invocation`
-false). `filter_skills` / `why.activation` still use only
-`disable_model_invocation` for auto-inject.
+false). `filter_skills` and `why.activation` share
+`SkillSource::empty_triggers_not_always_active` so a new vendor
+token cannot inject in one path and report `vendor_empty_triggers`
+in the other. Compat vendors (`claude`, `cursor`, `grok`;
+`COMPAT_VENDOR_TOKENS`) with empty `triggers` are not
+always-active. `bline` vendor, `user`, `agents`, and `extra` still
+auto-inject when `triggers` is empty. `disable_model_invocation`
+never auto-injects. `user_invocable` is slash-palette only.
 
 Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`, MCP
 `ascii_names`) until Bline chooses Unicode / NFKC as product policy.
@@ -218,8 +224,9 @@ Not skip kinds in v1 (silent or activation-only):
 | `Ignored` | `DiscoveryOptions.ignore` (CLI `--ignore`, MCP `ignore`; no skip row) |
 | `VendorDenylist` | Cursor list is silent |
 | `InvocationOff` | `disable_model_invocation` is activation, not a skip |
+| `VendorEmptyTriggers` | `why.activation` / `filter_skills` only (`vendor_empty_triggers`) |
 
-Do not add those five as `SkipKind` variants until they have corpus
+Do not add those six as `SkipKind` variants until they have corpus
 fixtures.
 
 ## Corpus skip-row compare (2026-08-24)
