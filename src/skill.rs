@@ -37,6 +37,7 @@ pub struct Skill {
     #[serde(default)]
     pub triggers: Vec<String>,
     /// The Markdown body content injected into the prompt.
+    #[serde(default)]
     pub content: String,
     /// Where the skill was discovered.
     ///
@@ -343,6 +344,66 @@ mod tests {
             "list/why path must keep package_root for the load envelope"
         );
         let out = serde_json::to_string(&skill).expect("ser");
+        assert!(
+            !out.contains("sourcePath")
+                && !out.contains("source_path")
+                && !out.contains("\"path\""),
+            "Skill serialize must still omit source_path: {out}"
+        );
+    }
+
+    #[test]
+    fn serde_accepts_list_why_row_without_content() {
+        // List / why JSON is SkillSummary: name, description, source, path,
+        // flags. It never emits `content`. PRs 203/213 accepted source tokens
+        // and `path` on a row that still faked `"content":"z"`. A host that
+        // feeds a real list/why row back into Skill must not reject it.
+        let json = r#"{
+            "name": "x",
+            "description": "y",
+            "source": "extra",
+            "path": "/tmp/x/SKILL.md",
+            "user_invocable": false,
+            "disable_model_invocation": true,
+            "argument_hint": "[name]",
+            "when_to_use": "after rebase",
+            "triggers": ["git"],
+            "allowed_tools": "Read",
+            "license": "MIT",
+            "compatibility": "rust",
+            "metadata": {"author": "A"}
+        }"#;
+        let skill: Skill = serde_json::from_str(json).expect("list/why row without content");
+        assert_eq!(
+            skill.content, "",
+            "omitted list/why content must default empty, not reject the row"
+        );
+        assert_eq!(skill.name, "x");
+        assert_eq!(skill.description, "y");
+        assert_eq!(skill.source, SkillSource::ExtraPath);
+        assert_eq!(
+            skill.source_path.as_deref(),
+            Some(std::path::Path::new("/tmp/x/SKILL.md"))
+        );
+        assert!(!skill.user_invocable);
+        assert!(skill.disable_model_invocation);
+        assert_eq!(skill.argument_hint.as_deref(), Some("[name]"));
+        assert_eq!(skill.when_to_use.as_deref(), Some("after rebase"));
+        assert_eq!(skill.triggers, vec!["git".to_owned()]);
+        assert_eq!(skill.allowed_tools.as_deref(), Some("Read"));
+        assert_eq!(skill.license.as_deref(), Some("MIT"));
+        assert_eq!(skill.compatibility.as_deref(), Some("rust"));
+        assert_eq!(skill.metadata.get("author").map(String::as_str), Some("A"));
+        assert_eq!(
+            skill.package_root(),
+            Some(std::path::Path::new("/tmp/x")),
+            "list/why path must still keep package_root when content is omitted"
+        );
+        let out = serde_json::to_string(&skill).expect("ser");
+        assert!(
+            out.contains("\"content\":\"\""),
+            "Skill serialize still emits content (empty), not omit: {out}"
+        );
         assert!(
             !out.contains("sourcePath")
                 && !out.contains("source_path")
