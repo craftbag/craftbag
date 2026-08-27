@@ -435,6 +435,78 @@ fn list_leftover_skills_fifo_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn list_newline_extra_path_does_not_name_demo() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the CLI list door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert!(
+        !names.iter().any(|n| *n == "demo"),
+        "must not name demo under newline extra-path: {stdout}"
+    );
+    assert!(
+        !stdout.contains("SECRET_BODY"),
+        "body must not appear in list: {stdout}"
+    );
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().any(|s| {
+            s["kind"] == "unreadable"
+                && s["detail"].as_str().is_some_and(|d| {
+                    d.contains("path") || d.contains("line") || d.contains("control")
+                })
+        }),
+        "newline extra-path must be unreadable: {stdout}"
+    );
+    for s in skips {
+        if let Some(p) = s["path"].as_str() {
+            assert!(
+                !p.contains('\n') && !p.contains('\u{2028}') && !p.contains('\u{2029}'),
+                "skip path must not echo raw line separators: {p:?}"
+            );
+        }
+        if let Some(d) = s["detail"].as_str() {
+            assert!(
+                !d.contains('\n') && !d.contains('\u{2028}') && !d.contains('\u{2029}'),
+                "skip detail must not echo raw line separators: {d:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();

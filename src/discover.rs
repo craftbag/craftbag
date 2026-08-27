@@ -662,8 +662,11 @@ fn load_extra_path(
         return;
     };
     if path_has_line_separator(&expanded) {
+        // Sanitize path for list/why JSON and miss lines so hosts never
+        // echo a raw line separator from skip.path.
+        let skill_md = expanded.join("SKILL.md");
         skips.push(SkillSkip {
-            path: expanded.join("SKILL.md"),
+            path: PathBuf::from(crate::sanitize_error_token(&skill_md.display().to_string())),
             name: None,
             kind: SkipKind::Unreadable,
             detail: "path component contains a line separator".to_owned(),
