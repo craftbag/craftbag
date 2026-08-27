@@ -589,3 +589,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:21:43Z","job_id":"expand4-prove-agentskills-collection","work_source":"expand","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"collection loads package-full+minimal-valid; back to Spec"}
 {"ts":"2026-08-27T21:22:22Z","job_id":"improve-mpi42-spec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Spec sibling lock complete"}
 {"ts":"2026-08-27T21:23:22Z","job_id":"improve-mpi42-perf-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Perf REVIEW 0"}
+{"ts":"2026-08-27T21:24:23Z","job_id":"improve-mpi42-compat-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Compat REVIEW 0; steal-list already live; continue Adv not catalog copy"}
