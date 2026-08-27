@@ -3058,6 +3058,16 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn path_has_line_separator_detects_lf() {
+        assert!(path_has_line_separator(std::path::Path::new("evil\nroot")));
+        assert!(path_has_line_separator(std::path::Path::new(
+            "evil\u{2028}root"
+        )));
+        assert!(!path_has_line_separator(std::path::Path::new("wanted")));
+    }
+
+    #[test]
     fn extra_path_skills_named_package_does_not_hide_sibling() {
         // extra/skills/SKILL.md named skills is a sibling package.
         // A root SKILL.md is not exclusive-scan collection entries.
