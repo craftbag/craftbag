@@ -35,6 +35,9 @@ pub struct DiscoveryOptions {
     pub paths: Vec<String>,
     /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
     /// Empty or whitespace-only items are ignored (not cwd).
+    /// A prefix whose component contains a line separator is dropped
+    /// (same refuse as extra-path / user_dir). Lexical `evil\n/..`
+    /// must not collapse to cwd and hide the walk.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
@@ -1479,6 +1482,12 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
             // Same NFKC `.` / `..` rewrite as extra-path arguments, then
             // lexical collapse so `wanted/evil/‥` is the `wanted` prefix.
             let joined = nfkc_dot_path_components(&joined);
+            // Same refuse as extra-path / user_dir: a line-separator
+            // component must not become a prefix (`evil\n/..` collapses
+            // to cwd and would hide the walk).
+            if path_has_line_separator(&joined) {
+                return None;
+            }
             let lexical = lexical_normalize(&joined);
             let canonical = joined
                 .canonicalize()
@@ -7308,6 +7317,49 @@ mod tests {
                     .any(|s| s.content.contains("KEEP_BODY")),
                 "ignore {raw:?} must not drop cwd skill body: {:?}",
                 report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn ignore_line_separator_dotdot_does_not_hide_discover_cwd() {
+        // extra-path / user_dir refuse a line-separator component.
+        // Ignore must not treat `evil\n/..` as cwd after lexical collapse.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let agents = cwd.path().join(".agents").join("skills");
+        write_skill(&agents.join("keep"), "keep", "KEEP_BODY");
+        for raw in [
+            "evil\n/..",
+            "evil\nfoo/..",
+            "evil\r/..",
+            "evil\u{2028}/..",
+            "evil\u{2029}/..",
+        ] {
+            let opts = DiscoveryOptions {
+                ignore: vec![raw.to_owned()],
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(cwd.path(), &opts);
+            assert!(
+                find_skill_by_name(&report.skills, "keep").is_some(),
+                "ignore {raw:?} must not hide cwd .agents skills: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .any(|s| s.content.contains("KEEP_BODY")),
+                "ignore {raw:?} must not drop cwd skill body: {:?}",
+                report.skills
+            );
+            let home = tempfile::tempdir().expect("home");
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                watch_paths_contain(&dirs, &agents),
+                "ignore {raw:?} must not omit cwd .agents/skills from watch: {dirs:?}"
             );
         }
     }
