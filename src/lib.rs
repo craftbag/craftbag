@@ -41,9 +41,9 @@ mod why;
 
 pub use activate::{
     DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
-    format_available_skills_xml, format_body_header, format_catalog, format_load_message,
-    format_package_envelope, parse_list_format, progressive_budgets, rank_skills_for_catalog,
-    skill_relevance_score, trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
+    format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
+    parse_list_format, progressive_budgets, rank_skills_for_catalog, skill_relevance_score,
+    trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
@@ -240,6 +240,31 @@ mod tests {
         assert!(
             !collapsed.contains("why inlines") && !collapsed.contains("still inlined"),
             "crate-root rustdoc must not say why inlines skip TSV: {docs}"
+        );
+    }
+
+    /// Load is [`super::format_load_message`]. A leftover
+    /// `format_body_header` was never called from CLI, MCP, or
+    /// `format_load_message`.
+    #[test]
+    fn crate_root_does_not_export_unused_format_body_header() {
+        let lib = include_str!("lib.rs");
+        let activate = lib
+            .split("pub use activate::{")
+            .nth(1)
+            .and_then(|rest| rest.split("};").next())
+            .expect("lib.rs must re-export activate");
+        assert!(
+            !activate.contains("format_body_header"),
+            "format_body_header is unused; do not re-export it: {activate}"
+        );
+        let prod = include_str!("activate.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("activate.rs production");
+        assert!(
+            !prod.contains("fn format_body_header"),
+            "format_body_header is unused; load uses format_load_message"
         );
     }
 }
