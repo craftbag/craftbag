@@ -35,6 +35,9 @@ pub struct DiscoveryOptions {
     pub paths: Vec<String>,
     /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
     /// Empty or whitespace-only items are ignored (not cwd).
+    /// A prefix whose component contains a line separator is dropped
+    /// (same refuse as extra-path / user_dir). Lexical `evil\n/..`
+    /// must not collapse to cwd and hide the walk.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
@@ -133,19 +136,26 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         }
     }
 
-    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        if !path_has_line_separator(&user_dir) {
-            if !path_is_ignored(&user_dir, &ignore) {
-                push_watch_dir(&mut out, user_dir.clone());
-            }
-            // user_dir is always a skills root. leftover SKILL.md is a
-            // root_file skip, not a named package. Watch user/skills when
-            // discover would walk that collection.
-            let user_skills = user_dir.join("skills");
-            if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names)
-                && !path_is_ignored(&user_skills, &ignore)
-            {
-                push_watch_dir(&mut out, user_skills);
+    if !opts
+        .user_skills_dir
+        .as_deref()
+        .and_then(|p| p.to_str())
+        .is_some_and(str_has_line_separator)
+    {
+        if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+            if !path_has_line_separator(&user_dir) {
+                if !path_is_ignored(&user_dir, &ignore) {
+                    push_watch_dir(&mut out, user_dir.clone());
+                }
+                // user_dir is always a skills root. leftover SKILL.md is a
+                // root_file skip, not a named package. Watch user/skills when
+                // discover would walk that collection.
+                let user_skills = user_dir.join("skills");
+                if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names)
+                    && !path_is_ignored(&user_skills, &ignore)
+                {
+                    push_watch_dir(&mut out, user_skills);
+                }
             }
         }
     }
@@ -506,7 +516,16 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         }
     }
 
-    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+    if opts
+        .user_skills_dir
+        .as_deref()
+        .and_then(|p| p.to_str())
+        .is_some_and(str_has_line_separator)
+    {
+        if let Some(raw) = opts.user_skills_dir.as_deref() {
+            skip_line_separator_root(raw, &mut skips);
+        }
+    } else if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
         if path_has_line_separator(&user_dir) {
             // Same refuse as extra-path: do not load or echo a user_dir
             // whose component would split list/why TSV or watch_dirs.
@@ -680,6 +699,10 @@ fn load_extra_path(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
+    if str_has_line_separator(raw) {
+        skip_line_separator_root(Path::new(&crate::sanitize_error_token(raw)), skips);
+        return;
+    }
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
     };
@@ -1403,6 +1426,14 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
     })
 }
 
+/// True when a host token contains a line separator (U+000A, U+000D,
+/// U+2028, U+2029). Used before Path join so Windows cannot drop the
+/// control character as a component.
+fn str_has_line_separator(s: &str) -> bool {
+    s.chars()
+        .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+}
+
 /// True when a path component contains a line separator (U+000A, U+000D,
 /// U+2028, U+2029). Hosts that split `watch_dirs` on newline would see
 /// a fake root. Discover refuses the extra-path or user_dir instead of
@@ -1412,8 +1443,7 @@ fn path_has_line_separator(p: &Path) -> bool {
         let Some(s) = c.as_os_str().to_str() else {
             return false;
         };
-        s.chars()
-            .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+        str_has_line_separator(s)
     })
 }
 
@@ -1465,6 +1495,14 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
     paths
         .iter()
         .filter_map(|p| {
+            // Host token first, before trim. `\n/..`.trim() is `/..`,
+            // which Windows treats as a root-relative prefix. Windows
+            // Path::components can also drop a control-char component,
+            // so `evil\n/..` would collapse to cwd after lexical
+            // normalize if we only inspected Path.
+            if str_has_line_separator(p) {
+                return None;
+            }
             // Empty or whitespace-only is not a prefix (not discover cwd).
             let raw = p.trim();
             if raw.is_empty() {
@@ -1479,6 +1517,12 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
             // Same NFKC `.` / `..` rewrite as extra-path arguments, then
             // lexical collapse so `wanted/evil/‥` is the `wanted` prefix.
             let joined = nfkc_dot_path_components(&joined);
+            // Same refuse as extra-path / user_dir: a line-separator
+            // component must not become a prefix (`evil\n/..` collapses
+            // to cwd and would hide the walk).
+            if path_has_line_separator(&joined) {
+                return None;
+            }
             let lexical = lexical_normalize(&joined);
             let canonical = joined
                 .canonicalize()
@@ -1907,9 +1951,9 @@ mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
         extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
-        path_has_line_separator, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
-        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-        with_home_override,
+        path_has_line_separator, str_has_line_separator, unknown_or_skipped_skill,
+        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+        walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -3111,6 +3155,10 @@ mod tests {
             "evil\u{2028}root"
         )));
         assert!(!path_has_line_separator(std::path::Path::new("wanted")));
+        assert!(str_has_line_separator("evil\n/.."));
+        assert!(str_has_line_separator("evil\r/.."));
+        assert!(str_has_line_separator("evil\u{2028}/.."));
+        assert!(!str_has_line_separator("evil/.."));
     }
 
     #[test]
@@ -7308,6 +7356,50 @@ mod tests {
                     .any(|s| s.content.contains("KEEP_BODY")),
                 "ignore {raw:?} must not drop cwd skill body: {:?}",
                 report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn ignore_line_separator_dotdot_does_not_hide_discover_cwd() {
+        // extra-path / user_dir refuse a line-separator component.
+        // Ignore must not treat `evil\n/..` as cwd after lexical collapse.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let agents = cwd.path().join(".agents").join("skills");
+        write_skill(&agents.join("keep"), "keep", "KEEP_BODY");
+        for raw in [
+            "evil\n/..",
+            "evil\nfoo/..",
+            "evil\r/..",
+            "evil\u{2028}/..",
+            "evil\u{2029}/..",
+            "\n/..",
+        ] {
+            let opts = DiscoveryOptions {
+                ignore: vec![raw.to_owned()],
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(cwd.path(), &opts);
+            assert!(
+                find_skill_by_name(&report.skills, "keep").is_some(),
+                "ignore {raw:?} must not hide cwd .agents skills: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .any(|s| s.content.contains("KEEP_BODY")),
+                "ignore {raw:?} must not drop cwd skill body: {:?}",
+                report.skills
+            );
+            let home = tempfile::tempdir().expect("home");
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                watch_paths_contain(&dirs, &agents),
+                "ignore {raw:?} must not omit cwd .agents/skills from watch: {dirs:?}"
             );
         }
     }
