@@ -271,7 +271,7 @@ fn decide_one(
             detail: "disable_model_invocation is set".to_owned(),
         };
     }
-    if skill.triggers.is_empty() && is_vendor_compat(&skill.source) {
+    if skill.triggers.is_empty() && skill.source.empty_triggers_not_always_active() {
         return ActivationDecision {
             name: skill.name.clone(),
             reason: ActivationReason::VendorEmptyTriggers,
@@ -302,13 +302,6 @@ fn decide_one(
         name: skill.name.clone(),
         reason: ActivationReason::BudgetOmitted,
         detail: "matched but omitted by the body token budget".to_owned(),
-    }
-}
-
-fn is_vendor_compat(source: &SkillSource) -> bool {
-    match source {
-        SkillSource::Vendor { name } => matches!(name.as_str(), "claude" | "cursor" | "grok"),
-        _ => false,
     }
 }
 
@@ -581,6 +574,47 @@ mod tests {
         );
         assert_eq!(by_dir.skips[0].name.as_deref(), Some("alpha"));
         assert!(by_dir.unknown_skill_message().is_none());
+    }
+
+    #[test]
+    fn why_activation_matches_filter_skills_for_every_vendor() {
+        use crate::activate::filter_skills;
+
+        for name in SkillSource::VENDOR_TOKENS {
+            let mut skill = Skill::new("legacy", "d", "x".repeat(80));
+            skill.source = SkillSource::Vendor {
+                name: (*name).to_owned(),
+            };
+            let report = DiscoveryReport {
+                skills: vec![skill.clone()],
+                skips: vec![],
+            };
+            let why = why(&report, None, Some("hello"), None);
+            let injected = filter_skills(&report.skills, "hello", 10_000);
+            assert_eq!(why.activation.len(), 1, "vendor {name}");
+            if skill.source.empty_triggers_not_always_active() {
+                assert!(
+                    injected.is_empty(),
+                    "filter_skills must omit empty-trigger {name}"
+                );
+                assert_eq!(
+                    why.activation[0].reason,
+                    ActivationReason::VendorEmptyTriggers,
+                    "why must not inject empty-trigger {name}"
+                );
+            } else {
+                assert_eq!(
+                    injected.len(),
+                    1,
+                    "filter_skills must inject empty-trigger {name}"
+                );
+                assert_eq!(
+                    why.activation[0].reason,
+                    ActivationReason::Injected,
+                    "why must inject empty-trigger {name}"
+                );
+            }
+        }
     }
 
     #[test]

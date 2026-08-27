@@ -114,6 +114,24 @@ impl SkillSource {
     /// Frozen v1 vendor tokens (`bline`, `claude`, `cursor`, `grok`).
     pub const VENDOR_TOKENS: &'static [&'static str] = &["bline", "claude", "cursor", "grok"];
 
+    /// Vendor trees whose empty `triggers` are not always-active.
+    ///
+    /// Claude / Cursor / Grok product rule. [`Self::Vendor`] `bline` is
+    /// not in this set ([`crate::filter_skills`] still auto-injects it).
+    pub const COMPAT_VENDOR_TOKENS: &'static [&'static str] = &["claude", "cursor", "grok"];
+
+    /// True when empty `triggers` must not auto-inject.
+    ///
+    /// [`crate::filter_skills`] and `why.activation` share this so a new
+    /// vendor token cannot inject in one path and report
+    /// `vendor_empty_triggers` in the other.
+    pub fn empty_triggers_not_always_active(&self) -> bool {
+        match self {
+            Self::Vendor { name } => Self::COMPAT_VENDOR_TOKENS.contains(&name.as_str()),
+            _ => false,
+        }
+    }
+
     /// Help / error list (`bline, claude, cursor, or grok`).
     pub fn vendor_choice_list() -> String {
         match Self::VENDOR_TOKENS {
@@ -243,6 +261,36 @@ mod tests {
             | SkillSource::Vendor { .. }
             | SkillSource::ExtraPath => {}
         }
+    }
+
+    #[test]
+    fn compat_vendor_tokens_are_a_named_subset() {
+        for token in SkillSource::COMPAT_VENDOR_TOKENS {
+            assert!(
+                SkillSource::VENDOR_TOKENS.contains(token),
+                "compat vendor {token} must be a VENDOR_TOKENS member"
+            );
+            assert!(
+                SkillSource::Vendor {
+                    name: (*token).to_owned()
+                }
+                .empty_triggers_not_always_active(),
+                "{token} empty triggers must not auto-inject"
+            );
+        }
+        assert!(
+            !SkillSource::COMPAT_VENDOR_TOKENS.contains(&"bline"),
+            "bline stays always-active when triggers are empty"
+        );
+        assert!(
+            !SkillSource::Vendor {
+                name: "bline".to_owned()
+            }
+            .empty_triggers_not_always_active()
+        );
+        assert!(!SkillSource::Agents.empty_triggers_not_always_active());
+        assert!(!SkillSource::User.empty_triggers_not_always_active());
+        assert!(!SkillSource::ExtraPath.empty_triggers_not_always_active());
     }
 
     #[test]

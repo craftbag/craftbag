@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::skill::{SKILL_BODY_LINE_SOFT_WARN, Skill};
-use crate::source::SkillSource;
 
 /// Host-neutral wording for how to load one full skill body.
 pub const DEFAULT_ACTIVATE_HINT: &str =
@@ -99,18 +98,12 @@ fn is_trigger_word_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-fn is_vendor_compat(source: &SkillSource) -> bool {
-    match source {
-        SkillSource::Vendor { name } => matches!(name.as_str(), "claude" | "cursor" | "grok"),
-        _ => false,
-    }
-}
-
 /// Filter skills by trigger match and token budget.
 ///
-/// Vendor sources `claude` / `cursor` / `grok` with empty triggers are not
-/// always-active. `disable_model_invocation` never auto-injects.
-/// `user_invocable` is slash-palette only and does not change this filter.
+/// [`crate::SkillSource::empty_triggers_not_always_active`] vendors with
+/// empty triggers are not always-active. `disable_model_invocation` never
+/// auto-injects. `user_invocable` is slash-palette only and does not
+/// change this filter.
 pub fn filter_skills<'a>(
     skills: &'a [Skill],
     context: &str,
@@ -125,7 +118,7 @@ pub fn filter_skills<'a>(
             continue;
         }
         if skill.triggers.is_empty() {
-            if !is_vendor_compat(&skill.source) {
+            if !skill.source.empty_triggers_not_always_active() {
                 always_active.push(skill);
             }
         } else {
