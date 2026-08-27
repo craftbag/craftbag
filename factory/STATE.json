@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f2b88253930a1f12e56348da9feabdf6dfe1e9d3",
+  "ledger_sha": "f2004f5cd4f0093ed0e5732caf120861804b5392",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 2,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand1-prop-gap-noop",
-    "work_source": "expand",
-    "started_at": "2026-08-27T21:08:14Z",
-    "finished_at": "2026-08-27T21:08:14Z",
-    "result": "noop",
+    "id": "prove-invalid-name",
+    "work_source": "prove",
+    "started_at": "2026-08-27T21:08:56Z",
+    "finished_at": "2026-08-27T21:08:56Z",
+    "result": "ok",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "props+6 fuzz cover host parsers; no leftover-path souvenir",
+    "tests": "why --no-implicit-roots --path agentskills/invalid-name -> skip parse_error Bad_Name",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -61,9 +61,10 @@
       "tests/corpus/root-file (--path, no implicit roots)",
       "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)",
       "tests/corpus/leftover/skills-named-package (--path, no implicit roots)",
-      "tests/corpus/agentskills/name-mismatch (--path, no implicit roots)"
+      "tests/corpus/agentskills/name-mismatch (--path, no implicit roots)",
+      "tests/corpus/agentskills/invalid-name (--path, no implicit roots)"
     ],
-    "last_why_summary": "why --path name-mismatch skip name_directory_mismatch good-name vs wrong-dir"
+    "last_why_summary": "why --path invalid-name skip parse_error Bad_Name (underscore/caps)"
   },
   "budgets": {
     "max_cycles": null,

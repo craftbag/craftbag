@@ -574,3 +574,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:04:51Z","job_id":"expand5-steal-list-noop","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"steal 1-4 live; item 5 catalog copy banned; analysis 3d"}
 {"ts":"2026-08-27T21:06:39Z","job_id":"expand0-bline-miss-noop","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"skip compare green; no new Bline-miss fixture"}
 {"ts":"2026-08-27T21:08:14Z","job_id":"expand1-prop-gap-noop","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"3 expand no-ops; switch prove leftover/invalid-name"}
+{"ts":"2026-08-27T21:08:56Z","job_id":"prove-invalid-name","work_source":"prove","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"why skip parse_error Bad_Name; reset noop streaks"}
