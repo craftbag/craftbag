@@ -164,6 +164,9 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         let Some(expanded) = expand_extra_path_arg(raw, &cwd) else {
             continue;
         };
+        if path_has_line_separator(&expanded) {
+            continue;
+        }
         if path_is_ignored(&expanded, &ignore) {
             continue;
         }
@@ -658,6 +661,16 @@ fn load_extra_path(
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
     };
+    if path_has_line_separator(&expanded) {
+        skips.push(SkillSkip {
+            path: expanded.join("SKILL.md"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "path component contains a line separator".to_owned(),
+            winner_path: None,
+        });
+        return;
+    }
     // `is_file` is false for FIFO/socket/device and symlink-to-those.
     // Still try load so `read_skill_md` can emit unreadable (and not hang).
     if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
@@ -1374,6 +1387,19 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
     })
 }
 
+/// True when a path component contains a line separator (U+000A, U+000D,
+/// U+2028, U+2029). Hosts that split `watch_dirs` on newline would see
+/// a fake root. Discover refuses the extra-path instead of loading it.
+fn path_has_line_separator(p: &Path) -> bool {
+    p.components().any(|c| {
+        let Some(s) = c.as_os_str().to_str() else {
+            return false;
+        };
+        s.chars()
+            .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+    })
+}
+
 fn expand_extra_path_arg(raw: &str, cwd: &Path) -> Option<PathBuf> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -1834,8 +1860,9 @@ mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
         extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
-        unknown_or_skipped_skill, unknown_or_skipped_skill_message, validate_path,
-        validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
+        path_has_line_separator, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
+        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
+        with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -3028,6 +3055,15 @@ mod tests {
             !watch_paths_contain(&dirs, &extra.join("skills")),
             "empty extra/skills is not a discover walk: {dirs:?}"
         );
+    }
+
+    #[test]
+    fn path_has_line_separator_detects_lf() {
+        assert!(path_has_line_separator(std::path::Path::new("evil\nroot")));
+        assert!(path_has_line_separator(std::path::Path::new(
+            "evil\u{2028}root"
+        )));
+        assert!(!path_has_line_separator(std::path::Path::new("wanted")));
     }
 
     #[test]
@@ -4511,6 +4547,78 @@ mod tests {
             report.skips
         );
         assert!(report.skills.iter().all(|s| s.name != "hidden"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn package_path_with_newline_component_is_unreadable_not_loaded() {
+        // A path component with U+000A splits list/why TSV lines and can
+        // inject a fake watch root when hosts split watch_dirs on newline.
+        // Refuse the package (unreadable) instead of loading a row hosts
+        // cannot echo on one line.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let parent = tempfile::tempdir().expect("parent");
+        let extra = parent.path().join("evil\nroot");
+        fs::create_dir_all(extra.join("demo")).expect("mkdir");
+        write_skill(&extra.join("demo"), "demo", "SECRET_BODY");
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        assert!(
+            report.skills.iter().all(|s| s.name != "demo"),
+            "must not load a package under a newline path component: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("SECRET_BODY")),
+            "body must not load: {:?}",
+            report.skills
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && (s.detail.contains("path")
+                        || s.detail.contains("control")
+                        || s.detail.contains("line"))
+            }),
+            "newline path component must be unreadable with a path reason: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        let msg = unknown_or_skipped_skill_message("demo", &report.skips);
+        assert_eq!(msg.lines().count(), 1, "miss must stay one line: {msg:?}");
+        assert!(
+            !msg.contains('\n') && !msg.contains('\u{2028}'),
+            "miss must not echo raw separators: {msg:?}"
+        );
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            dirs.iter()
+                .all(|p| !path_has_line_separator(p) && !p.display().to_string().contains('\n')),
+            "watch_dirs must not list a newline path: {dirs:?}"
+        );
     }
 
     #[cfg(unix)]
