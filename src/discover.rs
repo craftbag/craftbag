@@ -3058,7 +3058,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn path_has_line_separator_detects_lf() {
         assert!(path_has_line_separator(std::path::Path::new("evil\nroot")));
         assert!(path_has_line_separator(std::path::Path::new(
