@@ -6,39 +6,36 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "9534f54d8eb347105e918b60363714a2e20c7616",
+  "ledger_sha": "302c4645a376b80a8edfd226e798c5fd2a66384a",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "load-newline-extra-path-cli-mcp",
+    "id": "mpi32-pm-steal-list",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:57:00Z",
-    "finished_at": "2026-08-27T03:03:00Z",
-    "result": "landed",
+    "started_at": "2026-08-27T03:05:35Z",
+    "finished_at": "2026-08-27T03:05:35Z",
+    "result": "noop",
     "head": "8079ffa7e7509d6c595873260c444f438330e212",
-    "pr": 244,
-    "files": [
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs"
-    ],
-    "tests": "load_newline_extra_path_demo_unknown,stdio_skills_load_newline_extra_path_demo_unknown",
+    "pr": null,
+    "files": [],
+    "tests": "steal-list production callers already exist",
     "review": "0"
   },
   "last_sha": "8079ffa7e7509d6c595873260c444f438330e212",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T03:03:00Z",
+    "checked_at": "2026-08-27T03:05:35Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 8,
+    "next_perspective": 9,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP load newline extra-path does not name demo."
+    "last_why_summary": "MPI 32 PM steal-list no-op: XML/NFKC/strict/codes already have callers."
   },
   "budgets": {
     "max_cycles": null,
