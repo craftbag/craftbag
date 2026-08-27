@@ -1419,11 +1419,14 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
         }
         None => user_dir.to_path_buf(),
     };
-    Some(if expanded.is_absolute() {
+    let expanded = if expanded.is_absolute() {
         expanded
     } else {
         cwd.join(expanded)
-    })
+    };
+    // Same NFKC `.` / `..` rewrite as extra-path and ignore, so
+    // `wanted/evil/‥` is the `wanted` user root, not a missing dir.
+    Some(nfkc_dot_path_components(&expanded))
 }
 
 /// True when a host token contains a line separator (U+000A, U+000D,
@@ -7427,6 +7430,94 @@ mod tests {
                     .iter()
                     .all(|s| !s.content.contains("FROM_CWD")),
                 "user_dir {raw:?} must not load cwd package body: {:?}",
+                report.skills
+            );
+        }
+    }
+
+    #[test]
+    fn user_dir_nfkc_dotdot_component_collapses_like_extra_path() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let user = tempfile::tempdir().expect("user");
+        write_skill(&user.path().join("mine"), "mine", "from-user");
+        write_skill(&user.path().join("evil"), "evil", "NESTED_SECRET");
+        let via_fullwidth = user.path().join("evil").join("‥");
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(via_fullwidth.clone()),
+            ..DiscoveryOptions::default()
+        };
+        let report = empty_home_discover(cwd.path(), &opts);
+        assert!(
+            find_skill_by_name(&report.skills, "mine").is_some(),
+            "user_dir wanted/evil/‥ must collapse like extra-path and load mine: {:?}",
+            report.skills
+        );
+        assert_eq!(
+            find_skill_by_name(&report.skills, "mine").map(|s| s.source.clone()),
+            Some(SkillSource::User),
+            "collapsed user_dir must stay User: {:?}",
+            report.skills
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "evil").is_some(),
+            "collapsed user root must still list sibling evil: {:?}",
+            report.skills
+        );
+        let via_path = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![via_fullwidth.display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&via_path.skills, "mine").is_some(),
+            "extra-path wanted/evil/‥ control must load mine: {:?}",
+            via_path.skills
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            watch_paths_contain(&dirs, user.path()),
+            "watch_dirs must list the collapsed user root, not wanted/evil/‥: {dirs:?}"
+        );
+        assert!(
+            !dirs
+                .iter()
+                .any(|p| p.as_os_str().to_string_lossy().contains('‥')),
+            "watch_dirs must not echo NFKC ‥ after collapse: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn user_dir_nfkc_dotdot_argument_joins_like_ascii_dotdot() {
+        for raw in ["‥", "︰", "．．", "․․"] {
+            let user = tempfile::tempdir().expect("user");
+            write_skill(&user.path().join("mine"), "mine", "from-user");
+            write_skill(&user.path().join("evil"), "evil", "NESTED_SECRET");
+            let child = user.path().join("evil");
+            fs::create_dir_all(&child).expect("mkdir");
+            let opts = DiscoveryOptions {
+                user_skills_dir: Some(PathBuf::from(raw)),
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(&child, &opts);
+            assert!(
+                find_skill_by_name(&report.skills, "mine").is_some(),
+                "user_dir `{raw}` must join like ASCII `..` and load mine: {:?}",
+                report.skills
+            );
+            assert_eq!(
+                find_skill_by_name(&report.skills, "mine").map(|s| s.source.clone()),
+                Some(SkillSource::User),
+                "user_dir `{raw}` must stay User: {:?}",
+                report.skills
+            );
+            assert!(
+                find_skill_by_name(&report.skills, "evil").is_some(),
+                "user_dir `{raw}` must still list sibling evil: {:?}",
                 report.skills
             );
         }
