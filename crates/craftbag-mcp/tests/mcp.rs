@@ -324,6 +324,111 @@ fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn stdio_skills_why_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the MCP why door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus_leftover_skills_named_package();
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {text}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "named extra/skills is not a leftover root file: {text}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "skills",
+                    "paths": [extra.clone()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    assert!(
+        loaded.iter().any(|s| s["name"] == "skills"),
+        "why must name the extra/skills package: {text}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 18,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "evil",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    assert_eq!(
+        resp["result"]["error_kind"], "unknown_skill",
+        "nested evil must stay unknown: {resp}"
+    );
+}
+
+#[test]
 fn stdio_skills_load_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the MCP load door. Default vendor stays off. Empty extra/skills
