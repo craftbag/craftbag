@@ -3121,6 +3121,91 @@ mod tests {
     }
 
     #[test]
+    fn skills_why_null_format_is_error_not_json_default() {
+        empty_home(|| {
+            let resp = call(82, "skills_why", json!({"format": null}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says format is string; null must not default to json: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"activation\""),
+                "must not return default WhyReport JSON for null format: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_empty_format_names_json_and_text() {
+        empty_home(|| {
+            let resp = call(83, "skills_why", json!({"format": "   "}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "empty format must not default to json: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("unknown format: empty"),
+                "error must name the empty token: {text}"
+            );
+            assert!(
+                text.contains("json") && text.contains("text"),
+                "must name valid formats: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_uppercase_format_suggests_lowercase() {
+        empty_home(|| {
+            let resp = call(84, "skills_why", json!({"format": "JSON"}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "uppercase format must not default to json: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("unknown format: JSON") && text.contains("did you mean json?"),
+                "must point at the lowercase token: {text}"
+            );
+            assert!(
+                !text.contains("\"activation\""),
+                "must not return WhyReport JSON for uppercase format: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_why_newline_format_stays_one_line() {
+        empty_home(|| {
+            let resp = call(85, "skills_why", json!({"format": "json\nxml"}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "newline format must not default to json: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(!text.contains('\n'), "error must stay one line: {text:?}");
+            assert!(
+                text.contains("json?xml"),
+                "newline must be sanitized in the token: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_list_empty_user_dir_is_error_not_cwd() {
         empty_home(|| {
             let resp = call(40, "skills_list", json!({"user_dir": ""}));
