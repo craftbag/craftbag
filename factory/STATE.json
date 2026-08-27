@@ -6,16 +6,16 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "7b113a5e28c6e25b5902a1dd960527e21b979560",
+  "ledger_sha": "dc10cc40383d72c8da92d68492ca3c39ce7a7acd",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-perf-extra-io",
+    "id": "mpi33-compat-serde",
     "work_source": "improve",
-    "started_at": "2026-08-27T05:51:49Z",
-    "finished_at": "2026-08-27T05:51:49Z",
+    "started_at": "2026-08-27T05:58:38Z",
+    "finished_at": "2026-08-27T05:58:38Z",
     "result": "noop",
     "head": "c6e763857bdfafc34967a4dd3a908c294385542a",
     "pr": null,
@@ -25,7 +25,7 @@
   },
   "last_sha": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -35,7 +35,7 @@
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 11,
+    "next_perspective": 12,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -57,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 perf no-op: parse-once and watch omit already landed."
+    "last_why_summary": "MPI 33 compat no-op: serde aliases already landed."
   },
   "budgets": {
     "max_cycles": null,
