@@ -279,3 +279,22 @@ fn ci_pins_current_workflow_linters() {
         "workflows job must pin zizmor 1.29.0"
     );
 }
+
+/// Constitution: README is only `# craftbag` / `Not ready.`
+/// A quiet pitch without banned words still passes assert-stealth's
+/// pitch regex. Path-filter must include README.md so the rust matrix
+/// (this test) runs on a README-only PR; otherwise only Stealth runs
+/// and a non-regex pitch can stay green.
+#[test]
+fn readme_stealth_placeholder_is_path_filtered() {
+    let readme = read_rel("README.md");
+    assert_eq!(
+        readme, "# craftbag\n\nNot ready.\n",
+        "README must stay the constitution stealth placeholder"
+    );
+    let ci = read_rel(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("- 'README.md'"),
+        "rust path-filter must include README.md so a README-only edit runs this lock"
+    );
+}
