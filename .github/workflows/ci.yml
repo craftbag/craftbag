@@ -79,6 +79,8 @@ jobs:
         with:
           tool: cargo-deny
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: bash factory/scripts/deny-check.sh
@@ -105,6 +107,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 
@@ -137,6 +141,7 @@ jobs:
             fuzz
           shared-key: fuzz
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # ASAN needs glibc. cargo-fuzz may default to musl.
       - run: cargo fuzz run parse_skill --target x86_64-unknown-linux-gnu -- -max_total_time=5
         env:
@@ -176,6 +181,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 
@@ -201,6 +208,8 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 

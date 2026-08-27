@@ -137,6 +137,90 @@ fn local_gate_commands_run_in_ci() {
     }
 }
 
+fn ci_job_body(ci: &str, job: &str) -> String {
+    let mut in_jobs = false;
+    let mut in_job = false;
+    let mut body = String::new();
+    for line in ci.lines() {
+        if !in_jobs {
+            if line == "jobs:" {
+                in_jobs = true;
+            }
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("  ") {
+            if !rest.starts_with(' ') && !rest.starts_with('#') && rest.ends_with(':') {
+                let name = rest.trim_end_matches(':');
+                if in_job {
+                    break;
+                }
+                in_job = name == job;
+                continue;
+            }
+        }
+        if in_job {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    assert!(!body.is_empty(), "ci.yml must have job {job}");
+    body
+}
+
+fn rust_cache_step(job_body: &str) -> String {
+    let lines: Vec<&str> = job_body.lines().collect();
+    let mut start = None;
+    for (i, line) in lines.iter().enumerate() {
+        if line.contains("Swatinem/rust-cache@") {
+            let mut s = i;
+            while s > 0 && !lines[s].trim_start().starts_with("- ") {
+                s -= 1;
+            }
+            start = Some(s);
+            break;
+        }
+    }
+    let start = start.expect("job must have a rust-cache step");
+    let indent = lines[start].chars().take_while(|c| *c == ' ').count();
+    let mut out = String::new();
+    for (j, line) in lines.iter().enumerate().skip(start) {
+        if j > start {
+            let next_indent = line.chars().take_while(|c| *c == ' ').count();
+            if line.trim_start().starts_with("- ") && next_indent <= indent {
+                break;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+/// rust-cache on lint/test/fuzz/windows/macos must save only on main.
+/// PR jobs still restore. Factory PR cache writes evict the main restore.
+#[test]
+fn rust_cache_save_if_main_only() {
+    let ci = repo_file(".github/workflows/ci.yml");
+    let save_if = "save-if: ${{ github.ref == 'refs/heads/main' }}";
+    for job in ["lint", "test", "fuzz-smoke", "test-windows", "test-macos"] {
+        let body = ci_job_body(&ci, job);
+        let step = rust_cache_step(&body);
+        assert!(
+            step.contains(save_if),
+            "{job} rust-cache must set {save_if} so only main writes: {step}"
+        );
+    }
+    let fuzz = rust_cache_step(&ci_job_body(&ci, "fuzz-smoke"));
+    assert!(
+        fuzz.contains("shared-key: fuzz"),
+        "fuzz-smoke rust-cache must keep shared-key: fuzz: {fuzz}"
+    );
+    assert!(
+        fuzz.contains("cache-on-failure: true"),
+        "fuzz-smoke rust-cache must keep cache-on-failure: true: {fuzz}"
+    );
+}
+
 /// rust-toolchain does not install nextest, cargo-deny, or gh. A first
 /// clone that only rustups 1.85 cannot run the documented local gate.
 /// Latest nextest/cargo-deny do not build on rustc 1.85.
