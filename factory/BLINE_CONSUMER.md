@@ -12,8 +12,8 @@ kinds on one tree, then (if wanted) re-export `Skill` / `SkipKind`.
 
 `load` / `why` misses carry a stable `error_kind` so a host can branch
 without scraping Display. Unknown is `unknown_skill`. A matching skip
-reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json`
-prints `{ "error_kind", "error" }` on stdout and keeps the same one-line
+reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json` and CLI `load --json`
+print `{ "error_kind", "error" }` on stdout and keep the same one-line
 text on stderr. A matching skip also peels `path` (the `SKILL.md`).
 Unknown omits `path`. A `name_collision` skip also peels `winner_path`
 (the loaded `SKILL.md`). Other misses omit it. SkillSkip deserialize
@@ -35,7 +35,7 @@ names go through `sanitize_error_token` so stderr stays one line.
 |--------------|-----------|
 | CLI `why --json` | stdout `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
-| CLI `load` | stderr `error` only (no JSON peel) |
+| CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
 | MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
 
 ## Path-dep (separate worktree)
