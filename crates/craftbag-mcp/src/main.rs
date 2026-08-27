@@ -1251,6 +1251,39 @@ mod tests {
     }
 
     #[test]
+    fn list_catalog_omits_disable_model_invocation() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hidden = extra.path().join("hidden-slash");
+        std::fs::create_dir_all(&hidden).expect("mkdir hidden");
+        std::fs::write(
+            hidden.join("SKILL.md"),
+            "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nbody\n",
+        )
+        .expect("write hidden");
+        let slash = extra.path().join("slash-only");
+        std::fs::create_dir_all(&slash).expect("mkdir slash");
+        std::fs::write(
+            slash.join("SKILL.md"),
+            "---\nname: slash-only\ndescription: user only\ndisable-model-invocation: true\n---\nbody\n",
+        )
+        .expect("write slash");
+        let path = extra.path().to_string_lossy().into_owned();
+        let cat = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                format: Some("catalog".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("catalog")
+        });
+        assert_eq!(
+            catalog_name_order(&cat),
+            ["hidden-slash"],
+            "skills_list format=catalog must omit disable_model_invocation: {cat}"
+        );
+    }
+
+    #[test]
     fn list_json_context_does_not_reorder() {
         let extra = two_trigger_skill_root();
         let path = extra.path().to_string_lossy().into_owned();
