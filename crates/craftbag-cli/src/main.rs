@@ -322,14 +322,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                             .unwrap_or_default()
                     );
                 }
-                for skip in &why.skips {
-                    println!(
-                        "skip\t{}\t{}\t{}",
-                        skip.kind.as_str(),
-                        skip.path.display(),
-                        skip.detail
-                    );
-                }
+                print!("{}", format_skip_tsv(&why.skips));
                 for a in &why.activation {
                     println!(
                         "activation\t{}\t{}\t{}",

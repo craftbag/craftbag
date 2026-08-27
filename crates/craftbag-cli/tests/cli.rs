@@ -2738,6 +2738,51 @@ fn why_extra_path_root_file_and_package_agree_with_load() {
 }
 
 #[test]
+fn why_leftover_hostile_skip_tsv_stays_one_row() {
+    // list catalog/xml uses format_skip_tsv (PR 278/279). CLI why
+    // (not --json) still inlined skip\tkind\tpath\tdetail. Implicit
+    // leftover SKILL.md is not extra-path refuse, so skip.path is the
+    // raw walk path. U+2028 / U+2014 must not split why TSV.
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root");
+    let skills = root.join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    fs::write(
+        skills.join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover\u{2014}root\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd.current_dir(&root).arg("why").output().expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let skip_lines: Vec<&str> = stdout.lines().filter(|l| l.starts_with("skip\t")).collect();
+    assert_eq!(
+        skip_lines.len(),
+        1,
+        "leftover why skip TSV must stay one row: {stdout:?}"
+    );
+    let row = skip_lines[0];
+    assert!(
+        row.starts_with("skip\troot_file\t"),
+        "leftover why must emit skip TSV like list: {row:?}"
+    );
+    assert!(
+        !row.contains('\u{2028}') && !row.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into why skip TSV: {row:?}"
+    );
+    assert!(
+        row.contains("evil?root"),
+        "hostile leftover path must be sanitized in place: {row:?}"
+    );
+}
+
+#[test]
 fn why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the CLI why door. Default vendor stays off. Empty extra/skills
