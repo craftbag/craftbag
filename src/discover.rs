@@ -703,6 +703,16 @@ fn load_extra_path(
         skip_line_separator_root(Path::new(&crate::sanitize_error_token(raw)), skips);
         return;
     }
+    if host_token_collapses_after_whitespace(raw) {
+        skips.push(SkillSkip {
+            path: PathBuf::from(crate::sanitize_error_token(raw)),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "path token collapses after whitespace trim".to_owned(),
+            winner_path: None,
+        });
+        return;
+    }
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
     };
@@ -1409,6 +1419,12 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
     // Relative user_dir joins discover cwd, same as extra-path.
     // Empty or whitespace-only is not a directory (not cwd).
     let user_dir = user_dir?;
+    if user_dir
+        .to_str()
+        .is_some_and(host_token_collapses_after_whitespace)
+    {
+        return None;
+    }
     let expanded = match user_dir.to_str() {
         Some(raw) => {
             let raw = raw.trim();
@@ -1435,6 +1451,23 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
 fn str_has_line_separator(s: &str) -> bool {
     s.chars()
         .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+}
+
+/// True when trim turns a relative-looking token into `/` / `/..`, or
+/// a Path component has leading/trailing whitespace so `evil /..`
+/// lexical-collapses to cwd the same way `evil\n/..` did.
+fn host_token_collapses_after_whitespace(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if trimmed != raw && Path::new(trimmed).is_absolute() {
+        return true;
+    }
+    Path::new(raw).components().any(|c| match c {
+        Component::Normal(s) => s.to_str().is_some_and(|t| t != t.trim()),
+        _ => false,
+    })
 }
 
 /// True when a path component contains a line separator (U+000A, U+000D,
@@ -1503,7 +1536,7 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
             // Path::components can also drop a control-char component,
             // so `evil\n/..` would collapse to cwd after lexical
             // normalize if we only inspected Path.
-            if str_has_line_separator(p) {
+            if str_has_line_separator(p) || host_token_collapses_after_whitespace(p) {
                 return None;
             }
             // Empty or whitespace-only is not a prefix (not discover cwd).
@@ -7409,6 +7442,85 @@ mod tests {
             assert!(
                 watch_paths_contain(&dirs, &agents),
                 "ignore {raw:?} must not omit cwd .agents/skills from watch: {dirs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignore_whitespace_dotdot_does_not_hide_discover_cwd() {
+        // Line separators (LF/CR/U+2028/U+2029) are already refused.
+        // `trim()` also strips TAB/VT/FF/NEL/NBSP/SPACE. `evil /..`
+        // lexical-collapses to cwd the same way `evil\n/..` did, and
+        // ` /..` becomes `/` and hides every prefix under root.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let agents = cwd.path().join(".agents").join("skills");
+        write_skill(&agents.join("keep"), "keep", "KEEP_BODY");
+        for raw in [
+            "evil /..",
+            " /..",
+            "\t/..",
+            "\u{0b}/..",
+            "\u{0c}/..",
+            "\u{85}/..",
+            "\u{00a0}/..",
+            "evil\u{85}/..",
+            "evil\u{0b}/..",
+        ] {
+            let opts = DiscoveryOptions {
+                ignore: vec![raw.to_owned()],
+                ..DiscoveryOptions::default()
+            };
+            let report = empty_home_discover(cwd.path(), &opts);
+            assert!(
+                find_skill_by_name(&report.skills, "keep").is_some(),
+                "ignore {raw:?} must not hide cwd .agents skills: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skills
+                    .iter()
+                    .any(|s| s.content.contains("KEEP_BODY")),
+                "ignore {raw:?} must not drop cwd skill body: {:?}",
+                report.skills
+            );
+            let home = tempfile::tempdir().expect("home");
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                watch_paths_contain(&dirs, &agents),
+                "ignore {raw:?} must not omit cwd .agents/skills from watch: {dirs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn extra_path_whitespace_dotdot_does_not_scan_filesystem_root() {
+        // ` /..`.trim() is `/..`, which is `/`. A host token that is
+        // not `/` must not walk or watch the filesystem root.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/.."] {
+            let opts = DiscoveryOptions {
+                paths: vec![raw.to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            };
+            let report = with_home_override(Some(home.path().to_path_buf()), || {
+                discover(cwd.path(), &opts).expect("discover")
+            });
+            assert!(
+                report.skills.is_empty(),
+                "extra-path {raw:?} must not load root packages: {:?}",
+                report.skills
+            );
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                dirs.iter().all(|p| p != std::path::Path::new("/")),
+                "extra-path {raw:?} must not watch /: {dirs:?}"
             );
         }
     }
