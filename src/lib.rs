@@ -26,7 +26,9 @@
 //!
 //! [`format_skip_tsv`] is the skip TSV source (`skip\tkind\tpath\tdetail`)
 //! for CLI list stderr, CLI why stdout, and MCP catalog/xml text.
-//! Do not inline those rows on a new text surface.
+//! [`format_list_tsv`] is default list TSV. [`format_why_text`] is CLI
+//! why text (loaded rows, skip TSV, activation). Do not inline those
+//! rows on a new text surface.
 
 mod activate;
 mod discover;
@@ -58,9 +60,11 @@ pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
     SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
 };
-pub use skip::{DiscoveryReport, SkillSkip, SkipKind, format_skip_tsv};
+pub use skip::{DiscoveryReport, SkillSkip, SkipKind, format_list_tsv, format_skip_tsv};
 pub use source::SkillSource;
-pub use why::{ActivationDecision, ActivationReason, SkillSummary, WhyReport, why};
+pub use why::{
+    ActivationDecision, ActivationReason, SkillSummary, WhyReport, format_why_text, why,
+};
 
 /// Package version from `Cargo.toml`.
 pub fn version() -> &'static str {

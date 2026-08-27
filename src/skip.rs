@@ -166,6 +166,31 @@ pub struct DiscoveryReport {
     pub skips: Vec<SkillSkip>,
 }
 
+/// Default list TSV rows (`name\tsource\tpath`) for CLI `list`.
+///
+/// Path goes through [`crate::sanitize_error_token`] so a leftover
+/// implicit package cannot split the row (U+2028). Extra-path refuse
+/// already rejects a line-separator token; leftover implicit paths
+/// do not.
+pub fn format_list_tsv(skills: &[Skill]) -> String {
+    let mut out = String::new();
+    for skill in skills {
+        let path = skill
+            .source_path
+            .as_ref()
+            .map(|p| crate::sanitize_error_token(&p.display().to_string()))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "{}\t{}\t{}",
+            crate::sanitize_error_token(&skill.name),
+            skill.source.as_str(),
+            path
+        );
+    }
+    out
+}
+
 /// TSV skip rows (`skip\tkind\tpath\tdetail`) for CLI list stderr,
 /// CLI why stdout, and MCP catalog/xml text (stdio has no stderr).
 ///
