@@ -166,8 +166,8 @@ pub struct DiscoveryReport {
     pub skips: Vec<SkillSkip>,
 }
 
-/// TSV skip rows (`skip\tkind\tpath\tdetail`) for CLI list stderr and
-/// MCP catalog/xml text (stdio has no stderr).
+/// TSV skip rows (`skip\tkind\tpath\tdetail`) for CLI list stderr,
+/// CLI why stdout, and MCP catalog/xml text (stdio has no stderr).
 ///
 /// Path and detail go through [`crate::sanitize_error_token`] so a
 /// leftover SKILL.md skip cannot split the row (U+2028) or leak an
