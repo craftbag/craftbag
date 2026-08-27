@@ -480,7 +480,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 load_skills_from_dir(
                     &agents,
                     &dir_load(&SkillSource::Agents, &ignore, opts, &[]),
-                    None,
+                    &[],
                     &mut skills,
                     &mut skips,
                 );
@@ -501,14 +501,13 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         let skills_subdir = user_dir.join("skills");
         let handle_skills =
             extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips);
+        let skills_ref: &Path = &skills_subdir;
+        let skip_skills = [skills_ref];
+        let user_skip_skills: &[&Path] = if handle_skills { &skip_skills } else { &[] };
         load_skills_from_dir(
             &user_dir,
             &dir_load(&SkillSource::User, &ignore, opts, &[]),
-            if handle_skills {
-                Some(skills_subdir.as_path())
-            } else {
-                None
-            },
+            user_skip_skills,
             &mut skills,
             &mut skips,
         );
@@ -536,7 +535,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                         load_skills_from_dir(
                             &skills_subdir,
                             &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                            Some(skill_file.as_path()),
+                            &[skill_file.as_path()],
                             &mut skills,
                             &mut skips,
                         );
@@ -555,7 +554,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                         load_skills_from_dir(
                             &skills_subdir,
                             &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                            Some(skill_file.as_path()),
+                            &[skill_file.as_path()],
                             &mut skills,
                             &mut skips,
                         );
@@ -576,7 +575,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 load_skills_from_dir(
                     &skills_subdir,
                     &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                    None,
+                    &[],
                     &mut skills,
                     &mut skips,
                 );
@@ -591,7 +590,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 load_skills_from_dir(
                     &agents,
                     &dir_load(&SkillSource::Agents, &ignore, opts, &[]),
-                    None,
+                    &[],
                     &mut skills,
                     &mut skips,
                 );
@@ -637,7 +636,7 @@ fn load_vendor_tree(
         load_skills_from_dir(
             &dir,
             &dir_load(&source, ignore, opts, denylist),
-            None,
+            &[],
             skills,
             skips,
         );
@@ -719,13 +718,37 @@ fn load_extra_path(
     // collection; fall back to extra/ so sibling packages still load.
     // An empty extra/skills/ is the leftover two-dir analog: Bline
     // discover_skills still loads extra/wanted. Scan extra/skills
-    // only when that tree has a SKILL.md or child packages.
-    // Reuse classify's leftover SKILL.md read: extra/skills/ never
-    // sees extra/SKILL.md, and an extra/ sibling walk must not open
+    // when that tree has child packages or leftover extra/skills/SKILL.md.
+    // extra/skills/SKILL.md named skills is a sibling package: classify
+    // once and reuse the parse. Reuse leftover extra/SKILL.md: extra/skills
+    // never sees extra/SKILL.md, and an extra/ sibling walk must not open
     // a leftover file again. A leftover SKILL.md directory stays in
     // the extra/ walk (it is a package dir, not a root file).
+    let skills_md = ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|name| skills_subdir.join(name))
+        .find(|p| skill_md_inode_exists(p));
+    let mut extra_skills_named = false;
+    let mut leftover_skills_md = None;
+    if let Some(skill_file) = skills_md.as_ref() {
+        let classified = classify_extra_path_md(&skills_subdir, skill_file, opts.ascii_names);
+        if extra_skills_md_is_named_package(&classified) {
+            extra_skills_named = true;
+            load_classified_extra_path_package(
+                skill_file,
+                classified,
+                &SkillSource::ExtraPath,
+                ignore,
+                opts,
+                skills,
+                skips,
+            );
+        } else {
+            leftover_skills_md = Some(classified);
+        }
+    }
     let handle_skills = extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips)
-        && extra_skills_collection_has_entries(&skills_subdir);
+        && (dir_has_child_skill_packages(&skills_subdir) || leftover_skills_md.is_some());
     let skip_leftover = leftover_root.as_ref().and_then(|(p, name, err)| {
         if handle_skills || !skill_md_is_dir(p) {
             skip_loose_extra_path_root_skill_md(
@@ -741,18 +764,47 @@ fn load_extra_path(
             None
         }
     });
-    let scan = if handle_skills {
-        skills_subdir
+    if handle_skills {
+        if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
+            skip_classified_extra_skills_leftover(
+                skill_file,
+                &skills_subdir,
+                ignore,
+                classified,
+                skips,
+            );
+            load_skills_from_dir(
+                &skills_subdir,
+                &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
+                &[skill_file.as_path()],
+                skills,
+                skips,
+            );
+        } else {
+            load_skills_from_dir(
+                &skills_subdir,
+                &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
+                &[],
+                skills,
+                skips,
+            );
+        }
     } else {
-        expanded
-    };
-    load_skills_from_dir(
-        &scan,
-        &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
-        skip_leftover,
-        skills,
-        skips,
-    );
+        let mut walk_skip = Vec::new();
+        if let Some(p) = skip_leftover {
+            walk_skip.push(p);
+        }
+        if extra_skills_named {
+            walk_skip.push(skills_subdir.as_path());
+        }
+        load_skills_from_dir(
+            &expanded,
+            &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
+            &walk_skip,
+            skills,
+            skips,
+        );
+    }
 }
 
 fn dir_has_child_skill_packages(dir: &Path) -> bool {
@@ -789,7 +841,19 @@ fn extra_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
     if std::fs::read_dir(&skills_subdir).is_err() {
         return false;
     }
-    if !extra_skills_collection_has_entries(&skills_subdir) {
+    let skills_md = ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|name| skills_subdir.join(name))
+        .find(|p| skill_md_inode_exists(p));
+    if let Some(skill_file) = skills_md.as_ref() {
+        if extra_skills_md_is_named_package(&classify_extra_path_md(
+            &skills_subdir,
+            skill_file,
+            ascii_names,
+        )) {
+            return false;
+        }
+    } else if !dir_has_child_skill_packages(&skills_subdir) {
         return false;
     }
     let package_md = ["SKILL.md", "skill.md"]
@@ -853,14 +917,59 @@ fn extra_path_has_skills_entry(dir: &Path) -> bool {
     skill_md_inode_exists(&dir.join("skills"))
 }
 
-/// True when `extra/skills` has a root SKILL.md or child packages.
-/// An empty extra/skills/ is not the exclusive scan root: leftover
-/// extra/wanted must still load.
-fn extra_skills_collection_has_entries(skills_subdir: &Path) -> bool {
-    ["SKILL.md", "skill.md"]
-        .into_iter()
-        .any(|name| skill_md_inode_exists(&skills_subdir.join(name)))
-        || dir_has_child_skill_packages(skills_subdir)
+/// extra/skills/SKILL.md that loads as the package named `skills`.
+fn extra_skills_md_is_named_package(classified: &ExtraPathMd) -> bool {
+    matches!(
+        classified,
+        ExtraPathMd::Parsed(_) | ExtraPathMd::ParseFailed { .. }
+    )
+}
+
+/// Record leftover extra/skills/SKILL.md from classify so the extra/skills
+/// walk does not open it again.
+fn skip_classified_extra_skills_leftover(
+    skill_file: &Path,
+    confine: &Path,
+    ignore: &[IgnorePrefix],
+    classified: ExtraPathMd,
+    skips: &mut Vec<SkillSkip>,
+) {
+    match classified {
+        ExtraPathMd::Collection {
+            peeked_name,
+            read_err,
+        } => {
+            skip_loose_extra_path_root_skill_md(
+                skill_file,
+                confine,
+                ignore,
+                peeked_name,
+                read_err,
+                skips,
+            );
+        }
+        ExtraPathMd::Package(content) => {
+            skip_loose_extra_path_root_skill_md(
+                skill_file,
+                confine,
+                ignore,
+                peek_frontmatter_name(&content),
+                None,
+                skips,
+            );
+        }
+        ExtraPathMd::Unreadable(detail) => {
+            skip_loose_extra_path_root_skill_md(
+                skill_file,
+                confine,
+                ignore,
+                None,
+                Some(detail),
+                skips,
+            );
+        }
+        ExtraPathMd::Parsed(_) | ExtraPathMd::ParseFailed { .. } => {}
+    }
 }
 
 /// True when `extra/skills/` is a readable collection that stays under
@@ -1396,7 +1505,7 @@ fn dir_load<'a>(
 fn load_skills_from_dir(
     dir: &Path,
     load: &DirLoad<'_>,
-    skip: Option<&Path>,
+    skip: &[&Path],
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
@@ -1417,10 +1526,8 @@ fn load_skills_from_dir(
 
     for entry in entries.filter_map(Result::ok) {
         let path = entry.path();
-        if let Some(skip) = skip {
-            if path == skip {
-                continue;
-            }
+        if skip.iter().any(|s| path == *s) {
+            continue;
         }
         if !path.is_dir() {
             if path
@@ -2904,6 +3011,57 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &extra.join("skills")),
             "empty extra/skills is not a discover walk: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn extra_path_skills_named_package_does_not_hide_sibling() {
+        // extra/skills/SKILL.md named skills is a sibling package.
+        // A root SKILL.md is not exclusive-scan collection entries.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("skills"), "skills", "PACKAGE_BODY");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-sibling");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let mut names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["skills", "wanted"],
+            "extra/skills named package must not hide leftover sibling: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
+            "extra/skills named package is not a leftover root file: {:?}",
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "must watch extra-path root: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "named extra/skills is not a discover walk: {dirs:?}"
         );
     }
 
