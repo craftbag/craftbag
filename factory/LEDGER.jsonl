@@ -454,3 +454,4 @@
 {"ts": "2026-08-27T05:31:43Z", "job_id": "mpi33-sec-ignore-ws-collapse", "work_source": "improve", "result": "landed", "head": "e598b29bf99c2c68f9bac7f5a2aa24a255be3d58", "pr": 254, "tests": "whitespace collapse refuse", "noop": false}
 {"ts": "2026-08-27T05:33:30Z", "job_id": "mpi33-pm-steal-list", "work_source": "improve", "result": "noop", "head": "e598b29bf99c2c68f9bac7f5a2aa24a255be3d58", "pr": null, "tests": "steal-list callers", "noop": true}
 {"ts": "2026-08-27T05:44:53Z", "job_id": "mpi33-spec-watch-collapse", "work_source": "improve", "result": "landed", "head": "c6e763857bdfafc34967a4dd3a908c294385542a", "pr": 255, "tests": "watch collapse omit", "noop": false}
+{"ts": "2026-08-27T05:51:49Z", "job_id": "mpi33-perf-extra-io", "work_source": "improve", "result": "noop", "head": "c6e763857bdfafc34967a4dd3a908c294385542a", "pr": null, "tests": "zero git diff", "noop": true}

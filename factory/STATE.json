@@ -6,40 +6,36 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a3973d3b0601297b396bb1ecde5b654215d1888c",
+  "ledger_sha": "7b113a5e28c6e25b5902a1dd960527e21b979560",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-spec-watch-collapse",
+    "id": "mpi33-perf-extra-io",
     "work_source": "improve",
-    "started_at": "2026-08-27T05:44:53Z",
-    "finished_at": "2026-08-27T05:44:53Z",
-    "result": "landed",
+    "started_at": "2026-08-27T05:51:49Z",
+    "finished_at": "2026-08-27T05:51:49Z",
+    "result": "noop",
     "head": "c6e763857bdfafc34967a4dd3a908c294385542a",
-    "pr": 255,
-    "files": [
-      "src/discover.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs"
-    ],
-    "tests": "list_watch_dirs_whitespace_extra_path_omits_root",
+    "pr": null,
+    "files": [],
+    "tests": "CONSTRAINT-4 zero git diff",
     "review": "0"
   },
   "last_sha": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
-    "main": "in_progress",
-    "ready_pr": "merged",
-    "checked_at": "2026-08-27T05:44:53Z",
+    "main": "success",
+    "ready_pr": null,
+    "checked_at": "2026-08-27T05:51:49Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 10,
+    "next_perspective": 11,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -61,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "watch_dirs omits extra-path tokens that collapse after whitespace."
+    "last_why_summary": "MPI 33 perf no-op: parse-once and watch omit already landed."
   },
   "budgets": {
     "max_cycles": null,
