@@ -6,29 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "70c7fc2f44a824a69a9c84e4b887da9915b63933",
+  "ledger_sha": "a59c7d2b4799fe7208cf767968f6a41a51d6f4b5",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 3,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-fuzz-leftover-path",
-    "work_source": "expand",
-    "started_at": "2026-08-27T15:45:31Z",
-    "finished_at": "2026-08-27T15:45:31Z",
+    "id": "improve-mpi38-auditor-catalog-rank",
+    "work_source": "improve",
+    "started_at": "2026-08-27T15:55:11Z",
+    "finished_at": "2026-08-27T15:55:11Z",
     "result": "landed",
-    "head": "f4f6e00bc791341f055b9b7f19a9d9ccd954a077",
-    "pr": 290,
+    "head": "8e5c5df5cadeec8ed228c5ded735d2658b88bb87",
+    "pr": 291,
     "files": [
-      "fuzz/fuzz_targets/leftover_path.rs",
-      "fuzz/Cargo.toml",
-      ".github/workflows/ci.yml",
-      "tests/ci_hygiene.rs"
+      "src/activate.rs"
     ],
-    "tests": "fuzz_smoke_runs_parse_skill_and_xml_catalog",
+    "tests": "format_catalog_uses_host_hint_not_bline_slash",
     "review": "0"
   },
-  "last_sha": "f4f6e00bc791341f055b9b7f19a9d9ccd954a077",
+  "last_sha": "8e5c5df5cadeec8ed228c5ded735d2658b88bb87",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
@@ -40,7 +37,7 @@
   },
   "mpi": {
     "cycle": 38,
-    "next_perspective": 2,
+    "next_perspective": 3,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
