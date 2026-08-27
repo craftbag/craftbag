@@ -482,3 +482,4 @@
 {"ts": "2026-08-27T09:20:20Z", "job_id": "expand-fuzz-sanitize-token", "work_source": "expand", "result": "landed", "head": "2200cc0932f6576f0ced43f791b69629eaa94c99", "pr": 268, "tests": "fuzz sanitize_error_token", "noop": false}
 {"ts": "2026-08-27T09:22:30Z", "job_id": "mpi35-ops-noop", "work_source": "improve", "result": "noop", "head": "2200cc0932f6576f0ced43f791b69629eaa94c99", "pr": null, "tests": "fuzz flags match", "noop": true}
 {"ts": "2026-08-27T09:35:06Z", "job_id": "mpi35-sec-user-dir-collapse", "work_source": "improve", "result": "landed", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": 269, "tests": "user_dir / .. skip", "noop": false}
+{"ts": "2026-08-27T09:38:46Z", "job_id": "mpi35-pm-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "steal-list live", "noop": true}
