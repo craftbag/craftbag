@@ -309,6 +309,83 @@ fn validate_json_hostile_unknown_key_stays_one_line() {
 }
 
 #[test]
+fn validate_json_line_separator_dotdot_does_not_retarget_root() {
+    // Sibling lock of extra-path line-separator refuse on validate --json.
+    // `/..\n` must not NFKC-rewrite to `/..` and join /SKILL.md.
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg("/..\n")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "line-separator /.. must fail");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["error_kind"], "unreadable", "stdout={stdout}");
+    if let Some(p) = v["path"].as_str() {
+        for banned in ["/", "/..", "/SKILL.md", "/../SKILL.md"] {
+            assert_ne!(p, banned, "must not peel path={banned}: {stdout}");
+        }
+        assert!(
+            !p.contains('\n') && !p.contains('\u{2028}'),
+            "path must not echo a raw line separator: {p:?}"
+        );
+    }
+    let err = v["error"].as_str().unwrap_or("");
+    assert!(
+        err.contains("line separator") || err.contains("collapses"),
+        "must name the refuse: {stdout}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn validate_json_package_dir_newline_component_is_unreadable() {
+    // Discover extra-path refuses a line-separator component. CLI
+    // validate --json must not report ok for that package dir.
+    let parent = tempfile::tempdir().expect("parent");
+    let pkg = parent.path().join("evil\nroot").join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "newline package dir must not validate"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("SECRET_BODY"),
+        "must not peek body: {stdout}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["error_kind"], "unreadable", "stdout={stdout}");
+    assert_ne!(v["ok"], true, "stdout={stdout}");
+    if let Some(p) = v["path"].as_str() {
+        assert!(
+            !p.contains('\n') && !p.contains('\u{2028}'),
+            "path must not echo a raw line separator: {p:?}"
+        );
+    }
+    let err = v["error"].as_str().unwrap_or("");
+    assert!(
+        err.contains("line separator") || err.contains("path"),
+        "must name the refuse: {stdout}"
+    );
+}
+
+#[test]
 fn list_extra_path_json() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let (_home, mut cmd) = bin();
