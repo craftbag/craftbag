@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "e3ab5cd9455fe54b3ec424ce254bc3d1072a313c",
+  "ledger_sha": "5867c234237b653b8e8a384b33d62c57f0548a0b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 3,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand2-fuzz-smoke-noop-r2",
-    "work_source": "expand",
-    "started_at": "2026-08-27T21:41:10Z",
-    "finished_at": "2026-08-27T21:41:10Z",
-    "result": "noop",
+    "id": "prove-empty-nested-reconfirm",
+    "work_source": "prove",
+    "started_at": "2026-08-27T21:42:18Z",
+    "finished_at": "2026-08-27T21:42:18Z",
+    "result": "ok",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "6 fuzz targets still in fuzz/fuzz_targets and ci.yml",
+    "tests": "why --json leftover/empty-nested-skills loaded wanted; watch lists extra-path root",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -65,7 +65,7 @@
       "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
       "tests/corpus/agentskills (--path collection, no implicit roots)"
     ],
-    "last_why_summary": "why --path agentskills collection loads package-full + minimal-valid"
+    "last_why_summary": "why --json leftover/empty-nested-skills still loads wanted; leftover parent is not a skills root"
   },
   "budgets": {
     "max_cycles": null,

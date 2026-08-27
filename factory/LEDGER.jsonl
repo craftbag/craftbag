@@ -606,3 +606,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:39:58Z","job_id":"improve-mpi43-spec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Spec REVIEW 0"}
 {"ts":"2026-08-27T21:41:05Z","job_id":"improve-mpi43-perf-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Perf REVIEW 0; expand2 fuzz already 6 targets"}
 {"ts":"2026-08-27T21:41:10Z","job_id":"expand2-fuzz-smoke-noop-r2","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"3 expand no-ops; prove next unused tree"}
+{"ts":"2026-08-27T21:42:18Z","job_id":"prove-empty-nested-reconfirm","work_source":"prove","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"wanted still loads; no unused tree invented; back to Compat"}
