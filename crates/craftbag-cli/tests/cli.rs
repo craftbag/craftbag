@@ -2868,6 +2868,58 @@ fn why_leftover_hostile_loaded_tsv_stays_one_row() {
 }
 
 #[test]
+fn load_leftover_hostile_path_stays_one_envelope_line() {
+    // format_list_tsv sanitizes leftover loaded paths (PR 282). Load
+    // envelope Skill package root still used catalog_one_line only, so
+    // U+2028 folded to a space. Same leftover implicit package as why
+    // loaded TSV must sanitize in place (evil?root).
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root");
+    let pkg = root.join(".agents").join("skills").join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: leftover\u{2014}pkg\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&root)
+        .arg("load")
+        .arg("demo")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let header = stdout.split("\n---\n").next().expect("header");
+    let root_line = header
+        .lines()
+        .find(|l| l.starts_with("Skill package root:"))
+        .expect("root line");
+    assert_eq!(
+        header
+            .lines()
+            .filter(|l| l.starts_with("Skill package root:"))
+            .count(),
+        1,
+        "leftover load envelope root must stay one line: {header}"
+    );
+    assert!(
+        !root_line.contains('\u{2028}') && !root_line.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into load envelope path: {root_line}"
+    );
+    assert!(
+        root_line.contains("evil?root"),
+        "hostile leftover path must be sanitized on load envelope: {root_line}"
+    );
+}
+
+#[test]
 fn why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the CLI why door. Default vendor stays off. Empty extra/skills

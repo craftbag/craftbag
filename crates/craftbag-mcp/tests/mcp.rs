@@ -1149,6 +1149,59 @@ fn stdio_skills_why_text_leftover_hostile_loaded_tsv_stays_one_row() {
 }
 
 #[test]
+fn stdio_skills_load_leftover_hostile_path_stays_one_envelope_line() {
+    // CLI load envelope leftover path is the sibling of leftover loaded
+    // TSV (PR 282). MCP skills_load shares format_load_message, so the
+    // same implicit package must sanitize Skill package root (evil?root).
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root");
+    let pkg = root.join(".agents").join("skills").join("demo");
+    std::fs::create_dir_all(&pkg).expect("mkdir");
+    std::fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: leftover\u{2014}pkg\n---\nbody\n",
+    )
+    .expect("write");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        &root,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 81,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": { "name": "demo" }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let header = text.split("\n---\n").next().expect("header");
+    let root_line = header
+        .lines()
+        .find(|l| l.starts_with("Skill package root:"))
+        .expect("root line");
+    assert_eq!(
+        header
+            .lines()
+            .filter(|l| l.starts_with("Skill package root:"))
+            .count(),
+        1,
+        "MCP load leftover envelope root must stay one line: {header}"
+    );
+    assert!(
+        !root_line.contains('\u{2028}') && !root_line.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into MCP load envelope path: {root_line}"
+    );
+    assert!(
+        root_line.contains("evil?root"),
+        "hostile leftover path must be sanitized on MCP load envelope: {root_line}"
+    );
+}
+
+#[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the MCP why door. Default vendor stays off. Empty extra/skills
