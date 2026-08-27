@@ -138,7 +138,9 @@ Set `DiscoveryOptions.ascii_names` (CLI `--ascii-names`, MCP
 `ascii_names`) until Bline chooses Unicode / NFKC as product policy.
 Default discover still loads `café` / `перевод`. With the option those
 names are a `parse_error` skip (`lowercase alphanumeric and hyphens
-only`) and do not appear in `skills`.
+only`; the detail names `--ascii-names` / `ascii_names` so a host can
+omit the flag). They do not appear in `skills`. The skip is not
+`invalid YAML`.
 
 Set `DiscoveryOptions.implicit_roots` to `false` (CLI
 `--no-implicit-roots`, MCP `implicit_roots: false`) for leftover
