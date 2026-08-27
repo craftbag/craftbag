@@ -45,7 +45,7 @@ pub use activate::{
     DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
     format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
     parse_list_format, progressive_budgets, rank_skills_for_catalog, skill_relevance_score,
-    trigger_matches, truncate_skill_body_for_budget, unknown_list_format,
+    trigger_matches, unknown_list_format,
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
@@ -267,6 +267,31 @@ mod tests {
         assert!(
             !prod.contains("fn format_body_header"),
             "format_body_header is unused; load uses format_load_message"
+        );
+    }
+
+    /// Catalog uses char budgets. `filter_skills` / why use estimated
+    /// tokens. CLI, MCP, and those formatters never called
+    /// `truncate_skill_body_for_budget`.
+    #[test]
+    fn crate_root_does_not_export_unused_truncate_skill_body_for_budget() {
+        let lib = include_str!("lib.rs");
+        let activate = lib
+            .split("pub use activate::{")
+            .nth(1)
+            .and_then(|rest| rest.split("};").next())
+            .expect("lib.rs must re-export activate");
+        assert!(
+            !activate.contains("truncate_skill_body_for_budget"),
+            "truncate_skill_body_for_budget is unused; do not re-export it: {activate}"
+        );
+        let prod = include_str!("activate.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("activate.rs production");
+        assert!(
+            !prod.contains("fn truncate_skill_body_for_budget"),
+            "truncate_skill_body_for_budget is unused; catalog/filter never call it"
         );
     }
 }
