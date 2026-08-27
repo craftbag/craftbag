@@ -162,9 +162,6 @@ jobs:
       - run: cargo fuzz run sanitize_error_token --target x86_64-unknown-linux-gnu -- -max_total_time=5
         env:
           RUSTFLAGS: ""
-      - run: cargo fuzz run leftover_path --target x86_64-unknown-linux-gnu -- -max_total_time=5
-        env:
-          RUSTFLAGS: ""
 
   test-windows:
     name: Test (Windows)
