@@ -880,6 +880,111 @@ fn stdio_skills_load_whitespace_extra_path_demo_is_unknown() {
     }
 }
 
+#[test]
+fn stdio_load_why_collapse_refuse_peels_unreadable_and_names_field() {
+    // Sibling of CLI load_why_collapse_refuse_peels_unreadable_and_names_flag.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let raw = " /..";
+
+    let load_path = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "demo",
+                    "paths": [raw],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(load_path["result"]["isError"], true, "{load_path}");
+    assert_eq!(
+        load_path["result"]["error_kind"], "unreadable",
+        "MCP load paths collapse must peel unreadable: {load_path}"
+    );
+    assert!(
+        load_path["result"]
+            .get("path")
+            .and_then(|p| p.as_str())
+            .is_some(),
+        "MCP load must peel path: {load_path}"
+    );
+    let load_text = load_path["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        load_text.contains("--path") && load_text.contains("paths"),
+        "MCP load error must name --path / paths: {load_text}"
+    );
+
+    let why_path = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "demo",
+                    "paths": [raw],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(why_path["result"]["isError"], true, "{why_path}");
+    assert_eq!(
+        why_path["result"]["error_kind"], "unreadable",
+        "MCP why paths collapse must peel unreadable: {why_path}"
+    );
+    let why_text = why_path["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        why_text.contains("--path"),
+        "MCP why error must name --path: {why_text}"
+    );
+
+    let load_user = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "demo",
+                    "user_dir": raw,
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(load_user["result"]["isError"], true, "{load_user}");
+    assert_eq!(
+        load_user["result"]["error_kind"], "unreadable",
+        "MCP load user_dir collapse must peel unreadable: {load_user}"
+    );
+    let user_text = load_user["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        user_text.contains("--user-dir") && user_text.contains("user_dir"),
+        "MCP load error must name --user-dir / user_dir: {user_text}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn stdio_skills_load_newline_extra_path_demo_is_unknown() {
