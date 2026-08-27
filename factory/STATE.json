@@ -6,25 +6,27 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "fe5169570d1d3fe8b2fa8c7f3c59d7dc4625ca06",
+  "ledger_sha": "3bff0e81a5be4bba0d224c184587a470f94857dc",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
   "expand_cursor": 5,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-cursor-4-skills-grok",
-    "work_source": "expand",
-    "started_at": "2026-08-27T19:05:10Z",
-    "finished_at": "2026-08-27T19:05:10Z",
-    "result": "proved",
-    "head": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
-    "pr": null,
-    "files": [],
-    "tests": "craftbag why --path ~/skills/grok/skills -> 351 loaded, 0 skips",
+    "id": "improve-mpi39-why-format-lock",
+    "work_source": "improve",
+    "started_at": "2026-08-27T19:20:18Z",
+    "finished_at": "2026-08-27T19:20:18Z",
+    "result": "landed",
+    "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
+    "pr": 300,
+    "files": [
+      "crates/craftbag-mcp/src/main.rs"
+    ],
+    "tests": "cargo nextest -p craftbag-mcp -- skills_why_ -> 26 passed",
     "review": "0"
   },
-  "last_sha": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
-  "next_work_source": "improve",
+  "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
+  "next_work_source": "adversary",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -35,7 +37,7 @@
   },
   "mpi": {
     "cycle": 39,
-    "next_perspective": 1,
+    "next_perspective": 2,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
