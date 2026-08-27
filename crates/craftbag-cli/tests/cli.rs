@@ -2963,6 +2963,100 @@ fn load_leftover_skills_fifo_names_wanted() {
 }
 
 #[test]
+fn why_incumbent_vercel_npx_names_deploy_hint() {
+    // Sibling lock of incumbent_vercel_skills_dir_as_extra_path
+    // on the CLI why door. Isolated HOME; default vendor stays off.
+    let extra = corpus().join("incumbent/vercel-npx");
+    let skill = extra.join("skills/deploy-hint/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed vercel-npx extra-path fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("deploy-hint")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "deploy-hint")
+        .unwrap_or_else(|| panic!("why must name deploy-hint: {stdout}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "vercel-npx extra/skills is not a skip: {stdout}"
+    );
+}
+
+#[test]
+fn load_incumbent_vercel_npx_names_deploy_hint() {
+    // Sibling lock of incumbent_vercel_skills_dir_as_extra_path
+    // on the CLI load door. Isolated HOME; default vendor stays off.
+    let extra = corpus().join("incumbent/vercel-npx");
+    let skill = extra.join("skills/deploy-hint/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed vercel-npx extra-path fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("deploy-hint")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: deploy-hint]"),
+        "vercel-npx extra-path must load deploy-hint: {stdout}"
+    );
+    assert!(
+        stdout.contains("Read this when deploying."),
+        "must load deploy-hint body: {stdout}"
+    );
+}
+
+#[test]
 fn load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
     let extra = tempfile::tempdir().expect("extra");
     fs::write(
