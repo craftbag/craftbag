@@ -135,6 +135,18 @@ impl SkillSkip {
         }
         skill_md_package_name(&self.path).is_some_and(|n| crate::parse::skill_names_equal(n, want))
     }
+
+    /// True when discover refused a host `--path` / `paths` or
+    /// `--user-dir` / `user_dir` token (collapse or line separator).
+    ///
+    /// That skip is not a package identity. Named `load` / `why`
+    /// still peel it so a host sees WHAT and which flag to change.
+    pub(crate) fn is_host_token_refuse(&self) -> bool {
+        self.kind == SkipKind::Unreadable
+            && self.name.is_none()
+            && (self.detail.contains("collapses after whitespace trim")
+                || self.detail.contains("line separator"))
+    }
 }
 
 /// Parent directory of a `SKILL.md` / `skill.md` path, when that is the file name.
@@ -324,6 +336,30 @@ mod tests {
             back.winner_path.as_deref(),
             Some(std::path::Path::new("/tmp/a/foo/SKILL.md"))
         );
+    }
+
+    #[test]
+    fn host_token_refuse_is_not_a_package_identity() {
+        let collapse = SkillSkip {
+            path: PathBuf::from(" /.."),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "--path / paths token collapses after whitespace trim".to_owned(),
+            winner_path: None,
+        };
+        assert!(collapse.is_host_token_refuse());
+        assert!(
+            !collapse.matches_requested_name("demo"),
+            "collapse token is not the skill name demo"
+        );
+        let other = SkillSkip {
+            path: PathBuf::from("/tmp/demo/SKILL.md"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Is a directory".to_owned(),
+            winner_path: None,
+        };
+        assert!(!other.is_host_token_refuse());
     }
 
     #[test]

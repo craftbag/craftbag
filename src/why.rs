@@ -175,11 +175,18 @@ impl WhyReport {
     /// Same miss as [`Self::unknown_skill_message`], with `error_kind`.
     pub fn unknown_skill_miss(&self) -> Option<SkillMiss> {
         let want = self.query.as_deref()?;
-        if self.loaded.is_empty() && self.skips.is_empty() {
-            Some(unknown_or_skipped_skill(want, &[]))
-        } else {
-            None
+        if !self.loaded.is_empty() {
+            return None;
         }
+        if self.skips.is_empty() {
+            return Some(unknown_or_skipped_skill(want, &[]));
+        }
+        // Host-token refuse skips are not a package identity. Peel them
+        // so a named why is unreadable + path, not a silent unknown.
+        if self.skips.iter().all(|s| s.is_host_token_refuse()) {
+            return Some(unknown_or_skipped_skill(want, &self.skips));
+        }
+        None
     }
 }
 
@@ -211,7 +218,7 @@ pub fn why(
         .iter()
         .filter(|s| match q {
             None => true,
-            Some(want) => s.matches_requested_name(want),
+            Some(want) => s.matches_requested_name(want) || s.is_host_token_refuse(),
         })
         .cloned()
         .collect();

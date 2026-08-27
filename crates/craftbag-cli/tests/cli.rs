@@ -1093,6 +1093,90 @@ fn load_whitespace_extra_path_demo_is_unknown() {
     }
 }
 
+#[test]
+fn load_why_collapse_refuse_peels_unreadable_and_names_flag() {
+    // Named load/why must peel the refuse skip so a first-time host
+    // sees unreadable + which flag to change, not path-less unknown.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let raw = " /..";
+
+    let (_home, mut load_path) = bin();
+    let load_out = load_path
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(raw)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let load_stdout = String::from_utf8_lossy(&load_out.stdout);
+    assert_ne!(load_out.status.code(), Some(0), "stdout={load_stdout}");
+    let load_v: serde_json::Value = serde_json::from_str(&load_stdout).expect("load json");
+    assert_eq!(
+        load_v["error_kind"], "unreadable",
+        "load --path collapse must peel unreadable: {load_stdout}"
+    );
+    assert!(
+        load_v.get("path").and_then(|p| p.as_str()).is_some(),
+        "load must peel path: {load_stdout}"
+    );
+    let load_err = load_v["error"].as_str().unwrap_or("");
+    assert!(
+        load_err.contains("--path") && load_err.contains("paths"),
+        "load error must name --path / paths: {load_stdout}"
+    );
+
+    let (_home, mut why_path) = bin();
+    let why_out = why_path
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(raw)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let why_stdout = String::from_utf8_lossy(&why_out.stdout);
+    assert_ne!(why_out.status.code(), Some(0), "stdout={why_stdout}");
+    let why_v: serde_json::Value = serde_json::from_str(&why_stdout).expect("why json");
+    assert_eq!(
+        why_v["error_kind"], "unreadable",
+        "why --path collapse must peel unreadable: {why_stdout}"
+    );
+    let why_err = why_v["error"].as_str().unwrap_or("");
+    assert!(
+        why_err.contains("--path"),
+        "why error must name --path: {why_stdout}"
+    );
+
+    let (_home, mut load_user) = bin();
+    let user_out = load_user
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("demo")
+        .arg("--json")
+        .arg("--user-dir")
+        .arg(raw)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let user_stdout = String::from_utf8_lossy(&user_out.stdout);
+    assert_ne!(user_out.status.code(), Some(0), "stdout={user_stdout}");
+    let user_v: serde_json::Value = serde_json::from_str(&user_stdout).expect("load user json");
+    assert_eq!(
+        user_v["error_kind"], "unreadable",
+        "load --user-dir collapse must peel unreadable: {user_stdout}"
+    );
+    let user_err = user_v["error"].as_str().unwrap_or("");
+    assert!(
+        user_err.contains("--user-dir") && user_err.contains("user_dir"),
+        "load error must name --user-dir / user_dir: {user_stdout}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn load_newline_extra_path_demo_is_unknown() {

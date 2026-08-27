@@ -16,7 +16,10 @@ without scraping Display. Unknown is `unknown_skill`. A matching skip
 reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json` and CLI `load --json`
 print `{ "error_kind", "error" }` on stdout and keep the same one-line
 text on stderr. A matching skip also peels `path` (the `SKILL.md`).
-Unknown omits `path`. A `name_collision` skip also peels `winner_path`
+Unknown omits `path`. A refused `--path` / `paths` or `--user-dir` /
+`user_dir` token (whitespace collapse or line separator) peels as
+`unreadable` with `path` and a detail that names that flag.
+A `name_collision` skip also peels `winner_path`
 (the loaded `SKILL.md`). Other misses omit it. SkillSkip deserialize
 accepts that snake `winner_path` (serialize still emits `winnerPath`). MCP `skills_load` /
 `skills_why` merge that same `SkillMiss` object next to `isError`

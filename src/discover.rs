@@ -301,7 +301,10 @@ impl std::fmt::Display for SkillMiss {
 /// [`crate::sanitize_error_token`] so the line cannot split.
 pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
     let want = name.trim();
-    let skip = skips.iter().find(|s| s.matches_requested_name(want));
+    let skip = skips
+        .iter()
+        .find(|s| s.matches_requested_name(want))
+        .or_else(|| skips.iter().find(|s| s.is_host_token_refuse()));
     match skip {
         Some(skip) => SkillMiss {
             error_kind: skip.kind.as_str(),
@@ -572,19 +575,19 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
 
     if let Some(raw_path) = opts.user_skills_dir.as_deref() {
         if raw_path.to_str().is_some_and(str_has_line_separator) {
-            skip_line_separator_root(raw_path, &mut skips);
+            skip_line_separator_root(raw_path, HostPathField::UserDir, &mut skips);
         } else if raw_path
             .to_str()
             .is_some_and(host_token_collapses_after_whitespace)
         {
             if let Some(raw) = raw_path.to_str() {
-                skip_whitespace_collapse_token(raw, &mut skips);
+                skip_whitespace_collapse_token(raw, HostPathField::UserDir, &mut skips);
             }
         } else if let Some(user_dir) = expand_user_skills_dir(&cwd, Some(raw_path)) {
             if path_has_line_separator(&user_dir) {
                 // Same refuse as extra-path: do not load or echo a user_dir
                 // whose component would split list/why TSV or watch_dirs.
-                skip_line_separator_root(&user_dir, &mut skips);
+                skip_line_separator_root(&user_dir, HostPathField::UserDir, &mut skips);
             } else {
                 // leftover user_dir/SKILL.md is a root_file skip. extra-path
                 // leftover + extra/skills is a collection; user_dir is never a
@@ -756,18 +759,22 @@ fn load_extra_path(
     skips: &mut Vec<SkillSkip>,
 ) {
     if str_has_line_separator(raw) {
-        skip_line_separator_root(Path::new(&crate::sanitize_error_token(raw)), skips);
+        skip_line_separator_root(
+            Path::new(&crate::sanitize_error_token(raw)),
+            HostPathField::ExtraPath,
+            skips,
+        );
         return;
     }
     if host_token_collapses_after_whitespace(raw) {
-        skip_whitespace_collapse_token(raw, skips);
+        skip_whitespace_collapse_token(raw, HostPathField::ExtraPath, skips);
         return;
     }
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
     };
     if path_has_line_separator(&expanded) {
-        skip_line_separator_root(&expanded, skips);
+        skip_line_separator_root(&expanded, HostPathField::ExtraPath, skips);
         return;
     }
     // `is_file` is false for FIFO/socket/device and symlink-to-those.
@@ -1572,7 +1579,31 @@ fn path_has_line_separator(p: &Path) -> bool {
     })
 }
 
-fn skip_line_separator_root(root: &Path, skips: &mut Vec<SkillSkip>) {
+/// Which host field produced a refused token. Named so skip details
+/// tell a first-time CLI or MCP host which flag/field to change.
+#[derive(Clone, Copy)]
+enum HostPathField {
+    ExtraPath,
+    UserDir,
+}
+
+impl HostPathField {
+    fn collapse_detail(self) -> &'static str {
+        match self {
+            Self::ExtraPath => "--path / paths token collapses after whitespace trim",
+            Self::UserDir => "--user-dir / user_dir token collapses after whitespace trim",
+        }
+    }
+
+    fn line_sep_detail(self) -> &'static str {
+        match self {
+            Self::ExtraPath => "--path / paths component contains a line separator",
+            Self::UserDir => "--user-dir / user_dir component contains a line separator",
+        }
+    }
+}
+
+fn skip_line_separator_root(root: &Path, field: HostPathField, skips: &mut Vec<SkillSkip>) {
     // Sanitize path for list/why JSON and miss lines so hosts never
     // echo a raw line separator from skip.path.
     let skill_md = root.join("SKILL.md");
@@ -1580,17 +1611,17 @@ fn skip_line_separator_root(root: &Path, skips: &mut Vec<SkillSkip>) {
         path: PathBuf::from(crate::sanitize_error_token(&skill_md.display().to_string())),
         name: None,
         kind: SkipKind::Unreadable,
-        detail: "path component contains a line separator".to_owned(),
+        detail: field.line_sep_detail().to_owned(),
         winner_path: None,
     });
 }
 
-fn skip_whitespace_collapse_token(raw: &str, skips: &mut Vec<SkillSkip>) {
+fn skip_whitespace_collapse_token(raw: &str, field: HostPathField, skips: &mut Vec<SkillSkip>) {
     skips.push(SkillSkip {
         path: PathBuf::from(crate::sanitize_error_token(raw)),
         name: None,
         kind: SkipKind::Unreadable,
-        detail: "path token collapses after whitespace trim".to_owned(),
+        detail: field.collapse_detail().to_owned(),
         winner_path: None,
     });
 }
@@ -8107,10 +8138,108 @@ mod tests {
             );
             let miss = unknown_or_skipped_skill("demo", &report.skips);
             assert_eq!(
-                miss.error_kind, "unknown_skill",
-                "nameless collapse skip is not demo: {miss:?}"
+                miss.error_kind, "unreadable",
+                "named load must peel the nameless collapse refuse: {miss:?}"
+            );
+            assert!(miss.path.is_some(), "named load must peel WHERE: {miss:?}");
+            assert!(
+                miss.error.contains("--path"),
+                "named load must name --path: {}",
+                miss.error
             );
         }
+    }
+
+    #[test]
+    fn collapse_refuse_names_flag_and_peels_named_miss() {
+        // A host that `load`/`why`s `demo` after `--path " /.."` or
+        // `user_dir: " /.."` must see unreadable + the flag/field to
+        // change, not a path-less unknown_skill.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        let extra = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![" /..".to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover extra")
+        });
+        let extra_skip = extra
+            .skips
+            .iter()
+            .find(|s| s.kind == SkipKind::Unreadable && s.detail.contains("collapses"))
+            .expect("extra-path collapse skip");
+        assert!(
+            extra_skip.detail.contains("--path") && extra_skip.detail.contains("paths"),
+            "extra-path collapse must name --path / paths: {}",
+            extra_skip.detail
+        );
+        let extra_miss = unknown_or_skipped_skill("demo", &extra.skips);
+        assert_eq!(
+            extra_miss.error_kind, "unreadable",
+            "named load must peel the refuse, not unknown_skill: {extra_miss:?}"
+        );
+        assert!(
+            extra_miss.path.is_some(),
+            "named load must peel path so the host sees WHERE: {extra_miss:?}"
+        );
+        assert!(
+            extra_miss.error.contains("--path") && extra_miss.error.contains("paths"),
+            "named load error must name --path / paths: {}",
+            extra_miss.error
+        );
+
+        let user = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    user_skills_dir: Some(PathBuf::from(" /..")),
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover user")
+        });
+        let user_skip = user
+            .skips
+            .iter()
+            .find(|s| s.kind == SkipKind::Unreadable && s.detail.contains("collapses"))
+            .expect("user_dir collapse skip");
+        assert!(
+            user_skip.detail.contains("--user-dir") && user_skip.detail.contains("user_dir"),
+            "user_dir collapse must name --user-dir / user_dir: {}",
+            user_skip.detail
+        );
+        let user_miss = unknown_or_skipped_skill("demo", &user.skips);
+        assert_eq!(
+            user_miss.error_kind, "unreadable",
+            "named load must peel the user_dir refuse: {user_miss:?}"
+        );
+        assert!(
+            user_miss.error.contains("--user-dir") && user_miss.error.contains("user_dir"),
+            "named load error must name --user-dir / user_dir: {}",
+            user_miss.error
+        );
+
+        let why_named = crate::why(&extra, Some("demo"), None, None);
+        let why_miss = why_named.unknown_skill_miss().expect("named why miss");
+        assert_eq!(
+            why_miss.error_kind, "unreadable",
+            "named why must peel the refuse, not drop the skip: {why_miss:?}"
+        );
+        assert!(
+            why_miss.path.is_some(),
+            "named why must peel path: {why_miss:?}"
+        );
+        assert!(
+            why_miss.error.contains("--path"),
+            "named why error must name --path: {}",
+            why_miss.error
+        );
     }
 
     #[test]
