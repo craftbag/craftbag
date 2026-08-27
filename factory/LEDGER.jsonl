@@ -624,3 +624,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:51:18Z","job_id":"prove-skills-named-package-reconfirm","work_source":"prove","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"wanted+skills still load; back to PM"}
 {"ts":"2026-08-27T21:52:20Z","job_id":"improve-mpi44-pm-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"PM steal list still live"}
 {"ts":"2026-08-27T21:53:10Z","job_id":"improve-mpi44-spec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Spec REVIEW 0"}
+{"ts":"2026-08-27T21:54:10Z","job_id":"improve-mpi44-perf-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Perf REVIEW 0; expand0 Bline-miss already green"}
