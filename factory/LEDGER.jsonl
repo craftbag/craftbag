@@ -721,3 +721,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-27T23:20:45Z", "job_id": "mpi49-pm-noop", "work_source": "improve", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 2 fuzz next"}
 {"ts": "2026-08-27T23:21:58Z", "job_id": "expand2-fuzz-smoke-noop-r6", "work_source": "expand", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "3 expand no-ops; prove new tree"}
 {"ts": "2026-08-27T23:22:17Z", "job_id": "prove-grok-bundled-skills", "work_source": "prove", "result": "ok", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "22 loaded 0 skips; reset expand streak; MPI 49 Spec"}
+{"ts": "2026-08-27T23:23:46Z", "job_id": "mpi49-spec-noop", "work_source": "improve", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "sibling lock holds; Perf next"}
