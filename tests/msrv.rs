@@ -3,7 +3,9 @@
 
 fn repo_file(rel: &str) -> String {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
+    std::fs::read_to_string(root.join(rel))
+        .unwrap_or_else(|e| panic!("read {rel}: {e}"))
+        .replace("\r\n", "\n")
 }
 
 #[test]
@@ -32,16 +34,69 @@ fn rust_toolchain_toml_matches_cargo_msrv_and_ci() {
     }
 }
 
-/// Local AGENTS.md gate and hosted CI must run the same commands.
+/// Commands a first clone actually copy-pastes: the AGENTS.md bash fence.
+fn agents_local_gate_fence(agents: &str) -> Vec<&str> {
+    let after_heading = agents
+        .split("Local gate before every commit")
+        .nth(1)
+        .expect("AGENTS.md must have a Local gate heading");
+    let after_open = after_heading
+        .split("```bash\n")
+        .nth(1)
+        .expect("AGENTS.md local gate must be a ```bash fence");
+    let body = after_open
+        .split("```")
+        .next()
+        .expect("AGENTS.md local-gate fence must close");
+    body.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect()
+}
+
+/// Recipes under the `check:` target. A Makefile that exists but lists
+/// fewer lines than AGENTS.md is first-PR drift.
+fn makefile_check_commands(makefile: &str) -> Vec<&str> {
+    let after = makefile
+        .split("check:\n")
+        .nth(1)
+        .expect("Makefile must have a check: target");
+    let mut cmds = Vec::new();
+    for line in after.lines() {
+        if let Some(rest) = line.strip_prefix('\t') {
+            let cmd = rest.trim();
+            if !cmd.is_empty() && !cmd.starts_with('#') {
+                cmds.push(cmd);
+            }
+            continue;
+        }
+        if line.chars().next().is_some_and(|c| !c.is_whitespace()) {
+            break;
+        }
+    }
+    cmds
+}
+
+/// Local AGENTS.md fence, Makefile `check`, and hosted CI must run the
+/// same commands. Substring checks alone miss an extra fence line.
 #[test]
 fn local_gate_commands_run_in_ci() {
     let agents = repo_file("AGENTS.md");
+    let makefile = repo_file("Makefile");
     let ci = repo_file(".github/workflows/ci.yml");
     assert!(
         ci.contains("- 'AGENTS.md'"),
         "rust path-filter must include AGENTS.md so a local-gate edit runs this test"
     );
-    let commands = [
+    assert!(
+        ci.contains("- 'Makefile'"),
+        "rust path-filter must include Makefile so a check-target edit runs this test"
+    );
+    assert!(
+        agents.contains("`make check`"),
+        "AGENTS.md must name make check next to the local-gate fence"
+    );
+    let expected = [
         "cargo fmt --check",
         "cargo clippy --locked --workspace --all-targets -- -D warnings",
         "cargo nextest run --locked --workspace",
@@ -50,8 +105,31 @@ fn local_gate_commands_run_in_ci() {
         "bash factory/scripts/assert-stealth.sh craftbag/craftbag",
         "bash factory/scripts/write-ledger.sh --self-test",
     ];
-    for cmd in commands {
-        assert!(agents.contains(cmd), "AGENTS.md local gate must list {cmd}");
+    let fence = agents_local_gate_fence(&agents);
+    let make_cmds = makefile_check_commands(&makefile);
+    assert_eq!(
+        fence.len(),
+        expected.len(),
+        "AGENTS.md local-gate fence has {} commands, lock has {}",
+        fence.len(),
+        expected.len()
+    );
+    assert_eq!(
+        make_cmds.len(),
+        expected.len(),
+        "Makefile check has {} commands, lock has {}",
+        make_cmds.len(),
+        expected.len()
+    );
+    assert_eq!(
+        fence, expected,
+        "AGENTS.md local-gate fence drifted from the lock"
+    );
+    assert_eq!(
+        make_cmds, expected,
+        "Makefile check drifted from the AGENTS.md local-gate fence"
+    );
+    for cmd in expected {
         assert!(
             ci.contains(cmd),
             "ci.yml must run {cmd}; a local-only gate command is not CI"

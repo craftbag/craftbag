@@ -13,7 +13,7 @@ Use prebuilt binaries. Do not `cargo install` those two on rustc 1.85
 
 Hosted CI also runs fuzz-smoke, gitleaks, actionlint, and zizmor.
 
-Local gate before every commit:
+Local gate before every commit (`make check`):
 
 ```bash
 cargo fmt --check
