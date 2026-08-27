@@ -27,8 +27,8 @@
 //! [`format_skip_tsv`] is the skip TSV source (`skip\tkind\tpath\tdetail`)
 //! for CLI list stderr, CLI why stdout, and MCP catalog/xml text.
 //! [`format_list_tsv`] is default list TSV. [`format_why_text`] is CLI
-//! why text (loaded rows, skip TSV, activation). Do not inline those
-//! rows on a new text surface.
+//! why text and MCP `skills_why` format=text (loaded rows, skip TSV,
+//! activation). Do not inline those rows on a new text surface.
 
 mod activate;
 mod discover;

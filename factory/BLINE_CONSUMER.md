@@ -25,6 +25,8 @@ accepts that snake `winner_path` (serialize still emits `winnerPath`). MCP `skil
 `skills_why` merge that same `SkillMiss` object next to `isError`
 (`error_kind`, `error`, `path` when known, and `winner_path` on
 collision) and leave `content[0].text` unchanged (same text as `error`).
+`skills_why` default is WhyReport JSON. `format=text` is
+`format_why_text` (same rows as CLI why).
 Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
 `SkillMiss::is_not_found`) from a path-dep. Do not parse
 `unknown skill:` / `skipped skill:`.

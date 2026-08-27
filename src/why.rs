@@ -191,8 +191,9 @@ impl WhyReport {
     }
 }
 
-/// Text why rows for CLI `why` (not `--json`): `loaded\tname\tpath`,
-/// skip TSV, then `activation\tname\treason\tdetail`.
+/// Text why rows for CLI `why` (not `--json`) and MCP `skills_why`
+/// `format=text`: `loaded\tname\tpath`, skip TSV, then
+/// `activation\tname\treason\tdetail`.
 ///
 /// Path and detail go through [`crate::sanitize_error_token`] so a
 /// leftover implicit package cannot split the row (U+2028). Skip
