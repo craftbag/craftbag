@@ -3426,6 +3426,61 @@ fn list_watch_dirs_leftover_skills_named_package_lists_extra_root() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn list_watch_dirs_leftover_skills_fifo_lists_extra_root() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the CLI watch door. Default vendor stays off. FIFO extra/skills/SKILL.md
+    // is unreadable; watch lists the extra root, not extra/skills. Do not commit
+    // a FIFO in the corpus.
+    let extra_td = tempfile::tempdir().expect("extra");
+    let skills_dir = extra_td.path().join("skills");
+    fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    mkfifo(&skills_dir.join("SKILL.md"));
+    let wanted_pkg = extra_td.path().join("wanted");
+    fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    fs::write(
+        wanted_pkg.join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let extra = extra_td
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize leftover extra: {e}"));
+    let extra_skills = extra.join("skills");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &extra),
+        "watch-dirs must list leftover extra-path root: {stdout}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, &extra_skills),
+        "FIFO extra/skills is not a discover walk: {stdout}"
+    );
+    assert!(
+        !stdout.contains("wanted") && !stdout.contains("## Skills"),
+        "watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
 #[test]
 fn why_vendor_cursor_names_create_rule() {
     let cwd = corpus().join("incumbent/cursor-project");

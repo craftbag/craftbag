@@ -1192,3 +1192,61 @@ fn stdio_skills_list_watch_leftover_skills_named_package_lists_extra_root() {
         "watch format must not load SKILL.md: {text}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn stdio_skills_list_watch_leftover_skills_fifo_lists_extra_root() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the MCP watch door. Default vendor stays off. FIFO extra/skills/SKILL.md
+    // is unreadable; watch lists the extra root, not extra/skills. Do not commit
+    // a FIFO in the corpus.
+    let extra_td = tempfile::tempdir().expect("extra");
+    let skills_dir = extra_td.path().join("skills");
+    std::fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    mkfifo(&skills_dir.join("SKILL.md"));
+    let wanted_pkg = extra_td.path().join("wanted");
+    std::fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    std::fs::write(
+        wanted_pkg.join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let extra = extra_td
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize leftover extra: {e}"));
+    let extra_skills = extra.join("skills");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 18,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "watch",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.lines().any(|l| Path::new(l) == extra.as_path()),
+        "watch must list leftover extra-path root: {text}"
+    );
+    assert!(
+        text.lines().all(|l| Path::new(l) != extra_skills.as_path()),
+        "FIFO extra/skills is not a discover walk: {text}"
+    );
+    assert!(
+        !text.contains("wanted") && !text.contains("## Skills"),
+        "watch format must not load SKILL.md: {text}"
+    );
+}
