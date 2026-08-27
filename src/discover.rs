@@ -110,18 +110,23 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     // `.agents/skills` fails; hosts that want "create later" watch
     // the parent instead. A FIFO / socket / device / file is not a
     // walk root (listing a FIFO for notify can hang).
+    let git_walk = if opts.implicit_roots {
+        walk_cwd_to_git_root(&cwd)
+    } else {
+        Vec::new()
+    };
 
     if opts.implicit_roots {
-        for dir in walk_cwd_to_git_root(&cwd) {
+        for dir in &git_walk {
             let agents = dir.join(".agents").join("skills");
             if !path_is_ignored(&agents, &ignore) {
-                push_watch_confined_dir(&mut out, agents, &dir);
+                push_watch_confined_dir(&mut out, agents, dir);
             }
             for name in SkillSource::VENDOR_TOKENS.iter().copied() {
                 if vendor_enabled(opts, name) {
                     let vendor = dir.join(format!(".{name}")).join("skills");
                     if !path_is_ignored(&vendor, &ignore) {
-                        push_watch_confined_dir(&mut out, vendor, &dir);
+                        push_watch_confined_dir(&mut out, vendor, dir);
                     }
                 }
             }
@@ -145,15 +150,17 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
 
     if opts.implicit_roots {
         if let Some(home) = home_dir() {
-            let agents = home.join(".agents").join("skills");
-            if !path_is_ignored(&agents, &ignore) {
-                push_watch_confined_dir(&mut out, agents, &home);
-            }
-            for name in SkillSource::VENDOR_TOKENS.iter().copied() {
-                if vendor_enabled(opts, name) {
-                    let vendor = home.join(format!(".{name}")).join("skills");
-                    if !path_is_ignored(&vendor, &ignore) {
-                        push_watch_confined_dir(&mut out, vendor, &home);
+            if !implicit_home_already_walked(&git_walk, &home) {
+                let agents = home.join(".agents").join("skills");
+                if !path_is_ignored(&agents, &ignore) {
+                    push_watch_confined_dir(&mut out, agents, &home);
+                }
+                for name in SkillSource::VENDOR_TOKENS.iter().copied() {
+                    if vendor_enabled(opts, name) {
+                        let vendor = home.join(format!(".{name}")).join("skills");
+                        if !path_is_ignored(&vendor, &ignore) {
+                            push_watch_confined_dir(&mut out, vendor, &home);
+                        }
                     }
                 }
             }
@@ -475,11 +482,16 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
     let ignore = expand_ignore_list(&cwd, &opts.ignore);
     let mut skills = Vec::new();
     let mut skips = Vec::new();
+    let git_walk = if opts.implicit_roots {
+        walk_cwd_to_git_root(&cwd)
+    } else {
+        Vec::new()
+    };
 
     if opts.implicit_roots {
-        for dir in walk_cwd_to_git_root(&cwd) {
+        for dir in &git_walk {
             let agents = dir.join(".agents").join("skills");
-            if !skip_if_dir_escapes(&agents, &dir, &mut skips) {
+            if !skip_if_dir_escapes(&agents, dir, &mut skips) {
                 load_skills_from_dir(
                     &agents,
                     &dir_load(&SkillSource::Agents, &ignore, opts, &[]),
@@ -488,7 +500,7 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                     &mut skips,
                 );
             }
-            load_vendor_tree(&dir, opts, &ignore, &mut skills, &mut skips);
+            load_vendor_tree(dir, opts, &ignore, &mut skills, &mut skips);
         }
     }
 
@@ -588,17 +600,19 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
 
     if opts.implicit_roots {
         if let Some(home) = home_dir() {
-            let agents = home.join(".agents").join("skills");
-            if !skip_if_dir_escapes(&agents, &home, &mut skips) {
-                load_skills_from_dir(
-                    &agents,
-                    &dir_load(&SkillSource::Agents, &ignore, opts, &[]),
-                    &[],
-                    &mut skills,
-                    &mut skips,
-                );
+            if !implicit_home_already_walked(&git_walk, &home) {
+                let agents = home.join(".agents").join("skills");
+                if !skip_if_dir_escapes(&agents, &home, &mut skips) {
+                    load_skills_from_dir(
+                        &agents,
+                        &dir_load(&SkillSource::Agents, &ignore, opts, &[]),
+                        &[],
+                        &mut skills,
+                        &mut skips,
+                    );
+                }
+                load_vendor_tree(&home, opts, &ignore, &mut skills, &mut skips);
             }
-            load_vendor_tree(&home, opts, &ignore, &mut skills, &mut skips);
         }
     }
 
@@ -1510,6 +1524,23 @@ fn stays_under(path: &Path, ancestor: &Path) -> bool {
         return false;
     };
     p.starts_with(anc)
+}
+
+/// True when `a` and `b` are the same walk root (cwd vs `$HOME` symlink).
+fn same_walk_root(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(ac), Ok(bc)) => ac == bc,
+        _ => lexical_normalize(a) == lexical_normalize(b),
+    }
+}
+
+/// True when `$HOME` is already in the cwd-to-git walk, so implicit
+/// home `.agents` / vendor trees must not be loaded or watched again.
+fn implicit_home_already_walked(cwd_walk: &[PathBuf], home: &Path) -> bool {
+    cwd_walk.iter().any(|dir| same_walk_root(dir, home))
 }
 
 fn skip_if_dir_escapes(dir: &Path, confine: &Path, skips: &mut Vec<SkillSkip>) -> bool {
@@ -8717,6 +8748,93 @@ mod tests {
         assert!(
             DiscoveryOptions::default().implicit_roots,
             "implicit_roots must default true so existing discover stays additive"
+        );
+    }
+
+    #[test]
+    fn implicit_home_agents_skill_md_is_opened_once_when_cwd_is_home() {
+        // cwd-to-git and $HOME both walk $HOME/.agents/skills when
+        // discover cwd is HOME. The same SKILL.md must not be opened
+        // twice (the second walk used to emit a name_collision skip).
+        let home = tempfile::tempdir().expect("home");
+        let skill_file = home
+            .path()
+            .join(".agents")
+            .join("skills")
+            .join("homeskill")
+            .join("SKILL.md");
+        write_skill(skill_file.parent().expect("pkg"), "homeskill", "FROM_HOME");
+        let leftover = home.path().join(".agents").join("skills").join("SKILL.md");
+        fs::write(
+            &leftover,
+            "---\nname: loose\ndescription: leftover home root\n---\nloose\n",
+        )
+        .expect("write leftover");
+        let _ = take_read_skill_md_paths();
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(home.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["homeskill"],
+            "HOME .agents must load once: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .all(|s| s.kind != SkipKind::NameCollision),
+            "cwd==HOME must not collide HOME .agents with itself: {:?}",
+            report.skips
+        );
+        let leftover_canon = leftover.canonicalize().expect("leftover");
+        assert_eq!(
+            report
+                .skips
+                .iter()
+                .filter(|s| {
+                    s.kind == SkipKind::RootFile && (s.path == leftover || s.path == leftover_canon)
+                })
+                .count(),
+            1,
+            "leftover HOME .agents SKILL.md must be one root_file: {:?}",
+            report.skips
+        );
+        let reads = take_read_skill_md_paths();
+        let skill_canon = skill_file.canonicalize().expect("skill");
+        let home_opens = reads
+            .iter()
+            .filter(|p| *p == &skill_file || *p == &skill_canon)
+            .count();
+        assert_eq!(
+            home_opens, 1,
+            "cwd==HOME must not open HOME .agents SKILL.md twice: {reads:?}"
+        );
+        let leftover_opens = reads
+            .iter()
+            .filter(|p| *p == &leftover || *p == &leftover_canon)
+            .count();
+        assert_eq!(
+            leftover_opens, 1,
+            "cwd==HOME must not open leftover HOME .agents SKILL.md twice: {reads:?}"
+        );
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(home.path(), &DiscoveryOptions::default())
+        });
+        let agents = home.path().join(".agents").join("skills");
+        let listed = dirs
+            .iter()
+            .filter(|p| watch_paths_contain(std::slice::from_ref(*p), &agents))
+            .count();
+        assert_eq!(
+            listed, 1,
+            "watch_dirs must list HOME .agents once when cwd is HOME: {dirs:?}"
         );
     }
 
