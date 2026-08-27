@@ -729,6 +729,15 @@ mod tests {
         s
     }
 
+    fn catalog_name_order(cat: &str) -> Vec<&str> {
+        cat.lines()
+            .filter_map(|line| {
+                line.strip_prefix("- **")
+                    .and_then(|rest| rest.split("**:").next())
+            })
+            .collect()
+    }
+
     #[test]
     fn progressive_budgets_scale_with_context() {
         let small = progressive_budgets(8_000);
@@ -1039,9 +1048,12 @@ mod tests {
 
     #[test]
     fn format_catalog_uses_host_hint_not_bline_slash() {
+        // Name/input order is aaa-always then git-workflow. A lone
+        // contains("git-workflow") would pass if format_catalog ignored
+        // context and listed both skills in input order.
         let skills = vec![
-            make_skill("git-workflow", &["git"], 10),
             make_skill("aaa-always", &[], 10),
+            make_skill("git-workflow", &["git"], 10),
         ];
         let budgets = ProgressiveBudgets {
             catalog_max_entries: 2,
@@ -1054,10 +1066,42 @@ mod tests {
             budgets,
             FormatOptions::default(),
         );
-        assert!(cat.contains("git-workflow"), "{cat}");
+        assert_eq!(
+            catalog_name_order(&cat),
+            ["git-workflow", "aaa-always"],
+            "format_catalog context must rank a trigger match first, not name/input order: {cat}"
+        );
         assert!(cat.contains(DEFAULT_ACTIVATE_HINT), "{cat}");
         assert!(!cat.contains("/skill"), "{cat}");
         assert!(!cat.contains("Available skills"), "{cat}");
+
+        let empty = format_catalog(&skills, "", budgets, FormatOptions::default());
+        assert_eq!(
+            catalog_name_order(&empty),
+            ["aaa-always", "git-workflow"],
+            "empty context stays name order so the ranked case cannot pass by input order: {empty}"
+        );
+
+        let tight = ProgressiveBudgets {
+            catalog_max_entries: 1,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let one = format_catalog(
+            &skills,
+            "please help with git rebase",
+            tight,
+            FormatOptions::default(),
+        );
+        assert_eq!(
+            catalog_name_order(&one),
+            ["git-workflow"],
+            "max_entries=1 must keep the ranked trigger match, not the first input skill: {one}"
+        );
+        assert!(
+            one.contains("more skills not listed"),
+            "omitted name-order skill must still be counted: {one}"
+        );
     }
 
     #[test]
