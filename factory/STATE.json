@@ -6,28 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a59c7d2b4799fe7208cf767968f6a41a51d6f4b5",
+  "ledger_sha": "3a9e0debff39f7958a4e206ebea2912c7fc85143",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 3,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi38-auditor-catalog-rank",
+    "id": "improve-mpi38-dev-print-doors",
     "work_source": "improve",
-    "started_at": "2026-08-27T15:55:11Z",
-    "finished_at": "2026-08-27T15:55:11Z",
-    "result": "landed",
+    "started_at": "2026-08-27T16:02:05Z",
+    "finished_at": "2026-08-27T16:02:05Z",
+    "result": "noop",
     "head": "8e5c5df5cadeec8ed228c5ded735d2658b88bb87",
-    "pr": 291,
-    "files": [
-      "src/activate.rs"
-    ],
-    "tests": "format_catalog_uses_host_hint_not_bline_slash",
+    "pr": null,
+    "files": [],
+    "tests": "CLI/MCP already call format_watch_dirs; no leftover Path::display print",
     "review": "0"
   },
   "last_sha": "8e5c5df5cadeec8ed228c5ded735d2658b88bb87",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": null,
@@ -37,7 +35,7 @@
   },
   "mpi": {
     "cycle": 38,
-    "next_perspective": 3,
+    "next_perspective": 4,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
