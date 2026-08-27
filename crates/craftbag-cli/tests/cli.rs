@@ -850,6 +850,152 @@ fn list_watch_dirs_whitespace_extra_path_omits_root() {
     }
 }
 
+#[test]
+fn why_whitespace_extra_path_demo_is_unknown() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the CLI why door. `--path "/ .."` must not rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let (_home, mut named) = bin();
+        let named_out = named
+            .current_dir(cwd.path())
+            .arg("why")
+            .arg("demo")
+            .arg("--json")
+            .arg("--path")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        let named_stdout = String::from_utf8_lossy(&named_out.stdout);
+        let named_stderr = String::from_utf8_lossy(&named_out.stderr);
+        assert_ne!(
+            named_out.status.code(),
+            Some(0),
+            "why demo via extra-path {raw:?} must miss: stdout={named_stdout} stderr={named_stderr}"
+        );
+        let named_v: serde_json::Value =
+            serde_json::from_str(&named_stdout).expect("why named json");
+        if let Some(kind) = named_v.get("error_kind").and_then(|k| k.as_str()) {
+            assert!(
+                kind == "unknown_skill" || kind == "unreadable",
+                "why miss must be unknown or unreadable for {raw:?}: {named_stdout}"
+            );
+        } else {
+            let loaded = named_v["loaded"].as_array().expect("loaded");
+            assert!(
+                loaded.is_empty(),
+                "why demo must not load via extra-path {raw:?}: {named_stdout}"
+            );
+        }
+        assert!(
+            !named_stdout.contains("[Activated skill:")
+                && !named_stderr.contains("[Activated skill:"),
+            "why must not activate via extra-path {raw:?}: stdout={named_stdout} stderr={named_stderr}"
+        );
+
+        let (_home, mut all) = bin();
+        let all_out = all
+            .current_dir(cwd.path())
+            .arg("why")
+            .arg("--json")
+            .arg("--path")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        assert_eq!(
+            all_out.status.code(),
+            Some(0),
+            "unfiltered why via extra-path {raw:?} must stay ok: stderr={}",
+            String::from_utf8_lossy(&all_out.stderr)
+        );
+        let all_stdout = String::from_utf8_lossy(&all_out.stdout);
+        let all_v: serde_json::Value = serde_json::from_str(&all_stdout).expect("why all json");
+        let loaded = all_v["loaded"].as_array().expect("loaded");
+        assert!(
+            loaded.is_empty(),
+            "unfiltered why must not load root via extra-path {raw:?}: {all_stdout}"
+        );
+        let skips = all_v["skips"].as_array().expect("skips");
+        assert!(
+            skips.iter().any(|s| {
+                s["kind"] == "unreadable"
+                    && s["detail"]
+                        .as_str()
+                        .is_some_and(|d| d.contains("collapses"))
+            }),
+            "why must keep the collapse skip for extra-path {raw:?}: {all_stdout}"
+        );
+    }
+}
+
+#[test]
+fn load_whitespace_extra_path_demo_is_unknown() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the CLI load door. `--path "/ .."` must not rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(cwd.path())
+            .arg("load")
+            .arg("demo")
+            .arg("--json")
+            .arg("--path")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_ne!(
+            out.status.code(),
+            Some(0),
+            "load demo via extra-path {raw:?} must fail: stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            !stdout.contains("[Activated skill: demo]")
+                && !stderr.contains("[Activated skill: demo]"),
+            "must not activate demo via extra-path {raw:?}: stdout={stdout} stderr={stderr}"
+        );
+        let v: serde_json::Value = serde_json::from_str(&stdout).expect("load json");
+        let kind = v["error_kind"].as_str().unwrap_or("");
+        assert!(
+            kind == "unknown_skill" || kind == "unreadable",
+            "load miss must be unknown or unreadable for {raw:?}: {stdout}"
+        );
+        if let Some(p) = v.get("path").and_then(|x| x.as_str()) {
+            assert_ne!(p, "/", "must not peel path=/ for {raw:?}: {stdout}");
+            assert_ne!(
+                p, "/SKILL.md",
+                "must not peel path=/SKILL.md for {raw:?}: {stdout}"
+            );
+        }
+        assert_eq!(
+            stderr.lines().filter(|l| !l.is_empty()).count(),
+            1,
+            "load miss stderr must stay one line: {stderr:?}"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn load_newline_extra_path_demo_is_unknown() {
