@@ -6,33 +6,33 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a77c1994c443c0204647e068c07234c2f3e21940",
+  "ledger_sha": "29459814d8c44278ee349f8cfd6d6d247df3074c",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-skills-named-package-why-cli-mcp",
+    "id": "leftover-skills-named-package-watch-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T01:15:00Z",
-    "finished_at": "2026-08-27T01:19:41Z",
+    "started_at": "2026-08-27T01:21:00Z",
+    "finished_at": "2026-08-27T01:25:40Z",
     "result": "landed",
-    "head": "4a193c8507bcc445a07bb34ce45b49e2365a41cc",
-    "pr": 231,
+    "head": "b8758113e1d74b2c1fba71a93e352b0ded1c8fae",
+    "pr": 232,
     "files": [
       "crates/craftbag-cli/tests/cli.rs",
       "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "why_leftover_skills_named_package_names_wanted,stdio_skills_why_leftover_skills_named_package_names_wanted",
+    "tests": "list_watch_dirs_leftover_skills_named_package_lists_extra_root,stdio_skills_list_watch_leftover_skills_named_package_lists_extra_root",
     "review": "0"
   },
-  "last_sha": "4a193c8507bcc445a07bb34ce45b49e2365a41cc",
+  "last_sha": "b8758113e1d74b2c1fba71a93e352b0ded1c8fae",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T01:19:41Z",
+    "checked_at": "2026-08-27T01:25:40Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -60,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP why names leftover extra/skills named package plus wanted."
+    "last_why_summary": "CLI/MCP watch lists leftover extra root, not named extra/skills."
   },
   "budgets": {
     "max_cycles": null,
