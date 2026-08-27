@@ -8,7 +8,8 @@ issue from this tree. Do not write under findbug or durable `~/bline`.
 A later Bline change can path-depend on this crate, compare skip
 kinds on one tree, then (if wanted) re-export `Skill` / `SkipKind`.
 
-`load` and `why` already exist here (`craftbag` CLI and `craftbag-mcp`).
+`load`, `why`, and `validate` already exist here (`craftbag` CLI and
+`craftbag-mcp`).
 
 `load` / `why` misses carry a stable `error_kind` so a host can branch
 without scraping Display. Unknown is `unknown_skill`. A matching skip
@@ -33,6 +34,9 @@ path. `error_kind` is the skip code (`parse_error`, `unreadable`,
 `name_directory_mismatch`). Success prints the `ValidationReport`
 (no `error_kind`). Call `ValidationReport::miss`. Echoed keys and
 names go through `sanitize_error_token` so stderr stays one line.
+MCP `skills_validate` is the same path plus `strict` (omitted is
+false). Success `content[0].text` is that `ValidationReport`. A miss
+sets `isError` and peels the same `SkillMiss` next to it.
 
 | Host surface | Miss peel |
 |--------------|-----------|
@@ -40,6 +44,7 @@ names go through `sanitize_error_token` so stderr stays one line.
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
 | CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
 | MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
+| MCP `skills_validate` | same peel as CLI `validate --json` next to `isError`; success `content[0].text` is `ValidationReport` (no `error_kind`) |
 
 ## Path-dep (separate worktree)
 

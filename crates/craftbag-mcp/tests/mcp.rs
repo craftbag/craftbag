@@ -82,6 +82,24 @@ fn stdio_initialize() {
 }
 
 #[test]
+fn stdio_skills_validate_corpus() {
+    let resp = rpc(&serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 80,
+        "method": "tools/call",
+        "params": {
+            "name": "skills_validate",
+            "arguments": {"path": corpus_pkg()}
+        }
+    }));
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("validate json");
+    assert_eq!(v["ok"], true, "{text}");
+    assert_eq!(v["name"], "minimal-valid", "{text}");
+}
+
+#[test]
 fn stdio_skills_list_empty_path_does_not_scan_cwd() {
     let cwd = tempfile::tempdir().expect("cwd");
     let home = tempfile::tempdir().expect("home");

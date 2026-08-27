@@ -1,16 +1,17 @@
-//! MCP stdio server: `skills_list`, `skills_load`, `skills_why`.
+//! MCP stdio server: `skills_list`, `skills_load`, `skills_why`, `skills_validate`.
 //!
 //! Official `rmcp` 1.0+ uses let-chains and does not compile on MSRV 1.85.
 //! This binary speaks MCP JSON-RPC over stdio and wraps the same library
 //! the CLI uses.
 
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    parse_list_format, progressive_budgets, unknown_or_skipped_skill, watch_dirs, why,
+    parse_list_format, progressive_budgets, unknown_or_skipped_skill, validate_path_with_options,
+    watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -108,6 +109,14 @@ struct WhyArgs {
     /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValidateArgs {
+    path: String,
+    /// Reject unknown frontmatter keys. Omitted is false (host extensions pass).
+    #[serde(default)]
+    strict: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -260,6 +269,25 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     Ok(serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)
 }
 
+fn validate_text(args: ValidateArgs) -> Result<String, ToolError> {
+    if args.path.trim().is_empty() {
+        return Err("path must be a non-empty string".to_owned().into());
+    }
+    let report = validate_path_with_options(Path::new(&args.path), args.strict);
+    if report.ok {
+        return Ok(serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?);
+    }
+    if let Some(miss) = report.miss() {
+        return Err(miss.into());
+    }
+    Err(report
+        .errors
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "validation failed".to_owned())
+        .into())
+}
+
 fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
     (err.message, true, err.miss)
 }
@@ -350,6 +378,24 @@ fn tools() -> Value {
             "name": "skills_why",
             "description": "Explain loaded, skipped, and activation decisions (`{ loaded, skips, activation }`). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
             "inputSchema": {"type": "object", "properties": why_props}
+        },
+        {
+            "name": "skills_validate",
+            "description": "Validate one SKILL.md file or package directory (joins SKILL.md / skill.md). strict rejects unknown frontmatter keys (skills-ref default; omitted is false). Success is ValidationReport (no error_kind). A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as validate --json).",
+            "inputSchema": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Example: \"./my-skill\"."
+                    },
+                    "strict": {
+                        "type": "boolean",
+                        "description": "Reject unknown frontmatter keys (skills-ref default). Omitted is false so host extensions still pass."
+                    }
+                }
+            }
         }
     ])
 }
@@ -419,6 +465,14 @@ fn handle(req: RpcRequest) -> Option<Value> {
                         Err(e) => tool_fail(e),
                     },
                     Err(e) => tool_fail(e.into()),
+                },
+                "skills_validate" => match serde_json::from_value::<ValidateArgs>(params.arguments)
+                {
+                    Ok(args) => match validate_text(args) {
+                        Ok(s) => (s, false, None),
+                        Err(e) => tool_fail(e),
+                    },
+                    Err(e) => tool_fail(e.to_string().into()),
                 },
                 other => {
                     return Some(err(
@@ -537,13 +591,221 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         let got: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(got, ["skills_list", "skills_load", "skills_why"]);
+        assert_eq!(
+            got,
+            [
+                "skills_list",
+                "skills_load",
+                "skills_why",
+                "skills_validate"
+            ]
+        );
         assert!(
             tools[1]["inputSchema"]["required"]
                 .as_array()
                 .expect("req")
                 .iter()
                 .any(|v| v == "name")
+        );
+    }
+
+    #[test]
+    fn skills_validate_corpus_ok() {
+        empty_home(|| {
+            let resp = call(70, "skills_validate", json!({"path": corpus_pkg()}));
+            assert_eq!(
+                resp["result"]["isError"],
+                false,
+                "MCP must expose CLI validate: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            let v: serde_json::Value = serde_json::from_str(text).expect("validate json");
+            assert_eq!(v["ok"], true, "{text}");
+            assert_eq!(v["name"], "minimal-valid", "{text}");
+            assert!(
+                v.get("error_kind").is_none(),
+                "ok validate must not peel a miss: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_validate_unknown_key_passes_default_and_fails_strict() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let pkg = tmp.path().join("demo");
+            fs::create_dir_all(&pkg).expect("mkdir");
+            fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: demo\ndescription: d\nmade_up_field: x\n---\nbody\n",
+            )
+            .expect("write");
+            let skill = pkg.join("SKILL.md").to_string_lossy().into_owned();
+            let lenient = call(71, "skills_validate", json!({"path": skill.clone()}));
+            assert_eq!(
+                lenient["result"]["isError"],
+                false,
+                "default validate must ignore host keys: {}",
+                call_text(&lenient)
+            );
+            let strict = call(
+                72,
+                "skills_validate",
+                json!({"path": skill, "strict": true}),
+            );
+            assert_eq!(
+                strict["result"]["isError"],
+                true,
+                "strict must reject unknown keys like CLI validate --strict: {}",
+                call_text(&strict)
+            );
+            assert_eq!(
+                strict["result"]["error_kind"], "parse_error",
+                "strict miss must peel like CLI validate --json: {strict}"
+            );
+            let text = call_text(&strict);
+            assert!(
+                text.contains("made_up_field"),
+                "strict must name the unknown key: {text}"
+            );
+            assert_eq!(
+                strict["result"]["error"], text,
+                "strict must peel SkillMiss.error like load/why: {strict}"
+            );
+            let path = strict["result"]["path"].as_str().expect("path");
+            assert!(
+                path.ends_with("demo/SKILL.md") || path.ends_with("demo\\SKILL.md"),
+                "strict miss must peel SkillMiss.path: {strict}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_validate_missing_path_is_error() {
+        empty_home(|| {
+            let resp = call(73, "skills_validate", json!({}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "path is required like skills_load name: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("missing field") && text.contains("path"),
+                "error must name the missing path: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_validate_empty_path_is_error() {
+        empty_home(|| {
+            let resp = call(74, "skills_validate", json!({"path": "   "}));
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "whitespace path must not validate cwd: {}",
+                call_text(&resp)
+            );
+            assert_eq!(
+                call_text(&resp),
+                "path must be a non-empty string",
+                "{}",
+                call_text(&resp)
+            );
+        });
+    }
+
+    #[test]
+    fn skills_validate_null_strict_is_error_not_lenient() {
+        empty_home(|| {
+            let resp = call(
+                75,
+                "skills_validate",
+                json!({"path": corpus_pkg(), "strict": null}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says strict is boolean; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("\"ok\""),
+                "must not return ValidationReport for null strict: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_validate_invalid_name_peels_parse_error() {
+        empty_home(|| {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/corpus/agentskills/invalid-name/Bad_Name/SKILL.md")
+                .to_string_lossy()
+                .into_owned();
+            let resp = call(76, "skills_validate", json!({"path": path}));
+            assert_eq!(resp["result"]["isError"], true);
+            assert_eq!(
+                resp["result"]["error_kind"], "parse_error",
+                "invalid name must peel like CLI validate --json: {resp}"
+            );
+            let text = call_text(&resp);
+            assert_eq!(
+                resp["result"]["error"], text,
+                "validate miss must peel SkillMiss.error: {resp}"
+            );
+            let peeled = resp["result"]["path"].as_str().expect("path");
+            assert!(
+                peeled.ends_with("Bad_Name/SKILL.md") || peeled.ends_with("Bad_Name\\SKILL.md"),
+                "validate miss must peel SkillMiss.path: {resp}"
+            );
+        });
+    }
+
+    #[test]
+    fn tools_list_validate_describes_strict_and_peel() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(77)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let tool = tools
+            .iter()
+            .find(|t| t["name"] == "skills_validate")
+            .expect("skills_validate");
+        let desc = tool["description"].as_str().unwrap_or("");
+        assert!(
+            desc.contains("package directory") && desc.contains("SKILL.md"),
+            "skills_validate must name package dir like CLI validate --help: {desc}"
+        );
+        assert!(
+            desc.contains("ValidationReport") && desc.contains("no error_kind"),
+            "skills_validate must name success JSON like CLI validate --json: {desc}"
+        );
+        let props = &tool["inputSchema"]["properties"];
+        assert_eq!(props["path"]["type"], "string", "{props}");
+        assert_eq!(props["strict"]["type"], "boolean", "{props}");
+        let required = tool["inputSchema"]["required"]
+            .as_array()
+            .expect("required");
+        assert!(
+            required.iter().any(|v| v == "path"),
+            "skills_validate path is required: {tool}"
+        );
+        assert!(
+            props.get("vendor").is_none() && props.get("ascii_names").is_none(),
+            "validate is one path, not a discover walk: {props}"
         );
     }
 
@@ -2971,7 +3233,7 @@ mod tests {
         })
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
-        for name in ["skills_load", "skills_why"] {
+        for name in ["skills_load", "skills_why", "skills_validate"] {
             let tool = tools.iter().find(|t| t["name"] == name).expect(name);
             let desc = tool["description"].as_str().unwrap_or("");
             assert!(
@@ -3163,6 +3425,9 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         for tool in tools {
+            if !is_discover_tool(tool["name"].as_str()) {
+                continue;
+            }
             let vendor = &tool["inputSchema"]["properties"]["vendor"];
             let tokens: Vec<&str> = vendor["items"]["enum"]
                 .as_array()
@@ -3185,6 +3450,10 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn is_discover_tool(name: Option<&str>) -> bool {
+        matches!(name, Some("skills_list" | "skills_load" | "skills_why"))
     }
 
     /// JSON string arrays in help text (`["claude"]`). Prose aliases stay out.
@@ -3216,6 +3485,9 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         for tool in tools {
+            if !is_discover_tool(tool["name"].as_str()) {
+                continue;
+            }
             let props = &tool["inputSchema"]["properties"];
             assert!(
                 props.get("ascii_names").is_some(),
@@ -3241,6 +3513,9 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         for tool in tools {
+            if !is_discover_tool(tool["name"].as_str()) {
+                continue;
+            }
             let props = &tool["inputSchema"]["properties"];
             assert!(
                 props.get("implicit_roots").is_some(),
@@ -3360,6 +3635,9 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         for tool in tools {
+            if !is_discover_tool(tool["name"].as_str()) {
+                continue;
+            }
             let props = &tool["inputSchema"]["properties"];
             assert!(
                 props.get("disabled").is_some(),
@@ -3497,6 +3775,9 @@ mod tests {
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
         for tool in tools {
+            if !is_discover_tool(tool["name"].as_str()) {
+                continue;
+            }
             let props = &tool["inputSchema"]["properties"];
             assert!(
                 props.get("ignore").is_some(),
