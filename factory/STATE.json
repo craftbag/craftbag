@@ -6,33 +6,33 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "32027139ecbc39df8b2d6fba71b50bdee1447390",
+  "ledger_sha": "22d4c27a0190b9460febb78be8e360fa63b358dd",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-skills-fifo-list-cli-mcp",
+    "id": "leftover-skills-fifo-why-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T01:49:00Z",
-    "finished_at": "2026-08-27T01:53:46Z",
+    "started_at": "2026-08-27T01:54:00Z",
+    "finished_at": "2026-08-27T01:59:33Z",
     "result": "landed",
-    "head": "f45423b5f4ddfba7295e4c46b5a1d327263b662a",
-    "pr": 235,
+    "head": "43368a1ade25a5742454a07853d6b6e252296f36",
+    "pr": 236,
     "files": [
       "crates/craftbag-cli/tests/cli.rs",
       "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "list_leftover_skills_fifo_names_wanted,stdio_skills_list_leftover_skills_fifo_names_wanted",
+    "tests": "why_leftover_skills_fifo_names_wanted,stdio_skills_why_leftover_skills_fifo_names_wanted",
     "review": "0"
   },
-  "last_sha": "f45423b5f4ddfba7295e4c46b5a1d327263b662a",
+  "last_sha": "43368a1ade25a5742454a07853d6b6e252296f36",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T01:53:46Z",
+    "checked_at": "2026-08-27T01:59:33Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -60,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP list leftover FIFO extra/skills names wanted."
+    "last_why_summary": "CLI/MCP why leftover FIFO extra/skills names wanted."
   },
   "budgets": {
     "max_cycles": null,
