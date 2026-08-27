@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "15777761aa1aac29ac85bda5e645de81cc9478ba",
+  "ledger_sha": "3adc7edb54b4c2b79cfddba26ee20a5c714082a8",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 2,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-cursor-1-prop-none",
-    "work_source": "expand",
-    "started_at": "2026-08-27T20:01:02Z",
-    "finished_at": "2026-08-27T20:01:02Z",
-    "result": "noop",
+    "id": "prove-root-file-extra-path",
+    "work_source": "prove",
+    "started_at": "2026-08-27T20:03:56Z",
+    "finished_at": "2026-08-27T20:03:56Z",
+    "result": "proved",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "none",
+    "tests": "craftbag why --path tests/corpus/root-file -> name_directory_mismatch",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -57,9 +57,10 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)",
       "tests/corpus/incumbent/bline-project (cwd + --vendor bline)",
-      "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)"
+      "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)",
+      "tests/corpus/root-file (--path, no implicit roots)"
     ],
-    "last_why_summary": "why --path ~/skills/grok/skills loaded 351, 0 skips; named pr-gate"
+    "last_why_summary": "why --path tests/corpus/root-file skip name_directory_mismatch loose (package dir, not root_file)"
   },
   "budgets": {
     "max_cycles": null,
