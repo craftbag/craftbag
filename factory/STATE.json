@@ -6,26 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "d8edeb3e190a2e44a5cc34ba809d2b90437d4be4",
+  "ledger_sha": "8e3094c013e40de9d5c97c7bef12d2c69c8cd537",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 2,
   "expand_noop_streak": 2,
   "last_job": {
-    "id": "improve-mpi44-nc-noop",
+    "id": "improve-mpi44-obs-noop",
     "work_source": "improve",
-    "started_at": "2026-08-27T21:57:43Z",
-    "finished_at": "2026-08-27T21:57:43Z",
+    "started_at": "2026-08-27T21:58:19Z",
+    "finished_at": "2026-08-27T21:58:19Z",
     "result": "noop",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "local-gate lock still complete",
+    "tests": "SkillMiss peel + skip TSV still locked",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -34,8 +34,8 @@
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 44,
-    "next_perspective": 15,
+    "cycle": 45,
+    "next_perspective": 1,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
