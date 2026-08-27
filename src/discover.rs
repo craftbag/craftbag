@@ -748,6 +748,7 @@ fn load_extra_path(
         }
     }
     let handle_skills = extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips)
+        && !extra_skills_named
         && (dir_has_child_skill_packages(&skills_subdir) || leftover_skills_md.is_some());
     let skip_leftover = leftover_root.as_ref().and_then(|(p, name, err)| {
         if handle_skills || !skill_md_is_dir(p) {
@@ -3021,6 +3022,11 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         let extra = tempfile::tempdir().expect("extra");
         write_skill(&extra.path().join("skills"), "skills", "PACKAGE_BODY");
+        write_skill(
+            &extra.path().join("skills").join("evil"),
+            "evil",
+            "NESTED_SECRET",
+        );
         write_skill(&extra.path().join("wanted"), "wanted", "from-sibling");
         let report = empty_home_discover(
             cwd.path(),
@@ -3043,6 +3049,19 @@ mod tests {
             report.skips.iter().all(|s| s.kind != SkipKind::RootFile),
             "extra/skills named package is not a leftover root file: {:?}",
             report.skips
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "evil").is_none(),
+            "named extra/skills must not scan nested SKILL.md: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("NESTED_SECRET")),
+            "nested skill body must not load: {:?}",
+            report.skills
         );
         let home = tempfile::tempdir().expect("home");
         let dirs = with_home_override(Some(home.path().to_path_buf()), || {
