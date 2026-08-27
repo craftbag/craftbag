@@ -42,6 +42,74 @@ fn validate_minimal_valid_ok() {
 }
 
 #[test]
+fn validate_package_dir_ok() {
+    let path = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg(&path)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok\tminimal-valid"));
+}
+
+#[test]
+fn validate_package_dir_json_path_is_skill_md() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let skill = pkg.join("SKILL.md");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("validate")
+        .arg("--json")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("validate json");
+    assert_eq!(v["ok"], true, "stdout={stdout}");
+    assert_eq!(v["name"], "minimal-valid", "stdout={stdout}");
+    assert_eq!(
+        v["path"].as_str().map(Path::new),
+        Some(skill.as_path()),
+        "package dir --json path must be the joined SKILL.md: {stdout}"
+    );
+}
+
+#[test]
+fn validate_collection_dir_names_package() {
+    let dir = corpus().join("leftover/empty-nested-skills");
+    let (_home, mut cmd) = bin();
+    let out = cmd.arg("validate").arg(&dir).output().expect("run");
+    assert_eq!(out.status.code(), Some(1), "collection root must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not a skill package"),
+        "must not say SKILL.md is not a regular file: {stderr}"
+    );
+    assert!(
+        !stderr.contains("regular file"),
+        "directory miss must name the package hole: {stderr}"
+    );
+}
+
+#[test]
+fn validate_help_names_package_dir() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("package directory"))
+        .stdout(predicates::str::contains("SKILL.md"))
+        .stdout(predicates::str::contains("skill.md"));
+}
+
+#[test]
 fn validate_invalid_name_fails() {
     let path = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
     let (_home, mut cmd) = bin();

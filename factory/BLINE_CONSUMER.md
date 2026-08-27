@@ -25,8 +25,11 @@ Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
 `SkillMiss::is_not_found`) from a path-dep. Do not parse
 `unknown skill:` / `skipped skill:`.
 
-CLI `validate --json` uses the same peel on a failed path.
-`error_kind` is the skip code (`parse_error`, `unreadable`,
+CLI `validate` accepts a SKILL.md file or a package directory (joins
+`SKILL.md` / `skill.md`, same as extra-path). A collection root with
+no package file is unreadable (`directory is not a skill package`),
+not a child walk. `validate --json` uses the same peel on a failed
+path. `error_kind` is the skip code (`parse_error`, `unreadable`,
 `name_directory_mismatch`). Success prints the `ValidationReport`
 (no `error_kind`). Call `ValidationReport::miss`. Echoed keys and
 names go through `sanitize_error_token` so stderr stays one line.
