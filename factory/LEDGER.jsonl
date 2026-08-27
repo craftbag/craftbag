@@ -669,3 +669,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:19:43Z","job_id":"improve-mpi46-adv-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Adv REVIEW 0 same SHA"}
 {"ts":"2026-08-27T22:20:54Z","job_id":"improve-mpi46-arch-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Architecture REVIEW 0; expand3 incumbents already present"}
 {"ts":"2026-08-27T22:20:59Z","job_id":"expand3-incumbent-noop-r4","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"incumbents complete; back to NC"}
+{"ts":"2026-08-27T22:21:50Z","job_id":"improve-mpi46-nc-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"NC REVIEW 0"}
