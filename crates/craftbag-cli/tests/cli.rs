@@ -334,6 +334,10 @@ fn validate_json_line_separator_dotdot_does_not_retarget_root() {
     }
     let err = v["error"].as_str().unwrap_or("");
     assert!(
+        err.contains("validate") && err.contains("skills_validate"),
+        "must name validate / skills_validate: {stdout}"
+    );
+    assert!(
         err.contains("line separator") || err.contains("collapses"),
         "must name the refuse: {stdout}"
     );
