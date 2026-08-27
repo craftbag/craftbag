@@ -705,3 +705,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:54:40Z","job_id":"expand4-new-tree-noop-r4","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"no unused tree invented; back to Compat"}
 {"ts":"2026-08-27T22:55:18Z","job_id":"improve-mpi48-compat-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Compat REVIEW 0"}
 {"ts":"2026-08-27T22:56:28Z","job_id":"improve-mpi48-adv-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Adv REVIEW 0 same SHA"}
+{"ts":"2026-08-27T22:57:22Z","job_id":"improve-mpi48-arch-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Architecture REVIEW 0; expand5 steal-list already live"}
