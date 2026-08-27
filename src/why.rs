@@ -1,6 +1,7 @@
 //! Doctor: why a skill loaded, skipped, or did not auto-inject.
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -188,6 +189,40 @@ impl WhyReport {
         }
         None
     }
+}
+
+/// Text why rows for CLI `why` (not `--json`): `loaded\tname\tpath`,
+/// skip TSV, then `activation\tname\treason\tdetail`.
+///
+/// Path and detail go through [`crate::sanitize_error_token`] so a
+/// leftover implicit package cannot split the row (U+2028). Skip
+/// rows share [`crate::format_skip_tsv`].
+pub fn format_why_text(report: &WhyReport) -> String {
+    let mut out = String::new();
+    for skill in &report.loaded {
+        let path = skill
+            .path
+            .as_ref()
+            .map(|p| crate::sanitize_error_token(&p.display().to_string()))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "loaded\t{}\t{}",
+            crate::sanitize_error_token(&skill.name),
+            path
+        );
+    }
+    out.push_str(&crate::format_skip_tsv(&report.skips));
+    for decision in &report.activation {
+        let _ = writeln!(
+            out,
+            "activation\t{}\t{}\t{}",
+            crate::sanitize_error_token(&decision.name),
+            decision.reason.as_str(),
+            crate::sanitize_error_token(&decision.detail)
+        );
+    }
+    out
 }
 
 /// Explain loaded vs skipped skills and optional activation decisions.

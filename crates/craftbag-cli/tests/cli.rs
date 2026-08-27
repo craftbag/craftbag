@@ -2783,6 +2783,91 @@ fn why_leftover_hostile_skip_tsv_stays_one_row() {
 }
 
 #[test]
+fn why_leftover_hostile_loaded_tsv_stays_one_row() {
+    // format_skip_tsv sanitizes leftover skip paths (PR 279-280).
+    // An implicit leftover package still prints source_path raw on
+    // why loaded TSV and default list TSV. U+2028 must not split
+    // those rows (same leftover analog as skip TSV).
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root");
+    let pkg = root.join(".agents").join("skills").join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: leftover\u{2014}pkg\n---\nbody\n",
+    )
+    .expect("write");
+
+    let (_home, mut why_cmd) = bin();
+    let why_out = why_cmd
+        .current_dir(&root)
+        .arg("why")
+        .output()
+        .expect("run why");
+    assert_eq!(
+        why_out.status.code(),
+        Some(0),
+        "why stderr={}",
+        String::from_utf8_lossy(&why_out.stderr)
+    );
+    let why_stdout = String::from_utf8_lossy(&why_out.stdout);
+    let loaded: Vec<&str> = why_stdout
+        .lines()
+        .filter(|l| l.starts_with("loaded\t"))
+        .collect();
+    assert_eq!(
+        loaded.len(),
+        1,
+        "leftover why loaded TSV must stay one row: {why_stdout:?}"
+    );
+    let why_row = loaded[0];
+    assert!(
+        why_row.starts_with("loaded\tdemo\t"),
+        "why must emit loaded TSV for the leftover package: {why_row:?}"
+    );
+    assert!(
+        !why_row.contains('\u{2028}') && !why_row.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into why loaded TSV: {why_row:?}"
+    );
+    assert!(
+        why_row.contains("evil?root"),
+        "hostile leftover path must be sanitized on why loaded TSV: {why_row:?}"
+    );
+
+    let (_home, mut list_cmd) = bin();
+    let list_out = list_cmd
+        .current_dir(&root)
+        .arg("list")
+        .output()
+        .expect("run list");
+    assert_eq!(
+        list_out.status.code(),
+        Some(0),
+        "list stderr={}",
+        String::from_utf8_lossy(&list_out.stderr)
+    );
+    let list_stdout = String::from_utf8_lossy(&list_out.stdout);
+    let listed: Vec<&str> = list_stdout
+        .lines()
+        .filter(|l| l.starts_with("demo\t"))
+        .collect();
+    assert_eq!(
+        listed.len(),
+        1,
+        "leftover list TSV must stay one row: {list_stdout:?}"
+    );
+    let list_row = listed[0];
+    assert!(
+        !list_row.contains('\u{2028}') && !list_row.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into default list TSV: {list_row:?}"
+    );
+    assert!(
+        list_row.contains("evil?root"),
+        "hostile leftover path must be sanitized on default list TSV: {list_row:?}"
+    );
+}
+
+#[test]
 fn why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the CLI why door. Default vendor stays off. Empty extra/skills

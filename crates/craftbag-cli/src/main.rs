@@ -7,9 +7,9 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
-    find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    format_skip_tsv, parse_list_format, progressive_budgets, unknown_or_skipped_skill,
-    validate_path_with_options, watch_dirs, why,
+    find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
+    format_load_message, format_skip_tsv, format_why_text, parse_list_format, progressive_budgets,
+    unknown_or_skipped_skill, validate_path_with_options, watch_dirs, why,
 };
 
 #[derive(Parser)]
@@ -213,17 +213,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?
                 );
             } else {
-                for s in &report.skills {
-                    println!(
-                        "{}\t{}\t{}",
-                        s.name,
-                        s.source.as_str(),
-                        s.source_path
-                            .as_ref()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default()
-                    );
-                }
+                print!("{}", format_list_tsv(&report.skills));
             }
             if !matches!(mode, ListOutput::Json) {
                 let _ = write!(io::stderr(), "{}", format_skip_tsv(&report.skips));
@@ -312,25 +302,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?
                 );
             } else {
-                for s in &why.loaded {
-                    println!(
-                        "loaded\t{}\t{}",
-                        s.name,
-                        s.path
-                            .as_ref()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default()
-                    );
-                }
-                print!("{}", format_skip_tsv(&why.skips));
-                for a in &why.activation {
-                    println!(
-                        "activation\t{}\t{}\t{}",
-                        a.name,
-                        a.reason.as_str(),
-                        a.detail
-                    );
-                }
+                print!("{}", format_why_text(&why));
             }
             Ok(ExitCode::SUCCESS)
         }
