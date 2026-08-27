@@ -891,3 +891,54 @@ fn stdio_skills_list_watch_leftover_empty_nested_skills_lists_extra_root() {
         "watch format must not load SKILL.md: {text}"
     );
 }
+
+#[test]
+fn stdio_skills_list_watch_leftover_skills_named_package_lists_extra_root() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the MCP watch door. Default vendor stays off. Named extra/skills
+    // is a package, not a discover walk.
+    let extra = corpus_leftover_skills_named_package()
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize leftover extra: {e}"));
+    let extra_skills = extra.join("skills");
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra_skills.join("SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "watch",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.lines().any(|l| Path::new(l) == extra.as_path()),
+        "watch must list leftover extra-path root: {text}"
+    );
+    assert!(
+        text.lines().all(|l| Path::new(l) != extra_skills.as_path()),
+        "named extra/skills is not a discover walk: {text}"
+    );
+    assert!(
+        !text.contains("wanted") && !text.contains("evil") && !text.contains("## Skills"),
+        "watch format must not load SKILL.md: {text}"
+    );
+}
