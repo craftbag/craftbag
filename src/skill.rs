@@ -32,8 +32,10 @@ pub struct Skill {
     /// Short description of what the skill provides (from frontmatter).
     /// agentskills: required, max 1024 characters.
     pub description: String,
-    /// Trigger phrases that activate this skill (host extension). Empty means
-    /// always active for non-vendor sources.
+    /// Trigger phrases that activate this skill (host extension). Empty
+    /// means always-active unless
+    /// [`SkillSource::empty_triggers_not_always_active`] (compat vendors
+    /// `claude` / `cursor` / `grok`).
     #[serde(default)]
     pub triggers: Vec<String>,
     /// The Markdown body content injected into the prompt.

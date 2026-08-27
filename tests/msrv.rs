@@ -262,6 +262,43 @@ fn bline_consumer_watch_dirs_omits_ignore_prefixes() {
     );
 }
 
+/// Host notes must name the shared empty-trigger policy from #257.
+/// Stale "only disable_model_invocation" sent a Bline integrator the
+/// wrong auto-inject rule after compat vendors stopped always-active.
+#[test]
+fn bline_consumer_names_empty_trigger_policy() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("empty_triggers_not_always_active"),
+        "BLINE_CONSUMER must name SkillSource::empty_triggers_not_always_active"
+    );
+    assert!(
+        notes.contains("filter_skills") && notes.contains("why.activation"),
+        "BLINE_CONSUMER must say filter_skills and why.activation share the empty-trigger rule"
+    );
+    assert!(
+        notes.contains("COMPAT_VENDOR_TOKENS")
+            && notes.contains("claude")
+            && notes.contains("cursor")
+            && notes.contains("grok"),
+        "BLINE_CONSUMER must name compat vendors whose empty triggers are not always-active"
+    );
+    assert!(
+        notes.contains("`bline` vendor") && notes.contains("auto-inject"),
+        "BLINE_CONSUMER must say bline vendor empty triggers still auto-inject"
+    );
+    assert!(
+        notes.contains("vendor_empty_triggers"),
+        "BLINE_CONSUMER must name the vendor_empty_triggers activation reason"
+    );
+    let collapsed = notes.replace('\n', " ");
+    assert!(
+        !collapsed.contains("still use only")
+            || !collapsed.contains("disable_model_invocation for auto-inject"),
+        "BLINE_CONSUMER must not say filter_skills still uses only disable_model_invocation"
+    );
+}
+
 /// Catalog stays cheap (name + description, plus `Use when:`). Watch is
 /// paths. Host notes must not group `list --catalog` / MCP catalog or
 /// watch with SkillSummary JSON keys (`user_invocable`, …).
