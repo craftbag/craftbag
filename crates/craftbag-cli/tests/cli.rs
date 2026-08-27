@@ -2739,10 +2739,10 @@ fn why_extra_path_root_file_and_package_agree_with_load() {
 
 #[test]
 fn why_leftover_hostile_skip_tsv_stays_one_row() {
-    // list catalog/xml uses format_skip_tsv (PR 278/279). CLI why
-    // (not --json) still inlined skip\tkind\tpath\tdetail. Implicit
-    // leftover SKILL.md is not extra-path refuse, so skip.path is the
-    // raw walk path. U+2028 / U+2014 must not split why TSV.
+    // list catalog/xml and CLI why (not --json) use format_skip_tsv
+    // (PR 278-280). Implicit leftover SKILL.md is not extra-path refuse,
+    // so skip.path is the raw walk path. U+2028 / U+2014 must not split
+    // why TSV.
     let tmp = tempfile::tempdir().expect("tmp");
     let root = tmp.path().join("evil\u{2028}root");
     let skills = root.join(".agents").join("skills");

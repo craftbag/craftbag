@@ -23,6 +23,10 @@
 //! (joins `SKILL.md` / `skill.md`). Success is [`ValidationReport`]
 //! (no `error_kind`). A miss is [`ValidationReport::miss`]. CLI
 //! `validate --json` and MCP `skills_validate` share that report.
+//!
+//! [`format_skip_tsv`] is the skip TSV source (`skip\tkind\tpath\tdetail`)
+//! for CLI list stderr, CLI why stdout, and MCP catalog/xml text.
+//! Do not inline those rows on a new text surface.
 
 mod activate;
 mod discover;
@@ -208,6 +212,30 @@ mod tests {
         assert!(
             docs.contains("validate --json") && docs.contains("skills_validate"),
             "crate-root rustdoc must map CLI validate --json and MCP skills_validate: {docs}"
+        );
+    }
+
+    /// After PR 278-280, [`super::format_skip_tsv`] is the skip TSV
+    /// source. A new text surface must not inline `skip\tkind\tpath\tdetail`.
+    #[test]
+    fn crate_root_docs_name_format_skip_tsv() {
+        let docs: String = include_str!("lib.rs")
+            .lines()
+            .filter(|line| line.starts_with("//!"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            docs.contains("[`format_skip_tsv`]"),
+            "crate-root rustdoc must name format_skip_tsv so a new surface does not inline skip TSV: {docs}"
+        );
+        assert!(
+            docs.contains("CLI why") && docs.contains("list") && docs.contains("catalog"),
+            "crate-root rustdoc must name CLI why / list / catalog as format_skip_tsv callers: {docs}"
+        );
+        let collapsed = docs.replace('\n', " ");
+        assert!(
+            !collapsed.contains("why inlines") && !collapsed.contains("still inlined"),
+            "crate-root rustdoc must not say why inlines skip TSV: {docs}"
         );
     }
 }
