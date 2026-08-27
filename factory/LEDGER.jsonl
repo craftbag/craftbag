@@ -446,3 +446,4 @@
 {"ts": "2026-08-27T04:08:12Z", "job_id": "mpi32-arch-ignore-line-separator", "work_source": "improve", "result": "landed", "head": "5d8de557327fd58b700ad166d8d1494920dbe583", "pr": 249, "tests": "ignore line-separator token", "noop": false}
 {"ts": "2026-08-27T04:23:31Z", "job_id": "mpi32-contrib-make-check-lock", "work_source": "improve", "result": "landed", "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd", "pr": 250, "tests": "local gate lock", "noop": false}
 {"ts": "2026-08-27T04:31:07Z", "job_id": "mpi32-obs-peel-parity", "work_source": "improve", "result": "noop", "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd", "pr": null, "tests": "peel parity exists", "noop": true}
+{"ts": "2026-08-27T04:34:44Z", "job_id": "mpi33-qa-ignore-cli-mcp", "work_source": "improve", "result": "noop", "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd", "pr": null, "tests": "CLI/MCP already green", "noop": true}
