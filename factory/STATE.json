@@ -6,30 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "6cb66559e66eb903b81a608055f5a3eb3c1982ae",
+  "ledger_sha": "26939a8beffa4abb8f122615112b676777f5ca71",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi32-maint-noop",
+    "id": "extra-skills-fifo-does-not-hide-sibling",
     "work_source": "improve",
-    "started_at": "2026-08-27T01:38:00Z",
-    "finished_at": "2026-08-27T01:45:00Z",
-    "result": "noop",
-    "head": "11569cb56eacea809b0cdbfe3d27c557b03648c9",
-    "pr": null,
-    "files": [],
-    "tests": "Maintainer 6min hunt killed",
+    "started_at": "2026-08-27T01:44:00Z",
+    "finished_at": "2026-08-27T01:48:10Z",
+    "result": "landed",
+    "head": "da47321a8da493c2ad63caf2acdc1cb0cb80a552",
+    "pr": 234,
+    "files": [
+      "src/discover.rs"
+    ],
+    "tests": "extra_path_skills_fifo_skill_md_does_not_hide_sibling",
     "review": "0"
   },
-  "last_sha": "11569cb56eacea809b0cdbfe3d27c557b03648c9",
+  "last_sha": "da47321a8da493c2ad63caf2acdc1cb0cb80a552",
   "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "success",
-    "ready_pr": null,
-    "checked_at": "2026-08-27T01:37:00Z",
+    "main": "in_progress",
+    "ready_pr": "merged",
+    "checked_at": "2026-08-27T01:48:10Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -57,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP load leftover extra/skills named package plus wanted."
+    "last_why_summary": "FIFO extra/skills/SKILL.md does not hide extra/wanted."
   },
   "budgets": {
     "max_cycles": null,
