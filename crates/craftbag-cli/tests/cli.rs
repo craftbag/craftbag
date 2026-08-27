@@ -644,6 +644,61 @@ fn list_watch_dirs_newline_extra_path_omits_root() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_newline_extra_path_demo_is_unknown() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the CLI load door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("demo")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "load demo under newline extra-path must fail: stdout={stdout} stderr={stderr}"
+    );
+    assert!(
+        !stdout.contains("SECRET_BODY") && !stderr.contains("SECRET_BODY"),
+        "body must not load: stdout={stdout} stderr={stderr}"
+    );
+    assert!(
+        !stdout.contains("evil\nroot")
+            && !stderr.contains("evil\nroot")
+            && !stdout.contains('\u{2028}')
+            && !stderr.contains('\u{2028}')
+            && !stdout.contains('\u{2029}')
+            && !stderr.contains('\u{2029}'),
+        "load must not echo a raw newline path: stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        !stdout.contains("[Activated skill: demo]"),
+        "must not activate demo under newline extra-path: {stdout}"
+    );
+    assert_eq!(
+        stderr.lines().filter(|l| !l.is_empty()).count(),
+        1,
+        "load miss stderr must stay one line: {stderr:?}"
+    );
+}
+
 #[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
