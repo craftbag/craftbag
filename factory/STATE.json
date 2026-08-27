@@ -6,40 +6,36 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "e5ea317bcdb1409c89402782a9ef3f2ffa2fdc2a",
+  "ledger_sha": "394dbcd2fc4698b4fa54ec0af02ac394be56164a",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-contrib-empty-trigger-notes",
+    "id": "mpi33-obs-peel",
     "work_source": "improve",
-    "started_at": "2026-08-27T06:34:54Z",
-    "finished_at": "2026-08-27T06:34:54Z",
-    "result": "landed",
+    "started_at": "2026-08-27T06:41:59Z",
+    "finished_at": "2026-08-27T06:41:59Z",
+    "result": "noop",
     "head": "f43c096747f598118d8efa57d59d625c356c5496",
-    "pr": 258,
-    "files": [
-      "factory/BLINE_CONSUMER.md",
-      "src/skill.rs",
-      "tests/msrv.rs"
-    ],
-    "tests": "bline_consumer_names_empty_trigger_policy",
+    "pr": null,
+    "files": [],
+    "tests": "CONSTRAINT-4 zero git diff",
     "review": "0"
   },
   "last_sha": "f43c096747f598118d8efa57d59d625c356c5496",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
-    "main": "in_progress",
-    "ready_pr": "merged",
-    "checked_at": "2026-08-27T06:34:54Z",
+    "main": "success",
+    "ready_pr": null,
+    "checked_at": "2026-08-27T06:41:59Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 33,
-    "next_perspective": 15,
+    "cycle": 34,
+    "next_perspective": 1,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -61,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "BLINE_CONSUMER names shared empty-trigger policy."
+    "last_why_summary": "MPI 33 obs no-op; cycle 34 QA next."
   },
   "budgets": {
     "max_cycles": null,
