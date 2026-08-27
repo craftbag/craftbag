@@ -6,39 +6,36 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ceccf69cb7adc9a8b8da6127823381d78c059fd5",
+  "ledger_sha": "b55b01cb8ac2eef675356e7bfaa11b9e2507032e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-maint-deny-allow",
+    "id": "mpi33-ops-ci-parity",
     "work_source": "improve",
-    "started_at": "2026-08-27T05:07:56Z",
-    "finished_at": "2026-08-27T05:07:56Z",
-    "result": "landed",
+    "started_at": "2026-08-27T05:14:51Z",
+    "finished_at": "2026-08-27T05:14:51Z",
+    "result": "noop",
     "head": "b8f66ab414df8a7c54aa4422a63867ee12999a70",
-    "pr": 253,
-    "files": [
-      "deny.toml",
-      "tests/ci_hygiene.rs"
-    ],
-    "tests": "deny_toml_allow_list_matches_used_licenses",
+    "pr": null,
+    "files": [],
+    "tests": "CONSTRAINT-4 zero git diff",
     "review": "0"
   },
   "last_sha": "b8f66ab414df8a7c54aa4422a63867ee12999a70",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
-    "main": "in_progress",
-    "ready_pr": "merged",
-    "checked_at": "2026-08-27T05:07:56Z",
+    "main": "success",
+    "ready_pr": null,
+    "checked_at": "2026-08-27T05:14:51Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 6,
+    "next_perspective": 7,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "deny.toml allow list locked to used licenses."
+    "last_why_summary": "MPI 33 Ops no-op: CI hygiene already locked."
   },
   "budgets": {
     "max_cycles": null,
