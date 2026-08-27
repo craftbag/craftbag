@@ -287,7 +287,7 @@ fn ci_pins_current_workflow_linters() {
 /// and a non-regex pitch can stay green.
 #[test]
 fn readme_stealth_placeholder_is_path_filtered() {
-    let readme = read_rel("README.md");
+    let readme = read_rel("README.md").replace("\r\n", "\n");
     assert_eq!(
         readme, "# craftbag\n\nNot ready.\n",
         "README must stay the constitution stealth placeholder"
