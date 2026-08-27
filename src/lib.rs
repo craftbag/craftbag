@@ -54,7 +54,7 @@ pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,
     SKILL_MD_MAX_BYTES, SKILL_NAME_MAX_CHARS, Skill,
 };
-pub use skip::{DiscoveryReport, SkillSkip, SkipKind};
+pub use skip::{DiscoveryReport, SkillSkip, SkipKind, format_skip_tsv};
 pub use source::SkillSource;
 pub use why::{ActivationDecision, ActivationReason, SkillSummary, WhyReport, why};
 

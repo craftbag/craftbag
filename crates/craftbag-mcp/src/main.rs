@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    parse_list_format, progressive_budgets, unknown_or_skipped_skill, validate_path_with_options,
-    watch_dirs, why,
+    format_skip_tsv, parse_list_format, progressive_budgets, unknown_or_skipped_skill,
+    validate_path_with_options, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -176,14 +176,20 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     }
     let report = discover(&cwd, &opts).map_err(|e| e.to_string())?;
     if format == ListFormat::Xml {
-        return Ok(format_available_skills_xml(&report.skills));
+        return Ok(with_skip_tsv(
+            format_available_skills_xml(&report.skills),
+            &report.skips,
+        ));
     }
     if format == ListFormat::Catalog {
-        return Ok(format_catalog(
-            &report.skills,
-            "",
-            progressive_budgets(8_000),
-            FormatOptions::default(),
+        return Ok(with_skip_tsv(
+            format_catalog(
+                &report.skills,
+                "",
+                progressive_budgets(8_000),
+                FormatOptions::default(),
+            ),
+            &report.skips,
         ));
     }
     serde_json::to_string_pretty(&json!({
@@ -191,6 +197,20 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         "skips": report.skips,
     }))
     .map_err(|e| e.to_string())
+}
+
+/// Append `skip\tkind\tpath\tdetail` after the prompt fragment.
+/// CLI list catalog/xml prints those rows on stderr; MCP stdio has no
+/// stderr, so the skip TSV stays in the tool text.
+fn with_skip_tsv(mut out: String, skips: &[craftbag::SkillSkip]) -> String {
+    if skips.is_empty() {
+        return out;
+    }
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&format_skip_tsv(skips));
+    out
 }
 
 struct ToolError {
@@ -344,7 +364,7 @@ fn tools() -> Value {
         "type": "string",
         "enum": ListFormat::CANONICAL_TOKENS,
         "description": format!(
-            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). {} are the same walk as watch.",
+            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). xml and catalog also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
             ListFormat::ALIAS_TOKENS.join(" and ")
         )
     });
@@ -3593,6 +3613,10 @@ mod tests {
         assert!(
             desc.contains("{ skills, skips }"),
             "skills_list format json must name default keys like CLI list --json; xml already names <available_skills>: {desc}"
+        );
+        assert!(
+            desc.contains("skip\\tkind\\tpath\\tdetail"),
+            "skills_list format catalog/xml must name skip TSV like CLI list --format: {desc}"
         );
     }
 

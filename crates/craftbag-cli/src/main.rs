@@ -8,8 +8,8 @@ use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    parse_list_format, progressive_budgets, unknown_or_skipped_skill, validate_path_with_options,
-    watch_dirs, why,
+    format_skip_tsv, parse_list_format, progressive_budgets, unknown_or_skipped_skill,
+    validate_path_with_options, watch_dirs, why,
 };
 
 #[derive(Parser)]
@@ -36,6 +36,7 @@ enum Cmd {
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
         /// Same tokens as MCP skills_list format: json (`{ skills, skips }`), xml (`<available_skills>`), catalog, watch.
+        /// xml and catalog also emit `skip\tkind\tpath\tdetail` (CLI stderr; MCP text after the prompt fragment).
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
@@ -225,15 +226,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 }
             }
             if !matches!(mode, ListOutput::Json) {
-                for skip in &report.skips {
-                    let _ = writeln!(
-                        io::stderr(),
-                        "skip\t{}\t{}\t{}",
-                        skip.kind.as_str(),
-                        skip.path.display(),
-                        skip.detail
-                    );
-                }
+                let _ = write!(io::stderr(), "{}", format_skip_tsv(&report.skips));
             }
             Ok(ExitCode::SUCCESS)
         }
