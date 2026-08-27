@@ -596,3 +596,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:31:09Z","job_id":"improve-mpi42-obs-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"cycle 42 done; odd 43 starts QA"}
 {"ts":"2026-08-27T21:32:51Z","job_id":"improve-mpi43-qa-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"QA REVIEW 0; odd cycle skip TA -> Developer"}
 {"ts":"2026-08-27T21:34:27Z","job_id":"improve-mpi43-dev-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Developer REVIEW 0"}
+{"ts":"2026-08-27T21:35:42Z","job_id":"improve-mpi43-eu-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"EU REVIEW 0; expand0 Bline-miss already green this session"}
