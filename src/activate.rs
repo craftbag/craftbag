@@ -35,6 +35,12 @@ impl Default for FormatOptions<'static> {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static RELEVANCE_SCORE_NAMES: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
 /// Derive catalog + body budgets from the model context window size.
 ///
 /// `context_tokens` is the model's full context window (not free space).
@@ -132,11 +138,7 @@ pub fn filter_skills<'a>(
         }
     }
 
-    matched.sort_by(|a, b| {
-        skill_relevance_score(b, &context_lower)
-            .cmp(&skill_relevance_score(a, &context_lower))
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    let matched = rank_skill_refs(matched, &context_lower);
     always_active.sort_by(|a, b| a.name.cmp(&b.name));
 
     let mut result = Vec::new();
@@ -161,6 +163,8 @@ pub fn filter_skills<'a>(
 
 /// Relevance score for ranking skills against user text.
 pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
+    #[cfg(test)]
+    RELEVANCE_SCORE_NAMES.with(|c| c.borrow_mut().push(skill.name.clone()));
     if context_lower.is_empty() {
         return 0;
     }
@@ -199,13 +203,18 @@ pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
 /// Rank skills for catalog display: high relevance first, then name.
 pub fn rank_skills_for_catalog<'a>(skills: &'a [Skill], context: &str) -> Vec<&'a Skill> {
     let context_lower = context.to_lowercase();
-    let mut ranked: Vec<&Skill> = skills.iter().collect();
-    ranked.sort_by(|a, b| {
-        skill_relevance_score(b, &context_lower)
-            .cmp(&skill_relevance_score(a, &context_lower))
-            .then_with(|| a.name.cmp(&b.name))
-    });
-    ranked
+    rank_skill_refs(skills.iter().collect(), &context_lower)
+}
+
+/// Score each skill once, then sort. `sort_by` would re-score on every
+/// comparison (`trigger_matches` lowercases and scans the context).
+fn rank_skill_refs<'a>(skills: Vec<&'a Skill>, context_lower: &str) -> Vec<&'a Skill> {
+    let mut ranked: Vec<(&Skill, i32)> = skills
+        .into_iter()
+        .map(|s| (s, skill_relevance_score(s, context_lower)))
+        .collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.name.cmp(&b.0.name)));
+    ranked.into_iter().map(|(s, _)| s).collect()
 }
 
 /// Build a cheap catalog fragment: name + description, plus
@@ -230,10 +239,14 @@ pub fn format_catalog(
         return String::new();
     }
 
-    let ranked: Vec<&Skill> = rank_skills_for_catalog(skills, context)
-        .into_iter()
-        .filter(|s| !s.disable_model_invocation)
-        .collect();
+    let context_lower = context.to_lowercase();
+    let ranked = rank_skill_refs(
+        skills
+            .iter()
+            .filter(|s| !s.disable_model_invocation)
+            .collect(),
+        &context_lower,
+    );
     let header = format!(
         "## Skills\n{}\nPrefer a matching skill over improvising process.\n\n",
         fmt.activate_hint
@@ -727,6 +740,18 @@ mod tests {
             .collect()
     }
 
+    fn take_relevance_score_names() -> Vec<String> {
+        super::RELEVANCE_SCORE_NAMES.with(|c| std::mem::take(&mut *c.borrow_mut()))
+    }
+
+    fn score_counts(names: &[String]) -> std::collections::BTreeMap<&str, usize> {
+        let mut counts = std::collections::BTreeMap::new();
+        for name in names {
+            *counts.entry(name.as_str()).or_insert(0) += 1;
+        }
+        counts
+    }
+
     #[test]
     fn progressive_budgets_scale_with_context() {
         let small = progressive_budgets(8_000);
@@ -1123,6 +1148,102 @@ mod tests {
         assert!(
             xml.contains("<name>slash-only</name>"),
             "XML stays the host inventory (flags), not the filtered catalog: {xml}"
+        );
+    }
+
+    #[test]
+    fn format_catalog_scores_each_listed_skill_once() {
+        let skills = vec![
+            make_skill("alpha", &["alpha"], 10),
+            make_skill("beta", &["beta"], 10),
+            make_skill("gamma", &["gamma"], 10),
+            make_skill("delta", &["delta"], 10),
+            make_skill("epsilon", &["epsilon"], 10),
+        ];
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let _ = take_relevance_score_names();
+        let cat = format_catalog(
+            &skills,
+            "alpha beta gamma delta epsilon",
+            budgets,
+            FormatOptions::default(),
+        );
+        assert_eq!(
+            catalog_name_order(&cat).len(),
+            5,
+            "all five skills must stay listed: {cat}"
+        );
+        let calls = take_relevance_score_names();
+        let counts = score_counts(&calls);
+        for name in ["alpha", "beta", "gamma", "delta", "epsilon"] {
+            assert_eq!(
+                counts.get(name).copied().unwrap_or(0),
+                1,
+                "{name} must be scored once, not on every sort comparison: {counts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn format_catalog_does_not_score_disable_model_invocation() {
+        let mut hidden = make_skill("slash-only", &["slash"], 10);
+        hidden.disable_model_invocation = true;
+        let skills = vec![make_skill("shown", &["shown"], 10), hidden];
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let _ = take_relevance_score_names();
+        let cat = format_catalog(&skills, "slash shown", budgets, FormatOptions::default());
+        assert_eq!(catalog_name_order(&cat), ["shown"], "catalog: {cat}");
+        let calls = take_relevance_score_names();
+        assert!(
+            calls.iter().all(|n| n != "slash-only"),
+            "omitted disable_model_invocation must not be scored: {calls:?}"
+        );
+        assert_eq!(
+            calls.iter().filter(|n| *n == "shown").count(),
+            1,
+            "listed skill must still be scored once: {calls:?}"
+        );
+    }
+
+    #[test]
+    fn filter_skills_scores_each_matched_skill_once() {
+        let skills = vec![
+            make_skill("git-workflow", &["git"], 10),
+            make_skill("rust-style", &["rust"], 10),
+            make_skill("always-on", &[], 10),
+        ];
+        let _ = take_relevance_score_names();
+        let result = filter_skills(&skills, "git rust", 10_000);
+        let names: Vec<&str> = result.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["git-workflow", "rust-style", "always-on"],
+            "{names:?}"
+        );
+        let calls = take_relevance_score_names();
+        let counts = score_counts(&calls);
+        assert_eq!(
+            counts.get("git-workflow").copied().unwrap_or(0),
+            1,
+            "matched skill must be scored once: {counts:?}"
+        );
+        assert_eq!(
+            counts.get("rust-style").copied().unwrap_or(0),
+            1,
+            "matched skill must be scored once: {counts:?}"
+        );
+        assert_eq!(
+            counts.get("always-on").copied().unwrap_or(0),
+            0,
+            "always-active name sort must not score: {counts:?}"
         );
     }
 
