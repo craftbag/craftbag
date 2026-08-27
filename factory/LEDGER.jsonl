@@ -677,3 +677,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:25:54Z","job_id":"expand4-new-tree-noop-r3","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"no unused tree invented; back to Maintainer"}
 {"ts":"2026-08-27T22:26:30Z","job_id":"improve-mpi47-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0"}
 {"ts":"2026-08-27T22:27:03Z","job_id":"improve-mpi47-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; Win/macOS still green"}
+{"ts":"2026-08-27T22:28:02Z","job_id":"improve-mpi47-sec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Security REVIEW 0; expand5 steal-list already live"}
