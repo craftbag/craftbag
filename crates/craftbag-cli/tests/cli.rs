@@ -644,6 +644,43 @@ fn list_watch_dirs_newline_extra_path_omits_root() {
     );
 }
 
+#[test]
+fn list_watch_dirs_whitespace_extra_path_omits_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the CLI watch door. `--path " /.."` must not notify-watch `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/.."] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(cwd.path())
+            .arg("list")
+            .arg("--watch-dirs")
+            .arg("--path")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "raw={raw:?} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.lines().all(|l| {
+                let p = Path::new(l);
+                p != Path::new("/") && p != Path::new("/..")
+            }),
+            "watch-dirs must not list a collapsed extra-path token {raw:?}: {stdout:?}"
+        );
+        assert!(
+            stdout.trim().is_empty(),
+            "collapsed extra-path {raw:?} must not add a watch root: {stdout:?}"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn load_newline_extra_path_demo_is_unknown() {

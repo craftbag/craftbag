@@ -37,7 +37,9 @@ pub struct DiscoveryOptions {
     /// Empty or whitespace-only items are ignored (not cwd).
     /// A prefix whose component contains a line separator is dropped
     /// (same refuse as extra-path / user_dir). Lexical `evil\n/..`
-    /// must not collapse to cwd and hide the walk.
+    /// must not collapse to cwd and hide the walk. A token that
+    /// collapses after whitespace trim (` /..`, `evil /..`) is dropped
+    /// the same way.
     pub ignore: Vec<String>,
     /// Skill names never returned (still skipped at load, no skip row).
     /// Same NFKC + case-fold identity as [`find_skill_by_name`] / `why`.
@@ -102,7 +104,8 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// Host `user_skills_dir` is a skills root: leftover `SKILL.md` /
 /// `skill.md` must not hide `user_dir/skills` (same collection walk
 /// as extra-path leftover). [`DiscoveryOptions::ignore`] prefixes are
-/// omitted (same as [`discover`]).
+/// omitted (same as [`discover`]). An extra-path token that collapses
+/// after whitespace trim is omitted (same refuse as [`discover`]).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
@@ -180,6 +183,11 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     }
 
     for raw in &opts.paths {
+        // Same refuse as load_extra_path: trim-collapse (` /..`) or a
+        // line separator must not become a notify root discover skips.
+        if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
+            continue;
+        }
         let Some(expanded) = expand_extra_path_arg(raw, &cwd) else {
             continue;
         };
@@ -7537,8 +7545,8 @@ mod tests {
                 watch_dirs(cwd.path(), &opts)
             });
             assert!(
-                dirs.iter().all(|p| p != std::path::Path::new("/")),
-                "extra-path {raw:?} must not watch /: {dirs:?}"
+                dirs.is_empty(),
+                "extra-path {raw:?} must not watch a collapsed token (same as discover): {dirs:?}"
             );
         }
     }
