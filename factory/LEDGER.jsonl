@@ -638,3 +638,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:01:09Z","job_id":"expand2-fuzz-smoke-noop-r3","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"3 expand no-ops; prove then Maintainer"}
 {"ts":"2026-08-27T22:01:13Z","job_id":"prove-empty-nested-reconfirm-r2","work_source":"prove","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"wanted still loads; back to Maintainer"}
 {"ts":"2026-08-27T22:01:32Z","job_id":"improve-mpi45-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0"}
+{"ts":"2026-08-27T22:02:16Z","job_id":"improve-mpi45-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; Win/macOS still green"}
