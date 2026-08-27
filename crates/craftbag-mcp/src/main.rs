@@ -322,7 +322,7 @@ fn discover_properties() -> Value {
     let vendor_tokens = SkillSource::VENDOR_TOKENS;
     let vendor_listed = vendor_tokens.join(", ");
     json!({
-        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Example: [\"./my-skill\"]."},
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`). Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
             "items": {"type": "string", "enum": vendor_tokens},
@@ -330,7 +330,7 @@ fn discover_properties() -> Value {
                 "Opt-in vendor trees: {vendor_listed}. A leading dot is the on-disk tree (same as CLI --vendor). Example: [\"claude\"]."
             )
         },
-        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Example: \"~/myskills\"."},
+        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
@@ -388,7 +388,7 @@ fn tools() -> Value {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Example: \"./my-skill\"."
+                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). Example: \"./my-skill\"."
                     },
                     "strict": {
                         "type": "boolean",
@@ -813,6 +813,51 @@ mod tests {
             props.get("vendor").is_none() && props.get("ascii_names").is_none(),
             "validate is one path, not a discover walk: {props}"
         );
+    }
+
+    fn assert_schema_names_path_token_refuse(desc: &str, label: &str) {
+        assert!(
+            desc.contains("line separator"),
+            "{label} must name the line-separator refuse: {desc}"
+        );
+        assert!(
+            desc.contains("collapses") && desc.contains("/.."),
+            "{label} must name the whitespace-collapse refuse (` /..`): {desc}"
+        );
+    }
+
+    #[test]
+    fn tools_list_names_path_token_refuse() {
+        // CLI --help sibling. Schema must say what to change before a
+        // first-time host hits unreadable on paths / user_dir / path.
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(275)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for tool in tools {
+            let name = tool["name"].as_str().unwrap_or("");
+            let props = &tool["inputSchema"]["properties"];
+            if is_discover_tool(Some(name)) {
+                assert_schema_names_path_token_refuse(
+                    props["paths"]["description"].as_str().unwrap_or(""),
+                    &format!("{name} paths"),
+                );
+                assert_schema_names_path_token_refuse(
+                    props["user_dir"]["description"].as_str().unwrap_or(""),
+                    &format!("{name} user_dir"),
+                );
+            }
+            if name == "skills_validate" {
+                assert_schema_names_path_token_refuse(
+                    props["path"]["description"].as_str().unwrap_or(""),
+                    "skills_validate path",
+                );
+            }
+        }
     }
 
     #[cfg(unix)]
