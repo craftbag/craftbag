@@ -268,6 +268,95 @@ fn stdio_skills_list_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+fn mkfifo(path: &Path) {
+    let status = std::process::Command::new("mkfifo")
+        .arg(path)
+        .status()
+        .expect("run mkfifo");
+    assert!(status.success(), "mkfifo {path:?} failed: {status}");
+}
+
+#[cfg(unix)]
+#[test]
+fn stdio_skills_list_leftover_skills_fifo_names_wanted() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the MCP list door. FIFO extra/skills/SKILL.md is unreadable, not
+    // exclusive-scan entries. Do not commit a FIFO in the corpus.
+    let extra = tempfile::tempdir().expect("extra");
+    let skills_dir = extra.path().join("skills");
+    std::fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    let fifo = skills_dir.join("SKILL.md");
+    mkfifo(&fifo);
+    let wanted_pkg = extra.path().join("wanted");
+    std::fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    let wanted = wanted_pkg.join("SKILL.md");
+    std::fs::write(
+        &wanted,
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "paths": [extra.path()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let names: Vec<&str> = skills.iter().filter_map(|s| s["name"].as_str()).collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "FIFO extra/skills/SKILL.md must not hide leftover sibling packages: {text}"
+    );
+    let wanted_row = skills
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("list must name wanted: {text}"));
+    assert_eq!(
+        wanted_row["source"], "extra",
+        "list JSON source must be the wire token extra: {text}"
+    );
+    let path = wanted_row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize list path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize wanted: {e}"));
+    assert_eq!(got, want, "list path must be the wanted SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().any(|s| {
+            s["kind"] == "unreadable"
+                && Path::new(s["path"].as_str().unwrap_or("")) == fifo
+                && s["detail"]
+                    .as_str()
+                    .is_some_and(|d| d.contains("regular file"))
+        }),
+        "FIFO extra/skills/SKILL.md must be unreadable: {text}"
+    );
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "FIFO extra/skills/SKILL.md must not become a root_file peek: {text}"
+    );
+}
+
 #[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling

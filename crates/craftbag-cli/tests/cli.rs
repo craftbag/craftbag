@@ -364,6 +364,77 @@ fn list_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn list_leftover_skills_fifo_names_wanted() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the CLI list door. FIFO extra/skills/SKILL.md is unreadable, not
+    // exclusive-scan entries. Do not commit a FIFO in the corpus.
+    let extra = tempfile::tempdir().expect("extra");
+    let skills_dir = extra.path().join("skills");
+    fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    let fifo = skills_dir.join("SKILL.md");
+    mkfifo(&fifo);
+    let wanted_pkg = extra.path().join("wanted");
+    fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    let wanted = wanted_pkg.join("SKILL.md");
+    fs::write(
+        &wanted,
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "wanted"),
+        "extra",
+        "FIFO extra/skills/SKILL.md must not hide leftover sibling wanted: {stdout}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "FIFO extra/skills/SKILL.md must not hide leftover sibling packages: {stdout}"
+    );
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().any(|s| {
+            s["kind"] == "unreadable"
+                && Path::new(s["path"].as_str().unwrap_or("")) == fifo
+                && s["detail"]
+                    .as_str()
+                    .is_some_and(|d| d.contains("regular file"))
+        }),
+        "FIFO extra/skills/SKILL.md must be unreadable: {stdout}"
+    );
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "FIFO extra/skills/SKILL.md must not become a root_file peek: {stdout}"
+    );
+}
+
 #[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
