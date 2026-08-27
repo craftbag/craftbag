@@ -687,3 +687,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:42:13Z","job_id":"improve-mpi47-compat-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Compat REVIEW 0"}
 {"ts":"2026-08-27T22:43:58Z","job_id":"improve-mpi47-adv-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Adv REVIEW 0 same SHA"}
 {"ts":"2026-08-27T22:45:21Z","job_id":"improve-mpi47-arch-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Architecture REVIEW 0; expand1 props already covered"}
+{"ts":"2026-08-27T22:45:26Z","job_id":"expand1-prop-gap-noop-r5","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"prop gap still empty; back to NC"}
