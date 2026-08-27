@@ -284,6 +284,47 @@ fn ci_pins_current_workflow_linters() {
     );
 }
 
+/// taiki-e/install-action `tool: cargo-deny` (no @version) tracks latest.
+/// A new cargo-deny or nextest release can change the license graph or
+/// CLI flags overnight; local `make check` then disagrees with hosted lint.
+#[test]
+fn ci_pins_install_action_rust_tools() {
+    let ci = read_rel(".github/workflows/ci.yml");
+    let mut deny = 0;
+    let mut nextest = 0;
+    let mut fuzz = 0;
+    for line in ci.lines() {
+        let t = line.trim();
+        if t.starts_with("tool: cargo-deny") {
+            assert_eq!(
+                t, "tool: cargo-deny@0.20.2",
+                "lint must pin cargo-deny 0.20.2 (install-action checksummed manifest)"
+            );
+            deny += 1;
+        }
+        if t.starts_with("tool: cargo-nextest") {
+            assert_eq!(
+                t, "tool: cargo-nextest@0.9.143",
+                "test jobs must pin cargo-nextest 0.9.143"
+            );
+            nextest += 1;
+        }
+        if t.starts_with("tool: cargo-fuzz") {
+            assert_eq!(
+                t, "tool: cargo-fuzz@0.13.2",
+                "fuzz-smoke must pin cargo-fuzz 0.13.2"
+            );
+            fuzz += 1;
+        }
+    }
+    assert_eq!(deny, 1, "lint must install cargo-deny once: {deny}");
+    assert_eq!(
+        nextest, 3,
+        "test, test-windows, and test-macos must each pin cargo-nextest: {nextest}"
+    );
+    assert_eq!(fuzz, 1, "fuzz-smoke must install cargo-fuzz once: {fuzz}");
+}
+
 /// Constitution: README is only `# craftbag` / `Not ready.`
 /// A quiet pitch without banned words still passes assert-stealth's
 /// pitch regex. Path-filter must include README.md so the rust matrix
