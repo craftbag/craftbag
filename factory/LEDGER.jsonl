@@ -509,3 +509,4 @@ ts:2026-08-27T16:02:05Z
 {"ts":"2026-08-27T16:14:40Z","job":"improve-mpi38-user-path-hint","result":"landed","pr":292,"head":"3020cab969b69b8fafb4a14c2326ee9ccb4c22da"}
 ts:2026-08-27T16:24:36Z
 ts:2026-08-27T16:36:41Z
+{"ts": "2026-08-27T16:53:10Z", "job_id": "improve-rm-leftover-path-souvenirs", "work_source": "improve", "result": "landed", "sha": "a590dab98167e50d29bd269538d1e496e926638a", "pr": 295, "note": "drop leftover-path souvenir tests/fuzz and unused-export locks"}
