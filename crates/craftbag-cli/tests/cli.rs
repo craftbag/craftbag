@@ -2920,6 +2920,52 @@ fn load_leftover_hostile_path_stays_one_envelope_line() {
 }
 
 #[test]
+fn list_watch_dirs_leftover_hostile_path_stays_one_line() {
+    // format_list_tsv / load envelope / list XML sanitize leftover
+    // implicit paths (PR 279-286). list --watch-dirs still prints
+    // watch_dirs PathBufs raw, so U+2028 splits a host that splits
+    // on Unicode line breaks and U+2014 leaks. Same leftover cwd
+    // as load envelope must sanitize in place (evil?root-).
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root\u{2014}");
+    let pkg = root.join(".agents").join("skills").join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: leftover\u{2014}pkg\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&root)
+        .arg("list")
+        .arg("--watch-dirs")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{2028}') && !stdout.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into watch-dirs print: {stdout:?}"
+    );
+    assert!(
+        stdout.contains("evil?root-"),
+        "hostile leftover path must be sanitized on watch-dirs: {stdout:?}"
+    );
+    let watch_lines: Vec<&str> = stdout.lines().filter(|l| l.contains(".agents")).collect();
+    assert_eq!(
+        watch_lines.len(),
+        1,
+        "leftover watch root must stay one line: {stdout:?}"
+    );
+}
+
+#[test]
 fn why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the CLI why door. Default vendor stays off. Empty extra/skills

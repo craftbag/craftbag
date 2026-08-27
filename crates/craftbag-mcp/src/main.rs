@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    format_skip_tsv, format_why_text, parse_list_format, progressive_budgets,
+    format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format, progressive_budgets,
     unknown_or_skipped_skill, validate_path_with_options, watch_dirs, why,
 };
 use serde::Deserialize;
@@ -176,12 +176,7 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
     if format == ListFormat::Watch {
-        let mut out = String::new();
-        for dir in watch_dirs(&cwd, &opts) {
-            out.push_str(&dir.display().to_string());
-            out.push('\n');
-        }
-        return Ok(out);
+        return Ok(format_watch_dirs(&watch_dirs(&cwd, &opts)));
     }
     let report = discover(&cwd, &opts).map_err(|e| e.to_string())?;
     if format == ListFormat::Xml {
