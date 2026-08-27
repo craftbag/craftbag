@@ -1958,6 +1958,50 @@ fn load_unknown_exits_2() {
 }
 
 #[test]
+fn load_path_like_name_hints_frontmatter_and_path() {
+    // validate and list --path take a package dir. load <NAME> is the
+    // frontmatter name. A first-time `load ./pkg` must not stay a bare
+    // unknown; the hint is what they type next.
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg(&pkg)
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2), "path-as-name must still miss");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill:"),
+        "path-as-name stays unknown_skill: {stderr}"
+    );
+    assert!(
+        stderr.contains("frontmatter") && stderr.contains("--path"),
+        "load ./pkg must name frontmatter + --path so the next command works: {stderr}"
+    );
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "path-like unknown must stay one stderr line: {stderr:?}"
+    );
+}
+
+#[test]
+fn load_help_names_frontmatter_name_not_path() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Frontmatter"))
+        .stdout(predicates::str::contains("not a package path"))
+        .stdout(predicates::str::contains("--path"));
+}
+
+#[test]
 fn load_unknown_json_exposes_error_kind() {
     // CLI load is the last miss surface that only printed Display.
     // why --json / validate --json already peel SkillMiss.
@@ -2177,6 +2221,41 @@ fn why_unknown_exits_1() {
         1,
         "why unknown must stay one stderr line: {stderr:?}"
     );
+}
+
+#[test]
+fn why_path_like_name_hints_frontmatter_and_path() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg(&pkg)
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&pkg)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "path-as-name must still miss");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown skill:"),
+        "path-as-name stays unknown_skill: {stderr}"
+    );
+    assert!(
+        stderr.contains("frontmatter") && stderr.contains("--path"),
+        "why ./pkg must name frontmatter + --path so the next command works: {stderr}"
+    );
+}
+
+#[test]
+fn why_help_names_frontmatter_name_not_path() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("frontmatter"))
+        .stdout(predicates::str::contains("not a package path"));
 }
 
 #[test]
