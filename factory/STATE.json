@@ -6,38 +6,41 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "1c5a16c7cf3327ae10d03bce2e1dc4c457972c48",
+  "ledger_sha": "fadae04fc6e76ee18418506c7b211671832bf7a9",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-dev-user-dir-nfkc",
+    "id": "mpi33-user-ascii-names-detail",
     "work_source": "improve",
-    "started_at": "2026-08-27T04:45:16Z",
-    "finished_at": "2026-08-27T04:45:16Z",
+    "started_at": "2026-08-27T04:58:20Z",
+    "finished_at": "2026-08-27T04:58:20Z",
     "result": "landed",
-    "head": "71cc7d560b1e311bba58b7955112d5069c7a04c5",
-    "pr": 251,
+    "head": "93fb68f45d98bb8425d5be876c99a4cde61ec3d9",
+    "pr": 252,
     "files": [
-      "src/discover.rs"
+      "src/discover.rs",
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/src/main.rs",
+      "factory/BLINE_CONSUMER.md"
     ],
-    "tests": "user_dir_nfkc_dotdot_component_collapses_like_extra_path",
+    "tests": "load_unicode_name_skips_with_ascii_names",
     "review": "0"
   },
-  "last_sha": "71cc7d560b1e311bba58b7955112d5069c7a04c5",
+  "last_sha": "93fb68f45d98bb8425d5be876c99a4cde61ec3d9",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T04:45:16Z",
+    "checked_at": "2026-08-27T04:58:20Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 4,
+    "next_perspective": 5,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -59,7 +62,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "user_dir NFKC dots collapse like extra-path."
+    "last_why_summary": "ascii_names skip names the flag, not invalid YAML."
   },
   "budgets": {
     "max_cycles": null,
