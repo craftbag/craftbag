@@ -6,30 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "257b45b9a12ce93ce5a97fffb56db992f0747f86",
+  "ledger_sha": "acb806b9937b5f779ea67e148920bb4606c79726",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 4,
   "expand_noop_streak": 1,
   "last_job": {
-    "id": "mpi49-adversary-leftover-skills-loose",
+    "id": "mpi49-architecture-noop",
     "work_source": "improve",
-    "started_at": "2026-08-27T23:51:22Z",
-    "finished_at": "2026-08-27T23:51:22Z",
-    "result": "merged",
+    "started_at": "2026-08-27T23:52:06Z",
+    "finished_at": "2026-08-27T23:52:06Z",
+    "result": "noop",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
-    "pr": 301,
-    "files": [
-      "src/discover.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs"
-    ],
-    "tests": "extra_path_skills_leftover_skill_md_does_not_hide_sibling + CLI/MCP + root_file lock",
+    "pr": null,
+    "files": [],
+    "tests": "handle_skills Collection only; CLI/MCP still thin",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
     "main": "pending",
     "ready_pr": null,
@@ -39,7 +35,7 @@
   },
   "mpi": {
     "cycle": 49,
-    "next_perspective": 13,
+    "next_perspective": 14,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
