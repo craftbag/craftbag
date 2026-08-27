@@ -507,6 +507,90 @@ fn list_newline_extra_path_does_not_name_demo() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn why_newline_extra_path_demo_is_unknown() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the CLI why door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("demo")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stdout.contains("SECRET_BODY") && !stderr.contains("SECRET_BODY"),
+        "body must not load via why: stdout={stdout} stderr={stderr}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    if let Some(kind) = v.get("error_kind").and_then(|k| k.as_str()) {
+        assert!(
+            kind == "unknown_skill" || kind == "unreadable",
+            "why miss must be unknown or unreadable: {stdout}"
+        );
+        assert_ne!(
+            out.status.code(),
+            Some(0),
+            "why miss must be non-zero: stderr={stderr}"
+        );
+        for key in ["error", "path", "detail"] {
+            if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
+                assert!(
+                    !s.contains('\n') && !s.contains('\u{2028}') && !s.contains('\u{2029}'),
+                    "miss {key} must not echo raw line separators: {s:?}"
+                );
+            }
+        }
+        assert_eq!(
+            stderr.lines().filter(|l| !l.is_empty()).count(),
+            1,
+            "why miss stderr must stay one line: {stderr:?}"
+        );
+        assert!(
+            !stderr.contains('\u{2028}') && !stderr.contains('\u{2029}'),
+            "why miss stderr must not echo raw line separators: {stderr:?}"
+        );
+    } else {
+        let loaded = v["loaded"].as_array().expect("loaded");
+        assert!(
+            loaded.iter().all(|s| s["name"] != "demo"),
+            "must not load demo under newline extra-path: {stdout}"
+        );
+        if let Some(skips) = v.get("skips").and_then(|s| s.as_array()) {
+            for s in skips {
+                if let Some(p) = s.get("path").and_then(|x| x.as_str()) {
+                    assert!(
+                        !p.contains('\n') && !p.contains('\u{2028}') && !p.contains('\u{2029}'),
+                        "skip path must not echo raw line separators: {p:?}"
+                    );
+                }
+                if let Some(d) = s.get("detail").and_then(|x| x.as_str()) {
+                    assert!(
+                        !d.contains('\n') && !d.contains('\u{2028}') && !d.contains('\u{2029}'),
+                        "skip detail must not echo raw line separators: {d:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
