@@ -6,26 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "dc10cc40383d72c8da92d68492ca3c39ce7a7acd",
+  "ledger_sha": "fa751be1673f3e577d59f7b59a88415b3599f8e8",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
-  "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
+  "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-compat-serde",
+    "id": "mpi33-adv-user-dir-ws-watch",
     "work_source": "improve",
-    "started_at": "2026-08-27T05:58:38Z",
-    "finished_at": "2026-08-27T05:58:38Z",
+    "started_at": "2026-08-27T06:02:09Z",
+    "finished_at": "2026-08-27T06:02:09Z",
     "result": "noop",
     "head": "c6e763857bdfafc34967a4dd3a908c294385542a",
     "pr": null,
     "files": [],
-    "tests": "CONSTRAINT-4 zero git diff",
+    "tests": "user_dir whitespace collapse already green",
     "review": "0"
   },
   "last_sha": "c6e763857bdfafc34967a4dd3a908c294385542a",
-  "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "next_work_source": "expand",
+  "consecutive_noop": 3,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -35,7 +35,7 @@
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 12,
+    "next_perspective": 13,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -57,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 compat no-op: serde aliases already landed."
+    "last_why_summary": "MPI 33 adv no-op; switch expand cursor 1 property tests."
   },
   "budgets": {
     "max_cycles": null,
