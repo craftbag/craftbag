@@ -220,5 +220,4 @@ mod tests {
             "crate-root rustdoc must map CLI validate --json and MCP skills_validate: {docs}"
         );
     }
-
 }
