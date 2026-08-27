@@ -124,6 +124,74 @@ fn validate_help_names_validation_report() {
         .stdout(predicates::str::contains("no error_kind"));
 }
 
+fn help_own_flag_block(help: &str, flag: &str) -> String {
+    let lines: Vec<&str> = help.lines().collect();
+    let start = lines
+        .iter()
+        .position(|l| {
+            let t = l.trim_start();
+            t == flag || t.starts_with(&format!("{flag} "))
+        })
+        .unwrap_or_else(|| panic!("{flag} missing as its own flag: {help}"));
+    let mut block = vec![lines[start]];
+    for line in &lines[start + 1..] {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("--") || trimmed.starts_with("-h") || trimmed.starts_with('<') {
+            break;
+        }
+        block.push(*line);
+    }
+    block.join("\n")
+}
+
+fn assert_help_names_path_token_refuse(block: &str, label: &str) {
+    assert!(
+        block.contains("line separator"),
+        "{label} must name the line-separator refuse: {block}"
+    );
+    assert!(
+        block.contains("collapses") && block.contains("/.."),
+        "{label} must name the whitespace-collapse refuse (` /..`): {block}"
+    );
+}
+
+#[test]
+fn help_names_path_token_refuse() {
+    // PR 273/274 name the surface on the refuse. --help must say what
+    // to change before a first-time user hits unreadable.
+    for cmd_name in ["list", "load", "why"] {
+        let (_home, mut cmd) = bin();
+        let help = String::from_utf8_lossy(
+            &cmd.arg(cmd_name)
+                .arg("--help")
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        )
+        .into_owned();
+        assert_help_names_path_token_refuse(
+            &help_own_flag_block(&help, "--path"),
+            &format!("{cmd_name} --path"),
+        );
+        assert_help_names_path_token_refuse(
+            &help_own_flag_block(&help, "--user-dir"),
+            &format!("{cmd_name} --user-dir"),
+        );
+    }
+    let (_home, mut cmd) = bin();
+    let help = String::from_utf8_lossy(
+        &cmd.arg("validate")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    assert_help_names_path_token_refuse(&help, "validate PATH");
+}
+
 #[test]
 fn validate_invalid_name_fails() {
     let path = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
