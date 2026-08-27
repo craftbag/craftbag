@@ -541,6 +541,46 @@ fn stdio_skills_list_watch_newline_extra_path_omits_root() {
     );
 }
 
+#[test]
+fn stdio_skills_list_watch_whitespace_extra_path_omits_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the MCP watch door. paths: [" /.."] must not notify-watch `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/.."] {
+        let resp = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 20,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_list",
+                    "arguments": {
+                        "format": "watch",
+                        "paths": [raw],
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(resp["result"]["isError"], false, "raw={raw:?} {resp}");
+        let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+        assert!(
+            text.lines().all(|l| {
+                let p = Path::new(l);
+                p != Path::new("/") && p != Path::new("/..")
+            }),
+            "watch must not list a collapsed extra-path token {raw:?}: {text:?}"
+        );
+        assert!(
+            text.trim().is_empty(),
+            "collapsed extra-path {raw:?} must not add a watch root: {text:?}"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn stdio_skills_load_newline_extra_path_demo_is_unknown() {
