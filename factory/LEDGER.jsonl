@@ -599,3 +599,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:35:42Z","job_id":"improve-mpi43-eu-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"EU REVIEW 0; expand0 Bline-miss already green this session"}
 {"ts":"2026-08-27T21:35:47Z","job_id":"expand0-bline-miss-noop-r2","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"no new Bline-miss; back to Maintainer"}
 {"ts":"2026-08-27T21:36:25Z","job_id":"improve-mpi43-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0"}
+{"ts":"2026-08-27T21:37:10Z","job_id":"improve-mpi43-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; Node20 annotation not live-red"}
