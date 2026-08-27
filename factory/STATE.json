@@ -6,39 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "9310bda000d9294dcbd89239db3e685a896c25f2",
+  "ledger_sha": "f23f9798db8c86dc995273f5a98229cb7c0dba05",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi32-ops-readme-path-filter",
+    "id": "refuse-newline-extra-path-component",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:10:00Z",
-    "finished_at": "2026-08-27T02:19:32Z",
+    "started_at": "2026-08-27T02:22:00Z",
+    "finished_at": "2026-08-27T02:38:36Z",
     "result": "landed",
-    "head": "6c597c739ff4353b0ad6d9183eb4280983f1dce6",
-    "pr": 239,
+    "head": "46fcb0463a6c03cc8f04fe97049cc7ad389c2760",
+    "pr": 240,
     "files": [
-      ".github/workflows/ci.yml",
-      "tests/ci_hygiene.rs"
+      "src/discover.rs"
     ],
-    "tests": "readme_stealth_placeholder_is_path_filtered",
+    "tests": "package_path_with_newline_component_is_unreadable_not_loaded,path_has_line_separator_detects_lf",
     "review": "0"
   },
-  "last_sha": "6c597c739ff4353b0ad6d9183eb4280983f1dce6",
+  "last_sha": "46fcb0463a6c03cc8f04fe97049cc7ad389c2760",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T02:19:32Z",
+    "checked_at": "2026-08-27T02:38:36Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 7,
+    "next_perspective": 8,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "README stealth placeholder locked and path-filtered."
+    "last_why_summary": "extra-path line-separator component is Unreadable."
   },
   "budgets": {
     "max_cycles": null,
