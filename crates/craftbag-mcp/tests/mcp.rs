@@ -36,6 +36,27 @@ fn corpus_leftover_skills_named_package() -> PathBuf {
         .join("../../tests/corpus/leftover/skills-named-package")
 }
 
+/// extra/skills/SKILL.md named loose next to extra/wanted. Tempfile
+/// only; do not commit another leftover corpus tree.
+fn leftover_extra_skills_loose() -> (tempfile::TempDir, PathBuf) {
+    let extra = tempfile::tempdir().expect("extra");
+    std::fs::create_dir_all(extra.path().join("skills")).expect("mkdir skills");
+    std::fs::write(
+        extra.path().join("skills").join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover\n---\nloose\n",
+    )
+    .expect("write leftover");
+    let wanted = extra.path().join("wanted");
+    std::fs::create_dir_all(&wanted).expect("mkdir wanted");
+    let wanted_md = wanted.join("SKILL.md");
+    std::fs::write(
+        &wanted_md,
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write wanted");
+    (extra, wanted_md)
+}
+
 fn corpus_vercel_npx() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/vercel-npx")
 }
@@ -339,6 +360,50 @@ fn stdio_skills_list_leftover_skills_named_package_names_wanted() {
     assert!(
         skips.iter().all(|s| s["kind"] != "root_file"),
         "named extra/skills is not a leftover root file: {text}"
+    );
+}
+
+#[test]
+fn stdio_skills_list_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the MCP list door. leftover extra/skills/SKILL.md named loose is
+    // not exclusive-scan entries.
+    let (extra, _wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "paths": [extra.path()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let names: Vec<&str> = skills.iter().filter_map(|s| s["name"].as_str()).collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "leftover extra/skills/SKILL.md must not hide leftover sibling packages: {text}"
+    );
+    let wanted_row = skills
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("list must name wanted: {text}"));
+    assert_eq!(
+        wanted_row["source"], "extra",
+        "list JSON source must be the wire token extra: {text}"
     );
 }
 
@@ -1361,6 +1426,52 @@ fn stdio_skills_why_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[test]
+fn stdio_skills_why_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the MCP why door.
+    let (extra, wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra.path()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {text}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+}
+
 #[cfg(unix)]
 #[test]
 fn stdio_skills_why_leftover_skills_fifo_names_wanted() {
@@ -1562,6 +1673,42 @@ fn stdio_skills_load_leftover_skills_named_package_names_wanted() {
     assert_eq!(
         resp["result"]["error_kind"], "unknown_skill",
         "nested evil must stay unknown: {resp}"
+    );
+}
+
+#[test]
+fn stdio_skills_load_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the MCP load door.
+    let (extra, _wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra.path()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: wanted]"),
+        "leftover extra/skills/SKILL.md must not hide leftover sibling wanted: {text}"
+    );
+    assert!(
+        text.contains("from-sibling"),
+        "must load leftover sibling body: {text}"
     );
 }
 
@@ -2390,6 +2537,52 @@ fn stdio_skills_list_watch_leftover_skills_named_package_lists_extra_root() {
     );
     assert!(
         !text.contains("wanted") && !text.contains("evil") && !text.contains("## Skills"),
+        "watch format must not load SKILL.md: {text}"
+    );
+}
+
+#[test]
+fn stdio_skills_list_watch_leftover_skills_loose_md_lists_extra_root() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the MCP watch door. leftover extra/skills/SKILL.md is not a
+    // discover walk.
+    let (extra_td, _wanted) = leftover_extra_skills_loose();
+    let extra = extra_td
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize leftover extra: {e}"));
+    let extra_skills = extra.join("skills");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "watch",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.lines().any(|l| Path::new(l) == extra.as_path()),
+        "watch format must list leftover extra-path root: {text}"
+    );
+    assert!(
+        text.lines().all(|l| Path::new(l) != extra_skills.as_path()),
+        "leftover extra/skills/SKILL.md is not a discover walk: {text}"
+    );
+    assert!(
+        !text.contains("wanted") && !text.contains("loose") && !text.contains("## Skills"),
         "watch format must not load SKILL.md: {text}"
     );
 }

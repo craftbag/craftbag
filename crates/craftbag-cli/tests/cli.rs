@@ -30,6 +30,27 @@ fn corpus() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus")
 }
 
+/// extra/skills/SKILL.md named loose next to extra/wanted. Tempfile
+/// only; do not commit another leftover corpus tree.
+fn leftover_extra_skills_loose() -> (tempfile::TempDir, PathBuf) {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::create_dir_all(extra.path().join("skills")).expect("mkdir skills");
+    fs::write(
+        extra.path().join("skills").join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover\n---\nloose\n",
+    )
+    .expect("write leftover");
+    let wanted = extra.path().join("wanted");
+    fs::create_dir_all(&wanted).expect("mkdir wanted");
+    let wanted_md = wanted.join("SKILL.md");
+    fs::write(
+        &wanted_md,
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write wanted");
+    (extra, wanted_md)
+}
+
 #[test]
 fn validate_minimal_valid_ok() {
     let path = corpus().join("agentskills/minimal-valid/SKILL.md");
@@ -594,6 +615,54 @@ fn list_leftover_skills_named_package_names_wanted() {
         skips.iter().all(|s| s["kind"] != "root_file"),
         "named extra/skills is not a leftover root file: {stdout}"
     );
+}
+
+#[test]
+fn list_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the CLI list door. leftover extra/skills/SKILL.md named loose is
+    // not exclusive-scan entries.
+    let (extra, wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        list_json_source(&stdout, "wanted"),
+        "extra",
+        "leftover extra/skills/SKILL.md must not hide leftover sibling wanted: {stdout}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["wanted"],
+        "leftover extra/skills/SKILL.md must not hide leftover sibling packages: {stdout}"
+    );
+    assert!(
+        names.iter().all(|n| *n != "loose"),
+        "leftover extra/skills/SKILL.md must not load as a package: {stdout}"
+    );
+    let _ = wanted;
 }
 
 #[cfg(unix)]
@@ -3198,6 +3267,70 @@ fn why_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[test]
+fn why_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the CLI why door.
+    let (extra, wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("wanted")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {stdout}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("loose")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let miss: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    assert!(
+        miss.get("error_kind").is_some()
+            || miss["loaded"]
+                .as_array()
+                .is_some_and(|rows| rows.iter().all(|s| s["name"] != "loose")),
+        "leftover loose must not load as a package: {stdout}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn why_leftover_skills_fifo_names_wanted() {
@@ -3384,6 +3517,60 @@ fn load_leftover_skills_named_package_names_wanted() {
         "nested evil must not load: stdout={} stderr={}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn load_leftover_skills_loose_md_names_wanted() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the CLI load door.
+    let (extra, _wanted) = leftover_extra_skills_loose();
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("wanted")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: wanted]"),
+        "leftover extra/skills/SKILL.md must not hide leftover sibling wanted: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load leftover sibling body: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("loose")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "leftover loose must not load: stdout={stdout} stderr={stderr}"
+    );
+    assert!(
+        !stdout.contains("[Activated skill: loose]"),
+        "leftover extra/skills/SKILL.md must not load as a package: {stdout}"
     );
 }
 
@@ -4820,6 +5007,49 @@ fn list_watch_dirs_leftover_skills_named_package_lists_extra_root() {
     );
     assert!(
         !stdout.contains("wanted") && !stdout.contains("evil") && !stdout.contains("## Skills"),
+        "watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
+#[test]
+fn list_watch_dirs_leftover_skills_loose_md_lists_extra_root() {
+    // Sibling lock of extra_path_skills_leftover_skill_md_does_not_hide_sibling
+    // on the CLI watch door. leftover extra/skills/SKILL.md is not a
+    // discover walk.
+    let (extra_td, _wanted) = leftover_extra_skills_loose();
+    let extra = extra_td
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize leftover extra: {e}"));
+    let extra_skills = extra.join("skills");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout_has_path(&stdout, &extra),
+        "watch-dirs must list leftover extra-path root: {stdout}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, &extra_skills),
+        "leftover extra/skills/SKILL.md is not a discover walk: {stdout}"
+    );
+    assert!(
+        !stdout.contains("wanted") && !stdout.contains("loose") && !stdout.contains("## Skills"),
         "watch-dirs must not load SKILL.md: {stdout}"
     );
 }
