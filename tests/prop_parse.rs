@@ -1,9 +1,9 @@
 //! Property tests for `parse_skill` (name charset, description length, missing ---,
-//! present-null invocation flags).
+//! present-null invocation flags) and `sanitize_error_token`.
 
 use craftbag::{
     ParseError, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS,
-    normalize_skill_name, parse_skill, validate_skill_name,
+    normalize_skill_name, parse_skill, sanitize_error_token, validate_skill_name,
 };
 use proptest::prelude::*;
 
@@ -150,6 +150,50 @@ proptest! {
             "{key}: {raw:?} -> {err}"
         );
     }
+
+    /// Unit fixtures lock `\n` / `\0` / U+2028 / U+2029 / U+2014.
+    /// Other `Cc` chars (`\r`, TAB, BEL, DEL, NEL, …) are the same
+    /// `is_control` arm. A revert that only maps the fixture set
+    /// still fails here.
+    #[test]
+    fn sanitize_replaces_non_fixture_controls(
+        left in "[A-Za-z0-9._/-]{0,16}",
+        ch in extra_sanitize_control(),
+        right in "[A-Za-z0-9._/-]{0,16}",
+    ) {
+        let raw = format!("{left}{ch}{right}");
+        let out = sanitize_error_token(&raw);
+        prop_assert_eq!(&out, &format!("{left}?{right}"));
+        prop_assert!(!out.chars().any(char::is_control));
+        prop_assert_eq!(sanitize_error_token(&out), out);
+    }
+
+    #[test]
+    fn sanitize_error_token_stays_one_line(raw in ".{0,80}") {
+        let out = sanitize_error_token(&raw);
+        // Keep U+2028 / U+2029 / U+2014 out of prop_assert! format strings
+        // (`{2028}` is a positional arg).
+        prop_assert!(
+            !sanitize_leaves_splitter(&out),
+            "sanitized token must stay one line without an em dash: {out:?}"
+        );
+        prop_assert_eq!(out.chars().count(), raw.chars().count());
+        prop_assert_eq!(sanitize_error_token(&out), out);
+    }
+}
+
+/// True when a token still has a control, line/paragraph separator, or em dash.
+fn sanitize_leaves_splitter(out: &str) -> bool {
+    out.chars()
+        .any(|c| c.is_control() || c == '\u{2028}' || c == '\u{2029}' || c == '\u{2014}')
+}
+
+/// Controls the unit table does not list. `is_control` must still map them.
+fn extra_sanitize_control() -> impl Strategy<Value = char> {
+    prop::sample::select(vec![
+        '\r', '\t', '\u{0007}', '\u{0008}', '\u{000b}', '\u{000c}', '\u{001b}', '\u{007f}',
+        '\u{0085}', '\u{009f}',
+    ])
 }
 
 fn unicode_name_chunk() -> impl Strategy<Value = String> {
