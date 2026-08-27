@@ -22,6 +22,10 @@ fn corpus_grok_project() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/grok-project")
 }
 
+fn corpus_bline_project() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/bline-project")
+}
+
 fn corpus_leftover_empty_nested_skills() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/corpus/leftover/empty-nested-skills")
@@ -1905,6 +1909,87 @@ fn stdio_skills_why_vendor_grok_names_project_grok() {
     assert!(
         skips.is_empty(),
         "project-grok is a loaded vendor skill, not a skip: {text}"
+    );
+}
+
+#[test]
+fn stdio_skills_why_vendor_bline_names_project_bline() {
+    // Sibling lock of why_vendor_bline_names_project_bline on the MCP
+    // why door. Isolated HOME; default vendor stays off.
+    let cwd = corpus_bline_project();
+    let skill = cwd.join(".bline/skills/project-bline/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Bline project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let off = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "project-bline"}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], true,
+        "bline vendor is opt-in: {off}"
+    );
+    assert_eq!(
+        off["result"]["error_kind"], "unknown_skill",
+        "why without vendor bline must peel unknown_skill: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    assert!(
+        off_text.contains("unknown skill: project-bline"),
+        "why without vendor bline must not see project-bline: {off_text}"
+    );
+
+    let on = rpc_in(
+        &cwd,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "project-bline", "vendor": ["bline"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "project-bline")
+        .unwrap_or_else(|| panic!("why must name project-bline: {text}"));
+    assert_eq!(
+        row["source"], "bline",
+        "why JSON source must be the wire token: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "project-bline is a loaded vendor skill, not a skip: {text}"
     );
 }
 

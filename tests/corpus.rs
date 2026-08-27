@@ -82,3 +82,14 @@ fn corpus_incumbent_grok_user_parses() {
     let skill = parse_skill(&read(rel)).expect("parse");
     assert_eq!(skill.name, "home-grok");
 }
+
+#[test]
+fn corpus_incumbent_bline_project_parses_project_bline() {
+    let rel = "incumbent/bline-project/.bline/skills/project-bline/SKILL.md";
+    assert!(
+        corpus().join(rel).is_file(),
+        "committed Bline project fixture must exist: {rel}"
+    );
+    let skill = parse_skill(&read(rel)).expect("parse");
+    assert_eq!(skill.name, "project-bline");
+}

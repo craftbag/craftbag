@@ -4672,6 +4672,78 @@ fn why_vendor_grok_names_project_grok() {
 }
 
 #[test]
+fn why_vendor_bline_names_project_bline() {
+    // Bline-compared hosts always walk project `.bline/skills` (vendor
+    // bline). Isolated HOME; default vendor stays off.
+    let cwd = corpus().join("incumbent/bline-project");
+    let skill = cwd.join(".bline/skills/project-bline/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Bline project fixture must exist: {}",
+        skill.display()
+    );
+    let (_home, mut off) = bin();
+    let off_out = off
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("project-bline")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(1),
+        "bline vendor is opt-in: stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_err = String::from_utf8_lossy(&off_out.stderr);
+    assert!(
+        off_err.contains("unknown skill: project-bline"),
+        "why without --vendor bline must not see project-bline: {off_err}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(&cwd)
+        .arg("why")
+        .arg("project-bline")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("bline")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "project-bline")
+        .unwrap_or_else(|| panic!("why must name project-bline: {stdout}"));
+    assert_eq!(
+        row["source"], "bline",
+        "why JSON source must be the wire token: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "project-bline is a loaded vendor skill, not a skip: {stdout}"
+    );
+}
+
+#[test]
 fn list_vendor_claude_loads_user_home_layout() {
     let home = corpus().join("incumbent/claude-user");
     let cwd = tempfile::tempdir().expect("cwd");
