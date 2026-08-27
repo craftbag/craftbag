@@ -181,6 +181,10 @@ fn fuzz_smoke_runs_parse_skill_and_xml_catalog() {
         fuzz.contains("cargo fuzz run vendor_token"),
         "fuzz-smoke must run vendor_token so --vendor / MCP vendor errors stay one line: {fuzz}"
     );
+    assert!(
+        fuzz.contains("cargo fuzz run sanitize_error_token"),
+        "fuzz-smoke must run sanitize_error_token so echoed error tokens stay one line: {fuzz}"
+    );
 }
 
 #[test]
