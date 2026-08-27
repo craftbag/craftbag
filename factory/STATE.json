@@ -6,40 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "7e32b3e116bc31f044d72ec3835808b824980261",
+  "ledger_sha": "a8bda5a076f6e5129b379fe19c4b09b35ffc0368",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi36-arch-why-skip-tsv",
+    "id": "improve-mpi36-contrib-skip-tsv-docs",
     "work_source": "improve",
-    "started_at": "2026-08-27T12:52:33Z",
-    "finished_at": "2026-08-27T12:52:33Z",
+    "started_at": "2026-08-27T13:05:54Z",
+    "finished_at": "2026-08-27T13:05:54Z",
     "result": "landed",
-    "head": "392cefc96e81f39c2ebd956481d04c75a1f643f2",
-    "pr": 280,
+    "head": "6368e0cd8d93db48fe53bd24650e3e072ae13f80",
+    "pr": 281,
     "files": [
-      "crates/craftbag-cli/src/main.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "src/skip.rs"
+      "src/lib.rs",
+      "crates/craftbag-cli/tests/cli.rs"
     ],
-    "tests": "why_leftover_hostile_skip_tsv_stays_one_row",
+    "tests": "crate_root_docs_name_format_skip_tsv",
     "review": "0"
   },
-  "last_sha": "392cefc96e81f39c2ebd956481d04c75a1f643f2",
+  "last_sha": "6368e0cd8d93db48fe53bd24650e3e072ae13f80",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T12:52:33Z",
+    "checked_at": "2026-08-27T13:05:54Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 36,
-    "next_perspective": 14,
+    "next_perspective": 15,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
