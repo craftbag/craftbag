@@ -815,6 +815,161 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn skills_validate_package_dir_skill_md_symlink_escape_is_error() {
+        empty_home(|| {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let outside = tempfile::tempdir().expect("out");
+            fs::write(
+                outside.path().join("secret.md"),
+                "---\nname: wanted\ndescription: leaked\n---\nSECRET_BODY\n",
+            )
+            .expect("write");
+            let pkg = tmp.path().join("wanted");
+            fs::create_dir_all(&pkg).expect("mkdir");
+            std::os::unix::fs::symlink(outside.path().join("secret.md"), pkg.join("SKILL.md"))
+                .expect("symlink");
+            let resp = call(
+                78,
+                "skills_validate",
+                json!({"path": pkg.to_string_lossy()}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "MCP must refuse a package-dir SKILL.md symlink escape like lib validate: {}",
+                call_text(&resp)
+            );
+            assert_eq!(
+                resp["result"]["error_kind"], "unreadable",
+                "escape must peel unreadable: {resp}"
+            );
+            let text = call_text(&resp);
+            assert!(
+                !text.contains("SECRET_BODY") && !text.contains("wanted"),
+                "must not peek escaped SKILL.md: {text}"
+            );
+            assert!(
+                text.contains("escapes"),
+                "MCP must name the escape like CLI validate --json: {text}"
+            );
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skills_validate_package_dir_newline_component_is_error() {
+        empty_home(|| {
+            let parent = tempfile::tempdir().expect("parent");
+            let pkg = parent.path().join("evil\nroot").join("demo");
+            fs::create_dir_all(&pkg).expect("mkdir");
+            fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+            )
+            .expect("write");
+            let resp = call(
+                82,
+                "skills_validate",
+                json!({"path": pkg.to_string_lossy()}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "MCP must refuse a newline package dir like extra-path: {}",
+                call_text(&resp)
+            );
+            assert_eq!(
+                resp["result"]["error_kind"], "unreadable",
+                "newline package must peel unreadable: {resp}"
+            );
+            let text = call_text(&resp);
+            assert!(
+                !text.contains("SECRET_BODY"),
+                "must not peek newline-path SKILL.md: {text}"
+            );
+            assert!(
+                text.contains("line separator") || text.contains("path"),
+                "MCP must name the refuse: {text}"
+            );
+            if let Some(p) = resp["result"]["path"].as_str() {
+                assert!(
+                    !p.contains('\n') && !p.contains('\u{2028}'),
+                    "peeled path must not echo a raw line separator: {p:?}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn skills_validate_line_separator_dotdot_is_error() {
+        empty_home(|| {
+            for raw in ["/..\n", "/..\r", "/..\u{2028}"] {
+                let resp = call(79, "skills_validate", json!({"path": raw}));
+                assert_eq!(
+                    resp["result"]["isError"],
+                    true,
+                    "MCP must refuse line-separator /.. token {raw:?}: {}",
+                    call_text(&resp)
+                );
+                assert_eq!(
+                    resp["result"]["error_kind"], "unreadable",
+                    "collapsed root token must peel unreadable: {resp}"
+                );
+                let text = call_text(&resp);
+                assert!(
+                    !text.contains("SECRET_BODY"),
+                    "must not peek a collapsed root: {text}"
+                );
+                if let Some(p) = resp["result"]["path"].as_str() {
+                    for banned in ["/", "/..", "/SKILL.md", "/../SKILL.md"] {
+                        assert_ne!(p, banned, "must not peel path={banned} for {raw:?}: {resp}");
+                    }
+                    assert!(
+                        !p.contains('\n') && !p.contains('\r') && !p.contains('\u{2028}'),
+                        "peeled path must not echo a raw line separator: {p:?}"
+                    );
+                }
+                assert!(
+                    text.contains("line separator") || text.contains("collapses"),
+                    "MCP must name the refuse like extra-path: {text}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn skills_validate_whitespace_collapse_dotdot_is_error() {
+        empty_home(|| {
+            for raw in [" /..", "\t/..", "\u{85}/..", "\u{00a0}/..", "/\t.."] {
+                let resp = call(81, "skills_validate", json!({"path": raw}));
+                assert_eq!(
+                    resp["result"]["isError"],
+                    true,
+                    "MCP must refuse whitespace-collapse /.. token {raw:?}: {}",
+                    call_text(&resp)
+                );
+                if let Some(kind) = resp["result"]["error_kind"].as_str() {
+                    assert_eq!(
+                        kind, "unreadable",
+                        "collapsed token must peel unreadable: {resp}"
+                    );
+                }
+                let text = call_text(&resp);
+                assert!(
+                    text.contains("collapses") || text.contains("line separator"),
+                    "MCP must name the refuse like extra-path: {text}"
+                );
+                if let Some(p) = resp["result"]["path"].as_str() {
+                    for banned in ["/", "/..", "/SKILL.md", "/../SKILL.md"] {
+                        assert_ne!(p, banned, "must not peel path={banned} for {raw:?}: {resp}");
+                    }
+                }
+            }
+        });
+    }
+
     #[test]
     fn notification_has_no_response() {
         let resp = handle(RpcRequest {

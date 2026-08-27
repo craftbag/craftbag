@@ -397,6 +397,27 @@ pub fn validate_path(path: &Path) -> ValidationReport {
 /// A directory joins `SKILL.md` / `skill.md` like extra-path. A
 /// collection root with no package file is unreadable, not a walk.
 pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport {
+    // Same refuse as extra-path: a line-separator component or a token
+    // that collapses after whitespace (` /..`, `/ ..`) must not become
+    // `/` / `/..` and join /SKILL.md. NFKC `wanted/evil/‥` still
+    // rewrites to the wanted package below.
+    if let Some(detail) = validate_path_hostile_token(path) {
+        let detail = one_line_error(detail);
+        let path = PathBuf::from(crate::sanitize_error_token(&path.display().to_string()));
+        return ValidationReport {
+            path: path.clone(),
+            ok: false,
+            name: None,
+            errors: vec![detail.clone()],
+            skip: Some(SkillSkip {
+                path,
+                name: None,
+                kind: SkipKind::Unreadable,
+                detail,
+                winner_path: None,
+            }),
+        };
+    }
     // Same NFKC `.` / `..` rewrite as extra-path, so
     // `wanted/evil/‥/SKILL.md` is the `wanted` package.
     let path = nfkc_dot_path_components(path);
@@ -1964,6 +1985,45 @@ fn finish_load_parsed_skill(
 fn is_skill_md_filename(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
+}
+
+/// Refuse validate tokens discover already drops as extra-path.
+///
+/// A line-separator component (`evil\nroot`, `/..\n`) or a token that
+/// collapses after whitespace (` /..`, `/ ..`) must not be rewritten
+/// into `/` / `/..` and join `/SKILL.md`.
+fn validate_path_hostile_token(path: &Path) -> Option<&'static str> {
+    if path.to_str().is_some_and(str_has_line_separator) || path_has_line_separator(path) {
+        return Some("path component contains a line separator");
+    }
+    if path
+        .to_str()
+        .is_some_and(host_token_collapses_after_whitespace)
+    {
+        return Some("path token collapses after whitespace trim");
+    }
+    let padded = path.components().any(|c| match c {
+        Component::Normal(s) => s.to_str().is_some_and(component_is_whitespace_padded_dot),
+        _ => false,
+    });
+    if padded {
+        return Some("path token collapses after whitespace trim");
+    }
+    None
+}
+
+/// True when a Normal component is `.` / `..` only after trim
+/// (` ..`, `..\n`). NFKC `‥` stays an extra-path rewrite.
+fn component_is_whitespace_padded_dot(s: &str) -> bool {
+    let n = crate::parse::normalize_skill_name(s);
+    let trimmed = n.trim();
+    if trimmed != "." && trimmed != ".." {
+        return false;
+    }
+    if s == "." || s == ".." {
+        return false;
+    }
+    n != "." && n != ".."
 }
 
 /// Join `SKILL.md` / `skill.md` when `path` is a package directory.
@@ -6236,6 +6296,118 @@ mod tests {
         assert!(
             skip.detail.contains("escapes"),
             "detail must name the escape: {}",
+            skip.detail
+        );
+    }
+
+    fn assert_validate_token_does_not_retarget_root(raw: &str) {
+        let report = validate_path(std::path::Path::new(raw));
+        assert!(
+            !report.ok,
+            "validate token {raw:?} must not be ok (must not retarget to /): {report:?}"
+        );
+        assert!(
+            report.name.is_none(),
+            "must not peek a collapsed root token {raw:?}: {report:?}"
+        );
+        let path_s = report.path.display().to_string();
+        for banned in ["/", "/..", "/SKILL.md", "/skill.md", "/../SKILL.md"] {
+            assert_ne!(
+                path_s.as_str(),
+                banned,
+                "validate must not collapse {raw:?} to {banned}: {report:?}"
+            );
+        }
+        let skip = report.skip.as_ref().expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        let skip_s = skip.path.display().to_string();
+        for banned in ["/", "/..", "/SKILL.md", "/../SKILL.md"] {
+            assert_ne!(
+                skip_s.as_str(),
+                banned,
+                "skip.path must not be {banned} for {raw:?}: {skip:?}"
+            );
+        }
+        assert!(
+            skip.detail.contains("line separator") || skip.detail.contains("collapses"),
+            "detail must name the refuse for {raw:?}: {}",
+            skip.detail
+        );
+        assert!(
+            !path_s.contains('\n')
+                && !path_s.contains('\r')
+                && !path_s.contains('\u{2028}')
+                && !path_s.contains('\u{2029}'),
+            "report.path must not echo a raw line separator for {raw:?}: {path_s:?}"
+        );
+        assert!(
+            !skip_s.contains('\n')
+                && !skip_s.contains('\r')
+                && !skip_s.contains('\u{2028}')
+                && !skip_s.contains('\u{2029}'),
+            "skip.path must not echo a raw line separator for {raw:?}: {skip_s:?}"
+        );
+    }
+
+    #[test]
+    fn validate_path_line_separator_dotdot_does_not_retarget_to_fs_root() {
+        // Discover extra-path refuses a line-separator token. validate
+        // must not NFKC-rewrite `/..\n` into `/` and join /SKILL.md.
+        for raw in ["/..\n", "/..\r", "/..\u{2028}", "/..\u{2029}"] {
+            assert_validate_token_does_not_retarget_root(raw);
+        }
+    }
+
+    #[test]
+    fn validate_path_whitespace_collapse_dotdot_does_not_retarget_to_fs_root() {
+        // Sibling of extra_path_whitespace_dotdot_does_not_scan_filesystem_root.
+        // ` /..`.trim() is `/..`. validate has no extra-path trim, but
+        // nfkc rewrite of `/ ..` / `/\t..` is still `/`.
+        for raw in [
+            " /..",
+            "\t/..",
+            "\u{85}/..",
+            "\u{00a0}/..",
+            "/ ..",
+            "/\t..",
+            "/\u{00a0}..",
+        ] {
+            assert_validate_token_does_not_retarget_root(raw);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_path_package_dir_newline_component_is_unreadable() {
+        // Discover extra-path refuses a line-separator component.
+        // validate must not load the package under that path.
+        let parent = tempfile::tempdir().expect("parent");
+        let pkg = parent.path().join("evil\nroot").join("demo");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        let report = validate_path(&pkg);
+        assert!(
+            !report.ok,
+            "package dir with a newline component must not validate: {report:?}"
+        );
+        assert!(
+            report.name.is_none(),
+            "must not peek newline-path SKILL.md: {report:?}"
+        );
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        let path_s = skip.path.display().to_string();
+        assert!(
+            !path_s.contains('\n') && !path_s.contains('\u{2028}') && !path_s.contains('\u{2029}'),
+            "skip.path must not echo a raw line separator: {path_s:?}"
+        );
+        assert!(
+            skip.detail.contains("line separator") || skip.detail.contains("path"),
+            "detail must name the refuse: {}",
             skip.detail
         );
     }
