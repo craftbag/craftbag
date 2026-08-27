@@ -1813,6 +1813,104 @@ fn why_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn why_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the CLI why door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus().join("leftover/skills-named-package");
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("wanted")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {stdout}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "named extra/skills is not a leftover root file: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("skills")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    assert!(
+        loaded.iter().any(|s| s["name"] == "skills"),
+        "why must name the extra/skills package: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("evil")
+        .arg("--json")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "nested evil must not load: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
 fn load_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the CLI load door. Default vendor stays off. Empty extra/skills
