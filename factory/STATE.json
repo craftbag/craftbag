@@ -6,38 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a4e77e64dd683d4bf528cec153b6e1263e35bab3",
+  "ledger_sha": "17ac200e6d639365af6751a7320222de290f699e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi32-adv-user-dir-line-separator",
+    "id": "mpi32-arch-ignore-line-separator",
     "work_source": "improve",
-    "started_at": "2026-08-27T03:51:37Z",
-    "finished_at": "2026-08-27T03:51:37Z",
+    "started_at": "2026-08-27T04:08:12Z",
+    "finished_at": "2026-08-27T04:08:12Z",
     "result": "landed",
-    "head": "339b2f77871ef27b92e388680abb83b6f2f56939",
-    "pr": 248,
+    "head": "5d8de557327fd58b700ad166d8d1494920dbe583",
+    "pr": 249,
     "files": [
       "src/discover.rs"
     ],
-    "tests": "user_dir_path_with_cr_component_is_unreadable_not_loaded",
+    "tests": "ignore_line_separator_dotdot_does_not_hide_discover_cwd",
     "review": "0"
   },
-  "last_sha": "339b2f77871ef27b92e388680abb83b6f2f56939",
+  "last_sha": "5d8de557327fd58b700ad166d8d1494920dbe583",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T03:51:37Z",
+    "checked_at": "2026-08-27T04:08:12Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 13,
+    "next_perspective": 14,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -59,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "Refuse user_dir components that contain a line separator."
+    "last_why_summary": "Refuse ignore tokens that contain a line separator before Path join."
   },
   "budgets": {
     "max_cycles": null,
