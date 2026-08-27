@@ -1696,6 +1696,47 @@ fn list_format_catalog_matches_catalog_flag() {
 }
 
 #[test]
+fn list_catalog_and_xml_emit_skips_on_stderr() {
+    // Default TSV and --json already surface skip rows. Catalog/XML used
+    // to print an empty prompt fragment and exit 0 with no skip, so a
+    // leftover-only tree looked like "no skills, all good".
+    let tmp = tempfile::tempdir().expect("tmp");
+    let skills = tmp.path().join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    fs::write(
+        skills.join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover root file\n---\nbody\n",
+    )
+    .expect("write");
+    for format in ["catalog", "xml"] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(tmp.path())
+            .arg("list")
+            .arg("--format")
+            .arg(format)
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{format} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !stdout.contains("loose"),
+            "{format} stdout must stay a prompt fragment, not the leftover name: {stdout}"
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("skip\troot_file"),
+            "{format} must emit the leftover skip on stderr like default list: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn list_format_watch_lists_extra_collection() {
     let extra = corpus().join("incumbent/vercel-npx");
     let extra_skills = extra.join("skills");
