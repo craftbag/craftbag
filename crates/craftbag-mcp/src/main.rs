@@ -414,13 +414,19 @@ fn tools() -> Value {
         "description": "Token budget for catalog listing (format=catalog; default 8000). JSON, XML, and watch ignore this."
     });
     let mut load_props = discover_properties();
-    load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
+    load_props["name"] = json!({
+        "type": "string",
+        "description": "Frontmatter skill name (not a package path). Discover with paths, then pass that name."
+    });
     load_props["args"] = json!({
         "type": "string",
         "description": "Optional arguments copied into the envelope as User arguments. Matches SKILL.md argument-hint when set."
     });
     let mut why_props = discover_properties();
-    why_props["name"] = json!({"type": "string", "description": "Optional skill name filter."});
+    why_props["name"] = json!({
+        "type": "string",
+        "description": "Optional frontmatter skill name filter (not a package path)."
+    });
     why_props["context"] = json!({"type": "string", "description": "Activation context text."});
     why_props["context_tokens"] =
         json!({"type": "integer", "description": "Token budget for activation (default 8000)."});
@@ -894,6 +900,37 @@ mod tests {
             desc.contains("collapses") && desc.contains("/.."),
             "{label} must name the whitespace-collapse refuse (` /..`): {desc}"
         );
+    }
+
+    #[test]
+    fn tools_list_names_frontmatter_name_not_path() {
+        // CLI load/why NAME is the frontmatter name. tools/list must
+        // say that before a host passes a package path as name.
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(388)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        for (tool_name, label) in [
+            ("skills_load", "skills_load name"),
+            ("skills_why", "skills_why name"),
+        ] {
+            let tool = tools
+                .iter()
+                .find(|t| t["name"] == tool_name)
+                .unwrap_or_else(|| panic!("{tool_name}"));
+            let desc = tool["inputSchema"]["properties"]["name"]["description"]
+                .as_str()
+                .unwrap_or("");
+            let lower = desc.to_ascii_lowercase();
+            assert!(
+                lower.contains("frontmatter") && lower.contains("not a package path"),
+                "{label} must name frontmatter, not a package path: {desc}"
+            );
+        }
     }
 
     #[test]

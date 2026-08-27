@@ -335,13 +335,29 @@ pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
             path: Some(skip.path.clone()),
             winner_path: skip.winner_path.clone(),
         },
-        None => SkillMiss {
-            error_kind: UNKNOWN_SKILL_KIND,
-            error: format!("unknown skill: {}", crate::sanitize_error_token(name)),
-            path: None,
-            winner_path: None,
-        },
+        None => {
+            let shown = crate::sanitize_error_token(name);
+            let error = if requested_name_looks_like_path(name) {
+                format!(
+                    "unknown skill: {shown} (looks like a path; pass the frontmatter name and --path / paths)"
+                )
+            } else {
+                format!("unknown skill: {shown}")
+            };
+            SkillMiss {
+                error_kind: UNKNOWN_SKILL_KIND,
+                error,
+                path: None,
+                winner_path: None,
+            }
+        }
     }
+}
+
+/// `load ./pkg` / `why ./pkg` is a package root, not a frontmatter name.
+fn requested_name_looks_like_path(name: &str) -> bool {
+    let t = name.trim();
+    t.contains('/') || t.contains('\\')
 }
 
 /// Error text when `load` cannot return a skill.
@@ -2305,6 +2321,23 @@ mod tests {
         assert_eq!(unknown.error_kind, "unknown_skill");
         assert_eq!(unknown.error, "unknown skill: no-such");
         assert!(unknown.is_not_found());
+        let path_like = unknown_or_skipped_skill("./pkg", &[]);
+        assert_eq!(path_like.error_kind, "unknown_skill");
+        assert_eq!(
+            path_like.error,
+            "unknown skill: ./pkg (looks like a path; pass the frontmatter name and --path / paths)"
+        );
+        assert!(
+            path_like.is_not_found(),
+            "path-like unknown stays unknown_skill: {}",
+            path_like.error
+        );
+        let slash_nl = unknown_or_skipped_skill("./foo\u{2028}bar", &[]);
+        assert_eq!(
+            slash_nl.error,
+            "unknown skill: ./foo?bar (looks like a path; pass the frontmatter name and --path / paths)"
+        );
+        assert_eq!(slash_nl.error.lines().count(), 1, "{}", slash_nl.error);
         let injected = unknown_or_skipped_skill("no\u{2014}such", &[]);
         assert_eq!(injected.error_kind, "unknown_skill");
         assert_eq!(injected.error, "unknown skill: no-such");

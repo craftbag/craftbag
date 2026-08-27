@@ -70,6 +70,7 @@ enum Cmd {
     },
     /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
     Load {
+        /// Frontmatter skill name (not a package path). Discover with list --path DIR.
         name: String,
         /// Print `{ error_kind, error }` on a miss (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
@@ -101,6 +102,7 @@ enum Cmd {
     },
     /// Explain loaded, skipped, and activation decisions.
     Why {
+        /// Optional frontmatter skill name filter (not a package path).
         name: Option<String>,
         /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
