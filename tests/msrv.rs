@@ -151,6 +151,16 @@ fn bline_consumer_names_skill_summary_sibling_lock() {
     );
 }
 
+/// why --json success is WhyReport. list already names `{ skills, skips }`.
+#[test]
+fn bline_consumer_names_why_json_success_keys() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("{ loaded, skips, activation }"),
+        "BLINE_CONSUMER must name why --json success keys like list {{ skills, skips }}"
+    );
+}
+
 /// `watch_dirs_omits_ignored_extra_path` and watch_dirs rustdoc omit
 /// ignore prefixes. Host notes must not keep a second paragraph that
 /// says `watch_dirs` is unchanged.

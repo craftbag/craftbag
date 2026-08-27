@@ -4166,6 +4166,19 @@ fn why_help_names_json_error_kind() {
 }
 
 #[test]
+fn why_help_names_json_success_keys() {
+    // why --json success is WhyReport, not only the miss peel.
+    // list --help already names `{ skills, skips }`; why must name
+    // `{ loaded, skips, activation }` so the two JSON doctors cannot drift.
+    let (_home, mut cmd) = bin();
+    cmd.arg("why")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("{ loaded, skips, activation }"));
+}
+
+#[test]
 fn why_help_names_json_winner_path() {
     // SkillMiss.winner_path landed in #191. why --help must name the key so
     // a leftover host does not scrape `lost to` from Display.
