@@ -48,7 +48,9 @@ pub struct DiscoveryOptions {
     pub vendor_roots: Vec<String>,
     /// Host-supplied user skills dir (`~` / `~/` expanded, relative
     /// paths join the discover `cwd`, same as `paths`). Empty or
-    /// whitespace-only is ignored.
+    /// whitespace-only is ignored. A token that collapses after
+    /// whitespace trim (` /..`, `/ ..`) is an unreadable skip (same
+    /// refuse as extra-path).
     pub user_skills_dir: Option<PathBuf>,
     /// When true, names outside `a-z0-9-` are a `parse_error` skip.
     /// Default is off: Unicode / NFKC names still load.
@@ -104,8 +106,9 @@ pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, 
 /// Host `user_skills_dir` is a skills root: leftover `SKILL.md` /
 /// `skill.md` must not hide `user_dir/skills` (same collection walk
 /// as extra-path leftover). [`DiscoveryOptions::ignore`] prefixes are
-/// omitted (same as [`discover`]). An extra-path token that collapses
-/// after whitespace trim is omitted (same refuse as [`discover`]).
+/// omitted (same as [`discover`]). An extra-path or `user_dir` token
+/// that collapses after whitespace trim is omitted (same refuse as
+/// [`discover`]).
 pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     let cwd = cwd
         .canonicalize()
@@ -567,110 +570,112 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         }
     }
 
-    if opts
-        .user_skills_dir
-        .as_deref()
-        .and_then(|p| p.to_str())
-        .is_some_and(str_has_line_separator)
-    {
-        if let Some(raw) = opts.user_skills_dir.as_deref() {
-            skip_line_separator_root(raw, &mut skips);
-        }
-    } else if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        if path_has_line_separator(&user_dir) {
-            // Same refuse as extra-path: do not load or echo a user_dir
-            // whose component would split list/why TSV or watch_dirs.
-            skip_line_separator_root(&user_dir, &mut skips);
-        } else {
-            // leftover user_dir/SKILL.md is a root_file skip. extra-path
-            // leftover + extra/skills is a collection; user_dir is never a
-            // named package, so leftover must not hide user/skills.
-            // Classify user_dir/skills/SKILL.md once (same ExtraPathMd as
-            // extra-path) so leftover is RootFile, not a package
-            // name_directory_mismatch, and a named skills package reuses
-            // the parse. FIFO leftover is Unreadable (no extra/skills
-            // signal); still walk sibling packages.
-            let skills_subdir = user_dir.join("skills");
-            let handle_skills =
-                extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips);
-            let skills_ref: &Path = &skills_subdir;
-            let skip_skills = [skills_ref];
-            let user_skip_skills: &[&Path] = if handle_skills { &skip_skills } else { &[] };
-            load_skills_from_dir(
-                &user_dir,
-                &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                user_skip_skills,
-                &mut skills,
-                &mut skips,
-            );
-            if handle_skills {
-                let package_md = ["SKILL.md", "skill.md"]
-                    .into_iter()
-                    .map(|name| skills_subdir.join(name))
-                    .find(|p| skill_md_inode_exists(p));
-                if let Some(skill_file) = package_md {
-                    let classified =
-                        classify_extra_path_md(&skills_subdir, &skill_file, opts.ascii_names);
-                    match classified {
-                        ExtraPathMd::Collection {
-                            peeked_name,
-                            read_err,
-                        } => {
-                            skip_loose_extra_path_root_skill_md(
-                                &skill_file,
-                                &skills_subdir,
-                                &ignore,
+    if let Some(raw_path) = opts.user_skills_dir.as_deref() {
+        if raw_path.to_str().is_some_and(str_has_line_separator) {
+            skip_line_separator_root(raw_path, &mut skips);
+        } else if raw_path
+            .to_str()
+            .is_some_and(host_token_collapses_after_whitespace)
+        {
+            if let Some(raw) = raw_path.to_str() {
+                skip_whitespace_collapse_token(raw, &mut skips);
+            }
+        } else if let Some(user_dir) = expand_user_skills_dir(&cwd, Some(raw_path)) {
+            if path_has_line_separator(&user_dir) {
+                // Same refuse as extra-path: do not load or echo a user_dir
+                // whose component would split list/why TSV or watch_dirs.
+                skip_line_separator_root(&user_dir, &mut skips);
+            } else {
+                // leftover user_dir/SKILL.md is a root_file skip. extra-path
+                // leftover + extra/skills is a collection; user_dir is never a
+                // named package, so leftover must not hide user/skills.
+                // Classify user_dir/skills/SKILL.md once (same ExtraPathMd as
+                // extra-path) so leftover is RootFile, not a package
+                // name_directory_mismatch, and a named skills package reuses
+                // the parse. FIFO leftover is Unreadable (no extra/skills
+                // signal); still walk sibling packages.
+                let skills_subdir = user_dir.join("skills");
+                let handle_skills =
+                    extra_skills_subdir_is_collection(&skills_subdir, &user_dir, &mut skips);
+                let skills_ref: &Path = &skills_subdir;
+                let skip_skills = [skills_ref];
+                let user_skip_skills: &[&Path] = if handle_skills { &skip_skills } else { &[] };
+                load_skills_from_dir(
+                    &user_dir,
+                    &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                    user_skip_skills,
+                    &mut skills,
+                    &mut skips,
+                );
+                if handle_skills {
+                    let package_md = ["SKILL.md", "skill.md"]
+                        .into_iter()
+                        .map(|name| skills_subdir.join(name))
+                        .find(|p| skill_md_inode_exists(p));
+                    if let Some(skill_file) = package_md {
+                        let classified =
+                            classify_extra_path_md(&skills_subdir, &skill_file, opts.ascii_names);
+                        match classified {
+                            ExtraPathMd::Collection {
                                 peeked_name,
                                 read_err,
-                                &mut skips,
-                            );
-                            load_skills_from_dir(
-                                &skills_subdir,
-                                &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                                &[skill_file.as_path()],
-                                &mut skills,
-                                &mut skips,
-                            );
+                            } => {
+                                skip_loose_extra_path_root_skill_md(
+                                    &skill_file,
+                                    &skills_subdir,
+                                    &ignore,
+                                    peeked_name,
+                                    read_err,
+                                    &mut skips,
+                                );
+                                load_skills_from_dir(
+                                    &skills_subdir,
+                                    &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                                    &[skill_file.as_path()],
+                                    &mut skills,
+                                    &mut skips,
+                                );
+                            }
+                            ExtraPathMd::Unreadable(detail) => {
+                                // FIFO / socket / chmod leftover has no extra/skills
+                                // collection signal. user_dir is still a skills root.
+                                skip_loose_extra_path_root_skill_md(
+                                    &skill_file,
+                                    &skills_subdir,
+                                    &ignore,
+                                    None,
+                                    Some(detail),
+                                    &mut skips,
+                                );
+                                load_skills_from_dir(
+                                    &skills_subdir,
+                                    &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                                    &[skill_file.as_path()],
+                                    &mut skills,
+                                    &mut skips,
+                                );
+                            }
+                            other => {
+                                load_classified_extra_path_package(
+                                    &skill_file,
+                                    other,
+                                    &SkillSource::User,
+                                    &ignore,
+                                    opts,
+                                    &mut skills,
+                                    &mut skips,
+                                );
+                            }
                         }
-                        ExtraPathMd::Unreadable(detail) => {
-                            // FIFO / socket / chmod leftover has no extra/skills
-                            // collection signal. user_dir is still a skills root.
-                            skip_loose_extra_path_root_skill_md(
-                                &skill_file,
-                                &skills_subdir,
-                                &ignore,
-                                None,
-                                Some(detail),
-                                &mut skips,
-                            );
-                            load_skills_from_dir(
-                                &skills_subdir,
-                                &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                                &[skill_file.as_path()],
-                                &mut skills,
-                                &mut skips,
-                            );
-                        }
-                        other => {
-                            load_classified_extra_path_package(
-                                &skill_file,
-                                other,
-                                &SkillSource::User,
-                                &ignore,
-                                opts,
-                                &mut skills,
-                                &mut skips,
-                            );
-                        }
+                    } else {
+                        load_skills_from_dir(
+                            &skills_subdir,
+                            &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                            &[],
+                            &mut skills,
+                            &mut skips,
+                        );
                     }
-                } else {
-                    load_skills_from_dir(
-                        &skills_subdir,
-                        &dir_load(&SkillSource::User, &ignore, opts, &[]),
-                        &[],
-                        &mut skills,
-                        &mut skips,
-                    );
                 }
             }
         }
@@ -755,13 +760,7 @@ fn load_extra_path(
         return;
     }
     if host_token_collapses_after_whitespace(raw) {
-        skips.push(SkillSkip {
-            path: PathBuf::from(crate::sanitize_error_token(raw)),
-            name: None,
-            kind: SkipKind::Unreadable,
-            detail: "path token collapses after whitespace trim".to_owned(),
-            winner_path: None,
-        });
+        skip_whitespace_collapse_token(raw, skips);
         return;
     }
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
@@ -1582,6 +1581,16 @@ fn skip_line_separator_root(root: &Path, skips: &mut Vec<SkillSkip>) {
         name: None,
         kind: SkipKind::Unreadable,
         detail: "path component contains a line separator".to_owned(),
+        winner_path: None,
+    });
+}
+
+fn skip_whitespace_collapse_token(raw: &str, skips: &mut Vec<SkillSkip>) {
+    skips.push(SkillSkip {
+        path: PathBuf::from(crate::sanitize_error_token(raw)),
+        name: None,
+        kind: SkipKind::Unreadable,
+        detail: "path token collapses after whitespace trim".to_owned(),
         winner_path: None,
     });
 }
@@ -7945,6 +7954,54 @@ mod tests {
             assert!(
                 dirs.is_empty(),
                 "extra-path {raw:?} must not watch a collapsed token (same as discover): {dirs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn user_dir_whitespace_dotdot_does_not_scan_filesystem_root() {
+        // Sibling of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+        // on the user_dir door. expand_user_skills_dir already calls
+        // host_token_collapses, so `/ ..` must not rewrite to `/`.
+        // Record the same unreadable collapse skip extra-path records.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        for raw in [
+            " /..",
+            "\t/..",
+            "\u{85}/..",
+            "\u{00a0}/..",
+            "/ ..",
+            "/\t..",
+            "/\u{00a0}..",
+        ] {
+            let opts = DiscoveryOptions {
+                user_skills_dir: Some(PathBuf::from(raw)),
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            };
+            let report = with_home_override(Some(home.path().to_path_buf()), || {
+                discover(cwd.path(), &opts).expect("discover")
+            });
+            assert!(
+                report.skills.is_empty(),
+                "user_dir {raw:?} must not load root packages: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skips
+                    .iter()
+                    .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("collapses") }),
+                "user_dir {raw:?} must skip as collapse, not walk /: {:?}",
+                report.skips
+            );
+            let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+                watch_dirs(cwd.path(), &opts)
+            });
+            assert!(
+                dirs.is_empty(),
+                "user_dir {raw:?} must not watch a collapsed token (same as extra-path): {dirs:?}"
             );
         }
     }
