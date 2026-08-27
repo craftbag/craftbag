@@ -6,41 +6,36 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "be45e9dd52c925eda70b42c123b5fadd366363aa",
+  "ledger_sha": "cae44efd5f06e3ce9c1da0525443f79b7e16939e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi32-contrib-make-check-lock",
+    "id": "mpi32-obs-peel-parity",
     "work_source": "improve",
-    "started_at": "2026-08-27T04:23:31Z",
-    "finished_at": "2026-08-27T04:23:31Z",
-    "result": "landed",
+    "started_at": "2026-08-27T04:31:07Z",
+    "finished_at": "2026-08-27T04:31:07Z",
+    "result": "noop",
     "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
-    "pr": 250,
-    "files": [
-      "Makefile",
-      "AGENTS.md",
-      "tests/msrv.rs",
-      ".github/workflows/ci.yml"
-    ],
-    "tests": "local_gate_commands_run_in_ci",
+    "pr": null,
+    "files": [],
+    "tests": "SkillMiss peel parity already locked",
     "review": "0"
   },
   "last_sha": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
   "next_work_source": "improve",
-  "consecutive_noop": 0,
+  "consecutive_noop": 1,
   "ci_status": {
-    "main": "in_progress",
-    "ready_pr": "merged",
-    "checked_at": "2026-08-27T04:23:31Z",
+    "main": "success",
+    "ready_pr": null,
+    "checked_at": "2026-08-27T04:31:07Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 32,
-    "next_perspective": 15,
+    "cycle": 33,
+    "next_perspective": 1,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -62,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "make check plus exact local-gate fence lock."
+    "last_why_summary": "MPI 32 obs no-op: validate/load/why SkillMiss peel already shared."
   },
   "budgets": {
     "max_cycles": null,
