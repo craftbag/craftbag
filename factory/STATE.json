@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "5328735202ec4ac7a85e6c73874b1f32f000af45",
+  "ledger_sha": "fe5169570d1d3fe8b2fa8c7f3c59d7dc4625ca06",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
-  "expand_cursor": 4,
-  "expand_noop_streak": 1,
+  "expand_cursor": 5,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi38-obs-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-27T19:01:14Z",
-    "finished_at": "2026-08-27T19:01:14Z",
-    "result": "noop",
+    "id": "expand-cursor-4-skills-grok",
+    "work_source": "expand",
+    "started_at": "2026-08-27T19:05:10Z",
+    "finished_at": "2026-08-27T19:05:10Z",
+    "result": "proved",
     "head": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
     "pr": null,
     "files": [],
-    "tests": "n/a (read-only)",
+    "tests": "craftbag why --path ~/skills/grok/skills -> 351 loaded, 0 skips",
     "review": "0"
   },
   "last_sha": "c0ac5d7adbf81739747ec95d679b87f9a7232950",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -56,9 +56,10 @@
       "tests/corpus/incumbent/cursor-user (HOME + --vendor cursor)",
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)",
-      "tests/corpus/incumbent/bline-project (cwd + --vendor bline)"
+      "tests/corpus/incumbent/bline-project (cwd + --vendor bline)",
+      "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)"
     ],
-    "last_why_summary": "why names project-bline on bline-project + --vendor bline"
+    "last_why_summary": "why --path ~/skills/grok/skills loaded 351, 0 skips; named pr-gate"
   },
   "budgets": {
     "max_cycles": null,
