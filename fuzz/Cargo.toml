@@ -59,3 +59,10 @@ path = "fuzz_targets/sanitize_error_token.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "leftover_path"
+path = "fuzz_targets/leftover_path.rs"
+test = false
+doc = false
+bench = false
