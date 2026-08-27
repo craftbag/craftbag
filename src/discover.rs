@@ -749,7 +749,10 @@ fn load_extra_path(
     }
     let handle_skills = extra_skills_subdir_is_collection(&skills_subdir, &expanded, skips)
         && !extra_skills_named
-        && (dir_has_child_skill_packages(&skills_subdir) || leftover_skills_md.is_some());
+        && (dir_has_child_skill_packages(&skills_subdir)
+            || leftover_skills_md
+                .as_ref()
+                .is_some_and(leftover_extra_skills_md_is_collection_entry));
     let skip_leftover = leftover_root.as_ref().and_then(|(p, name, err)| {
         if handle_skills || !skill_md_is_dir(p) {
             skip_loose_extra_path_root_skill_md(
@@ -847,11 +850,13 @@ fn extra_should_watch_skills_subdir(dir: &Path, ascii_names: bool) -> bool {
         .map(|name| skills_subdir.join(name))
         .find(|p| skill_md_inode_exists(p));
     if let Some(skill_file) = skills_md.as_ref() {
-        if extra_skills_md_is_named_package(&classify_extra_path_md(
-            &skills_subdir,
-            skill_file,
-            ascii_names,
-        )) {
+        let classified = classify_extra_path_md(&skills_subdir, skill_file, ascii_names);
+        if extra_skills_md_is_named_package(&classified) {
+            return false;
+        }
+        if !dir_has_child_skill_packages(&skills_subdir)
+            && !leftover_extra_skills_md_is_collection_entry(&classified)
+        {
             return false;
         }
     } else if !dir_has_child_skill_packages(&skills_subdir) {
@@ -923,6 +928,16 @@ fn extra_skills_md_is_named_package(classified: &ExtraPathMd) -> bool {
     matches!(
         classified,
         ExtraPathMd::Parsed(_) | ExtraPathMd::ParseFailed { .. }
+    )
+}
+
+/// leftover extra/skills/SKILL.md that is exclusive-scan collection entries.
+/// Unreadable extra/skills/SKILL.md (FIFO) is not entries; extra/wanted
+/// must still load.
+fn leftover_extra_skills_md_is_collection_entry(classified: &ExtraPathMd) -> bool {
+    matches!(
+        classified,
+        ExtraPathMd::Collection { .. } | ExtraPathMd::Package(_)
     )
 }
 
@@ -3081,6 +3096,62 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &extra.path().join("skills")),
             "named extra/skills is not a discover walk: {dirs:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extra_path_skills_fifo_skill_md_does_not_hide_sibling() {
+        // extra/skills/SKILL.md FIFO is not exclusive-scan entries.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        let fifo = extra.path().join("skills").join("SKILL.md");
+        fs::create_dir_all(fifo.parent().expect("parent")).expect("mkdir");
+        mkfifo(&fifo);
+        write_skill(&extra.path().join("wanted"), "wanted", "from-sibling");
+        let report = discover_extra_path_with_timeout(
+            extra.path().to_path_buf(),
+            &fifo,
+            "discover must not block on extra/skills/SKILL.md FIFO",
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "FIFO extra/skills/SKILL.md must not hide leftover sibling: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skips.iter().any(|s| {
+                s.kind == SkipKind::Unreadable
+                    && s.path.ends_with("SKILL.md")
+                    && s.detail.contains("regular file")
+            }),
+            "FIFO extra/skills/SKILL.md must stay unreadable: {:?}",
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "must watch extra-path root: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "FIFO extra/skills/SKILL.md is not a discover walk: {dirs:?}"
         );
     }
 
