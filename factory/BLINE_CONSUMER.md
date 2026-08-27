@@ -33,10 +33,13 @@ CLI `validate` accepts a SKILL.md file or a package directory (joins
 `SKILL.md` / `skill.md`, same as extra-path). A collection root with
 no package file is unreadable (`directory is not a skill package`),
 not a child walk. `validate --json` uses the same peel on a failed
-path. `error_kind` is the skip code (`parse_error`, `unreadable`,
-`name_directory_mismatch`). Success prints the `ValidationReport`
-(no `error_kind`). Call `ValidationReport::miss`. Echoed keys and
-names go through `sanitize_error_token` so stderr stays one line.
+path. A refused validate path (whitespace collapse or line separator)
+peels as `unreadable` with a detail that names `validate` /
+`skills_validate`. `error_kind` is the skip code (`parse_error`,
+`unreadable`, `name_directory_mismatch`). Success prints the
+`ValidationReport` (no `error_kind`). Call `ValidationReport::miss`.
+Echoed keys and names go through `sanitize_error_token` so stderr
+stays one line.
 MCP `skills_validate` is the same path plus `strict` (omitted is
 false). Success `content[0].text` is that `ValidationReport`. A miss
 sets `isError` and peels the same `SkillMiss` next to it.

@@ -1585,6 +1585,7 @@ fn path_has_line_separator(p: &Path) -> bool {
 enum HostPathField {
     ExtraPath,
     UserDir,
+    Validate,
 }
 
 impl HostPathField {
@@ -1592,6 +1593,9 @@ impl HostPathField {
         match self {
             Self::ExtraPath => "--path / paths token collapses after whitespace trim",
             Self::UserDir => "--user-dir / user_dir token collapses after whitespace trim",
+            Self::Validate => {
+                "validate / skills_validate path token collapses after whitespace trim"
+            }
         }
     }
 
@@ -1599,6 +1603,7 @@ impl HostPathField {
         match self {
             Self::ExtraPath => "--path / paths component contains a line separator",
             Self::UserDir => "--user-dir / user_dir component contains a line separator",
+            Self::Validate => "validate / skills_validate path component contains a line separator",
         }
     }
 }
@@ -2055,20 +2060,20 @@ fn is_skill_md_filename(path: &Path) -> bool {
 /// into `/` / `/..` and join `/SKILL.md`.
 fn validate_path_hostile_token(path: &Path) -> Option<&'static str> {
     if path.to_str().is_some_and(str_has_line_separator) || path_has_line_separator(path) {
-        return Some("path component contains a line separator");
+        return Some(HostPathField::Validate.line_sep_detail());
     }
     if path
         .to_str()
         .is_some_and(host_token_collapses_after_whitespace)
     {
-        return Some("path token collapses after whitespace trim");
+        return Some(HostPathField::Validate.collapse_detail());
     }
     let padded = path.components().any(|c| match c {
         Component::Normal(s) => s.to_str().is_some_and(component_is_whitespace_padded_dot),
         _ => false,
     });
     if padded {
-        return Some("path token collapses after whitespace trim");
+        return Some(HostPathField::Validate.collapse_detail());
     }
     None
 }
@@ -6456,6 +6461,11 @@ mod tests {
             );
         }
         assert!(
+            skip.detail.contains("validate") && skip.detail.contains("skills_validate"),
+            "detail must name validate / skills_validate for {raw:?}: {}",
+            skip.detail
+        );
+        assert!(
             skip.detail.contains("line separator") || skip.detail.contains("collapses"),
             "detail must name the refuse for {raw:?}: {}",
             skip.detail
@@ -6501,6 +6511,43 @@ mod tests {
         ] {
             assert_validate_token_does_not_retarget_root(raw);
         }
+    }
+
+    #[test]
+    fn validate_collapse_refuse_names_flag() {
+        // Sibling of collapse_refuse_names_flag_and_peels_named_miss.
+        // Discover skip details name --path / paths or --user-dir /
+        // user_dir. Validate must name validate / skills_validate so a
+        // host does not scrape a generic "path token" string.
+        let collapse = validate_path(std::path::Path::new(" /.."));
+        assert!(
+            !collapse.ok,
+            "collapse token must not validate: {collapse:?}"
+        );
+        let skip = collapse.skip.as_ref().expect("collapse skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        assert!(
+            skip.detail.contains("validate") && skip.detail.contains("skills_validate"),
+            "validate collapse must name validate / skills_validate: {}",
+            skip.detail
+        );
+        let miss = collapse.miss().expect("collapse peel");
+        assert_eq!(miss.error_kind, "unreadable", "miss={miss:?}");
+        assert!(
+            miss.error.contains("validate") && miss.error.contains("skills_validate"),
+            "validate peel must name validate / skills_validate: {}",
+            miss.error
+        );
+
+        let line = validate_path(std::path::Path::new("/..\n"));
+        assert!(!line.ok, "line-separator token must not validate: {line:?}");
+        let skip = line.skip.as_ref().expect("line skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        assert!(
+            skip.detail.contains("validate") && skip.detail.contains("skills_validate"),
+            "validate line-separator must name validate / skills_validate: {}",
+            skip.detail
+        );
     }
 
     #[cfg(unix)]

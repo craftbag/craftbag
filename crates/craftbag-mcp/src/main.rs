@@ -935,6 +935,10 @@ mod tests {
                     );
                 }
                 assert!(
+                    text.contains("validate") && text.contains("skills_validate"),
+                    "MCP must name validate / skills_validate: {text}"
+                );
+                assert!(
                     text.contains("line separator") || text.contains("collapses"),
                     "MCP must name the refuse like extra-path: {text}"
                 );
@@ -960,6 +964,10 @@ mod tests {
                     );
                 }
                 let text = call_text(&resp);
+                assert!(
+                    text.contains("validate") && text.contains("skills_validate"),
+                    "MCP must name validate / skills_validate: {text}"
+                );
                 assert!(
                     text.contains("collapses") || text.contains("line separator"),
                     "MCP must name the refuse like extra-path: {text}"
