@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "293caf07178f15406fe4cd4466bfa77d6b0bcd86",
+  "ledger_sha": "d582a1e1f938ba656d9ef796cdd115621ebd0ee4",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 5,
-  "expand_noop_streak": 2,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi41-perf-stall",
-    "work_source": "improve",
-    "started_at": "2026-08-27T20:56:59Z",
-    "finished_at": "2026-08-27T20:56:59Z",
-    "result": "noop",
+    "id": "prove-name-mismatch",
+    "work_source": "prove",
+    "started_at": "2026-08-27T20:58:42Z",
+    "finished_at": "2026-08-27T20:58:42Z",
+    "result": "proved",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "none",
+    "tests": "why --path name-mismatch -> name_directory_mismatch",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -60,9 +60,10 @@
       "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)",
       "tests/corpus/root-file (--path, no implicit roots)",
       "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)",
-      "tests/corpus/leftover/skills-named-package (--path, no implicit roots)"
+      "tests/corpus/leftover/skills-named-package (--path, no implicit roots)",
+      "tests/corpus/agentskills/name-mismatch (--path, no implicit roots)"
     ],
-    "last_why_summary": "why leftover skills-named-package loads wanted+skills; evil unknown"
+    "last_why_summary": "why --path name-mismatch skip name_directory_mismatch good-name vs wrong-dir"
   },
   "budgets": {
     "max_cycles": null,
