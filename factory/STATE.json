@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a2e43fc86af373434d33033ac292dffd52bd92c0",
+  "ledger_sha": "75f61ab616846018cbb6ed2144402607e8b24f33",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 2,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-cursor-1-prop-still-none",
-    "work_source": "expand",
-    "started_at": "2026-08-27T20:38:24Z",
-    "finished_at": "2026-08-27T20:38:24Z",
-    "result": "noop",
+    "id": "prove-leftover-skills-named-package",
+    "work_source": "prove",
+    "started_at": "2026-08-27T20:40:54Z",
+    "finished_at": "2026-08-27T20:40:54Z",
+    "result": "proved",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "none",
+    "tests": "craftbag why --path leftover/skills-named-package -> wanted+skills",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -59,9 +59,10 @@
       "tests/corpus/incumbent/bline-project (cwd + --vendor bline)",
       "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)",
       "tests/corpus/root-file (--path, no implicit roots)",
-      "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)"
+      "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)",
+      "tests/corpus/leftover/skills-named-package (--path, no implicit roots)"
     ],
-    "last_why_summary": "why --path leftover/empty-nested-skills names wanted"
+    "last_why_summary": "why leftover skills-named-package loads wanted+skills; evil unknown"
   },
   "budgets": {
     "max_cycles": null,
