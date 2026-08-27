@@ -6,41 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "fadae04fc6e76ee18418506c7b211671832bf7a9",
+  "ledger_sha": "ceccf69cb7adc9a8b8da6127823381d78c059fd5",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-user-ascii-names-detail",
+    "id": "mpi33-maint-deny-allow",
     "work_source": "improve",
-    "started_at": "2026-08-27T04:58:20Z",
-    "finished_at": "2026-08-27T04:58:20Z",
+    "started_at": "2026-08-27T05:07:56Z",
+    "finished_at": "2026-08-27T05:07:56Z",
     "result": "landed",
-    "head": "93fb68f45d98bb8425d5be876c99a4cde61ec3d9",
-    "pr": 252,
+    "head": "b8f66ab414df8a7c54aa4422a63867ee12999a70",
+    "pr": 253,
     "files": [
-      "src/discover.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/src/main.rs",
-      "factory/BLINE_CONSUMER.md"
+      "deny.toml",
+      "tests/ci_hygiene.rs"
     ],
-    "tests": "load_unicode_name_skips_with_ascii_names",
+    "tests": "deny_toml_allow_list_matches_used_licenses",
     "review": "0"
   },
-  "last_sha": "93fb68f45d98bb8425d5be876c99a4cde61ec3d9",
+  "last_sha": "b8f66ab414df8a7c54aa4422a63867ee12999a70",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T04:58:20Z",
+    "checked_at": "2026-08-27T05:07:56Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 5,
+    "next_perspective": 6,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -62,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "ascii_names skip names the flag, not invalid YAML."
+    "last_why_summary": "deny.toml allow list locked to used licenses."
   },
   "budgets": {
     "max_cycles": null,
