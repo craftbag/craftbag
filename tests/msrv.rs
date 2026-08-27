@@ -196,13 +196,13 @@ fn rust_cache_step(job_body: &str) -> String {
     out
 }
 
-/// rust-cache on lint/test/windows/macos must save only on main.
+/// rust-cache on lint/test/fuzz/windows/macos must save only on main.
 /// PR jobs still restore. Factory PR cache writes evict the main restore.
 #[test]
 fn rust_cache_save_if_main_only() {
     let ci = repo_file(".github/workflows/ci.yml");
     let save_if = "save-if: ${{ github.ref == 'refs/heads/main' }}";
-    for job in ["lint", "test", "test-windows", "test-macos"] {
+    for job in ["lint", "test", "fuzz-smoke", "test-windows", "test-macos"] {
         let body = ci_job_body(&ci, job);
         let step = rust_cache_step(&body);
         assert!(
