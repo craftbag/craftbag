@@ -222,6 +222,23 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     out
 }
 
+/// One leftover-safe watch root per line for CLI `list --watch-dirs`
+/// and MCP `skills_list format=watch`.
+///
+/// Path goes through [`crate::sanitize_error_token`] so a leftover
+/// implicit cwd-to-git root cannot split the line (U+2028) or leak an
+/// em dash. Extra-path refuse already omits a line-separator token;
+/// leftover implicit paths do not. [`watch_dirs`] PathBufs stay raw
+/// for notify.
+pub fn format_watch_dirs(dirs: &[PathBuf]) -> String {
+    let mut out = String::new();
+    for dir in dirs {
+        out.push_str(&crate::sanitize_error_token(&dir.display().to_string()));
+        out.push('\n');
+    }
+    out
+}
+
 fn push_watch_dir(out: &mut Vec<PathBuf>, p: PathBuf) {
     if p.is_dir() {
         push_watch_unique(out, p);

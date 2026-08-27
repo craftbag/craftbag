@@ -28,7 +28,9 @@
 //! for CLI list stderr, CLI why stdout, and MCP catalog/xml text.
 //! [`format_list_tsv`] is default list TSV. [`format_why_text`] is CLI
 //! why text and MCP `skills_why` format=text (loaded rows, skip TSV,
-//! activation). Do not inline those rows on a new text surface.
+//! activation). [`format_watch_dirs`] is CLI `list --watch-dirs` and
+//! MCP `skills_list format=watch`. Do not inline those rows on a new
+//! text surface.
 
 mod activate;
 mod discover;
@@ -47,9 +49,9 @@ pub use activate::{
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
-    discover, find_skill_by_name, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
-    validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-    with_home_override,
+    discover, find_skill_by_name, format_watch_dirs, unknown_or_skipped_skill,
+    unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+    walk_cwd_to_git_root, watch_dirs, with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
 pub use parse::{

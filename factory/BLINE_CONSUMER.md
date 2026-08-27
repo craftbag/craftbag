@@ -142,9 +142,11 @@ Omitted fields add no line. Description, When to use, Triggers, License, Compati
 Metadata, Allowed tools, Argument hint, User arguments, and Activate hint fold
 Unicode whitespace to spaces so each stays one envelope
 line. Leftover implicit package paths in the load envelope (`Skill
-package root` and `scripts/` / `references/` / `assets/` dir listings)
-and list XML `<location>` go through `sanitize_error_token` like leftover
-TSV (`evil?root`, em dash to ASCII). File names still fold Unicode
+package root` and `scripts/` / `references/` / `assets/` dir listings),
+list XML `<location>`, and CLI `list --watch-dirs` / MCP
+`skills_list format=watch` (`format_watch_dirs`) go through
+`sanitize_error_token` like leftover TSV (`evil?root`, em dash to ASCII).
+`watch_dirs` PathBufs stay raw for notify. File names still fold Unicode
 whitespace so a newline cannot inject a header field. The skill body after `---` keeps
 its newlines. Catalog markdown is one list item per skill:
 newlines in a literal `|` or folded `>` description or
@@ -197,7 +199,8 @@ is empty. Present `null` is a type error. `watch_dirs` omits the same prefixes
 (hosts must not notify-watch a tree discover will not load).
 
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
-same list (one path per line) without loading SKILL.md. An extra-path
+same list (one path per line, leftover implicit roots sanitized like
+leftover TSV) without loading SKILL.md. An extra-path
 that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
 Project, home, vendor, and `user_dir` roots are listed only when they
 are directories. A FIFO, socket, device, or regular file at
