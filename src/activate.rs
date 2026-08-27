@@ -208,26 +208,6 @@ pub fn rank_skills_for_catalog<'a>(skills: &'a [Skill], context: &str) -> Vec<&'
     ranked
 }
 
-/// Cap a skill body to roughly `token_budget` tokens (`chars ≈ tokens * 4`).
-pub fn truncate_skill_body_for_budget(content: &str, token_budget: usize) -> String {
-    if token_budget == 0 {
-        return String::new();
-    }
-    let max_chars = token_budget.saturating_mul(4);
-    if content.len() <= max_chars {
-        return content.to_owned();
-    }
-    let mut cut = max_chars.saturating_sub(80);
-    while cut > 0 && !content.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    let mut out = content[..cut].to_owned();
-    out.push_str(
-        "\n\n…(skill body truncated for small context; use the host activate command for the full text)\n",
-    );
-    out
-}
-
 /// Build a cheap catalog fragment: name + description, plus
 /// `when_to_use` when the author set it.
 ///
@@ -715,8 +695,7 @@ mod tests {
     use super::{
         DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
         format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
-        parse_list_format, progressive_budgets, trigger_matches, truncate_skill_body_for_budget,
-        unknown_list_format,
+        parse_list_format, progressive_budgets, trigger_matches, unknown_list_format,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -1347,15 +1326,6 @@ mod tests {
             "leftover location must sanitize NUL like TSV, not drop it: {xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
-    }
-
-    #[test]
-    fn truncate_skill_body_for_budget_cuts_and_stays_host_neutral() {
-        let body = "word ".repeat(200);
-        let out = truncate_skill_body_for_budget(&body, 10);
-        assert!(out.len() < body.len());
-        assert!(out.contains("host activate command"));
-        assert!(!out.contains("/skill"));
     }
 
     #[test]
