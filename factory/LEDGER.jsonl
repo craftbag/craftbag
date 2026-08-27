@@ -451,3 +451,4 @@
 {"ts": "2026-08-27T04:58:20Z", "job_id": "mpi33-user-ascii-names-detail", "work_source": "improve", "result": "landed", "head": "93fb68f45d98bb8425d5be876c99a4cde61ec3d9", "pr": 252, "tests": "ascii_names skip detail", "noop": false}
 {"ts": "2026-08-27T05:07:56Z", "job_id": "mpi33-maint-deny-allow", "work_source": "improve", "result": "landed", "head": "b8f66ab414df8a7c54aa4422a63867ee12999a70", "pr": 253, "tests": "deny allow list", "noop": false}
 {"ts": "2026-08-27T05:14:51Z", "job_id": "mpi33-ops-ci-parity", "work_source": "improve", "result": "noop", "head": "b8f66ab414df8a7c54aa4422a63867ee12999a70", "pr": null, "tests": "zero git diff", "noop": true}
+{"ts": "2026-08-27T05:31:43Z", "job_id": "mpi33-sec-ignore-ws-collapse", "work_source": "improve", "result": "landed", "head": "e598b29bf99c2c68f9bac7f5a2aa24a255be3d58", "pr": 254, "tests": "whitespace collapse refuse", "noop": false}
