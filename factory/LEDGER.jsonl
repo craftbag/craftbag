@@ -586,3 +586,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:17:13Z","job_id":"improve-mpi42-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; main CI green Win/macOS"}
 {"ts":"2026-08-27T21:20:11Z","job_id":"improve-mpi42-sec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Security REVIEW 0"}
 {"ts":"2026-08-27T21:21:24Z","job_id":"improve-mpi42-pm-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"PM steal 1-4 live; expand4 prove agentskills collection"}
+{"ts":"2026-08-27T21:21:43Z","job_id":"expand4-prove-agentskills-collection","work_source":"expand","result":"ok","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"collection loads package-full+minimal-valid; back to Spec"}

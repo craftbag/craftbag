@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "5a747a35ff0e74f6a9cc193d3d0db3b909d2b9a6",
+  "ledger_sha": "d86246a0aa0b3ac168180bc1192aaa353e3d68d4",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "expand_cursor": 4,
-  "expand_noop_streak": 2,
+  "expand_cursor": 5,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi42-pm-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-27T21:21:24Z",
-    "finished_at": "2026-08-27T21:21:24Z",
-    "result": "noop",
+    "id": "expand4-prove-agentskills-collection",
+    "work_source": "expand",
+    "started_at": "2026-08-27T21:21:43Z",
+    "finished_at": "2026-08-27T21:21:43Z",
+    "result": "ok",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "steal 1-4 live; item 5 banned; analysis 3d old",
+    "tests": "why --no-implicit-roots --path tests/corpus/agentskills loads package-full and minimal-valid",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -62,9 +62,10 @@
       "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)",
       "tests/corpus/leftover/skills-named-package (--path, no implicit roots)",
       "tests/corpus/agentskills/name-mismatch (--path, no implicit roots)",
-      "tests/corpus/agentskills/invalid-name (--path, no implicit roots)"
+      "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
+      "tests/corpus/agentskills (--path collection, no implicit roots)"
     ],
-    "last_why_summary": "why --path invalid-name skip parse_error Bad_Name (underscore/caps)"
+    "last_why_summary": "why --path agentskills collection loads package-full + minimal-valid"
   },
   "budgets": {
     "max_cycles": null,
