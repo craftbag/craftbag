@@ -484,3 +484,4 @@
 {"ts": "2026-08-27T09:35:06Z", "job_id": "mpi35-sec-user-dir-collapse", "work_source": "improve", "result": "landed", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": 269, "tests": "user_dir / .. skip", "noop": false}
 {"ts": "2026-08-27T09:38:46Z", "job_id": "mpi35-pm-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "steal-list live", "noop": true}
 {"ts": "2026-08-27T09:41:23Z", "job_id": "mpi35-spec-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "help unnamed both doors", "noop": true}
+{"ts": "2026-08-27T09:42:58Z", "job_id": "mpi35-perf-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "consecutive_noop=3 expand incumbent", "noop": true}
