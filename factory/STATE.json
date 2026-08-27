@@ -6,33 +6,33 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "2f4da4d28dc49ab32f1a598adb7e2c55972284a2",
+  "ledger_sha": "897f49a825900e234b137490d1c95566d437f809",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "why-newline-extra-path-cli-mcp",
+    "id": "watch-newline-extra-path-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:45:00Z",
-    "finished_at": "2026-08-27T02:50:40Z",
+    "started_at": "2026-08-27T02:51:00Z",
+    "finished_at": "2026-08-27T02:56:42Z",
     "result": "landed",
-    "head": "5941d3a78528dbc5657abc1bb429b9021b0928e0",
-    "pr": 242,
+    "head": "99fc8420bfcac726e265825a624310591a548352",
+    "pr": 243,
     "files": [
       "crates/craftbag-cli/tests/cli.rs",
       "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "why_newline_extra_path_demo_is_unknown,stdio_skills_why_newline_extra_path_demo_is_unknown",
+    "tests": "list_watch_dirs_newline_extra_path_omits_root,stdio_skills_list_watch_newline_extra_path_omits_root",
     "review": "0"
   },
-  "last_sha": "5941d3a78528dbc5657abc1bb429b9021b0928e0",
+  "last_sha": "99fc8420bfcac726e265825a624310591a548352",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T02:50:40Z",
+    "checked_at": "2026-08-27T02:56:42Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -60,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP why newline extra-path does not name demo."
+    "last_why_summary": "CLI/MCP watch newline extra-path omits the root."
   },
   "budgets": {
     "max_cycles": null,
