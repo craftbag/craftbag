@@ -870,7 +870,10 @@ fn load_extra_path(
     // collection; fall back to extra/ so sibling packages still load.
     // An empty extra/skills/ is the leftover two-dir analog: Bline
     // discover_skills still loads extra/wanted. Scan extra/skills
-    // when that tree has child packages or leftover extra/skills/SKILL.md.
+    // when that tree has child packages or leftover extra/skills/SKILL.md
+    // that is a Collection. leftover extra/skills/SKILL.md that stays
+    // Package (name: loose) is not exclusive-scan entries: extra/wanted
+    // must still load (same as FIFO leftover extra/skills/SKILL.md).
     // extra/skills/SKILL.md named skills is a sibling package: classify
     // once and reuse the parse. Reuse leftover extra/SKILL.md: extra/skills
     // never sees extra/SKILL.md, and an extra/ sibling walk must not open
@@ -1084,13 +1087,10 @@ fn extra_skills_md_is_named_package(classified: &ExtraPathMd) -> bool {
 }
 
 /// leftover extra/skills/SKILL.md that is exclusive-scan collection entries.
-/// Unreadable extra/skills/SKILL.md (FIFO) is not entries; extra/wanted
-/// must still load.
+/// Unreadable extra/skills/SKILL.md (FIFO) and leftover Package
+/// (name: loose) are not entries; extra/wanted must still load.
 fn leftover_extra_skills_md_is_collection_entry(classified: &ExtraPathMd) -> bool {
-    matches!(
-        classified,
-        ExtraPathMd::Collection { .. } | ExtraPathMd::Package(_)
-    )
+    matches!(classified, ExtraPathMd::Collection { .. })
 }
 
 /// Record leftover extra/skills/SKILL.md from classify so the extra/skills
@@ -3540,6 +3540,60 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &extra.path().join("skills")),
             "named extra/skills is not a discover walk: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn extra_path_skills_leftover_skill_md_does_not_hide_sibling() {
+        // extra/skills/SKILL.md named loose is leftover, not exclusive-scan
+        // collection entries. extra/wanted must still load (same as FIFO
+        // leftover extra/skills/SKILL.md and empty extra/skills/).
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("skills"), "loose", "LEFTOVER");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-sibling");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["wanted"],
+            "leftover extra/skills/SKILL.md must not hide leftover sibling: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "loose").is_none(),
+            "leftover extra/skills/SKILL.md must not load as a package: {:?}",
+            report.skills
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "must watch extra-path root: {dirs:?}"
+        );
+        assert!(
+            !watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "leftover extra/skills/SKILL.md is not a discover walk: {dirs:?}"
         );
     }
 
