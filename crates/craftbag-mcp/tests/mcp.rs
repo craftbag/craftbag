@@ -357,6 +357,80 @@ fn stdio_skills_list_leftover_skills_fifo_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn stdio_skills_list_newline_extra_path_does_not_name_demo() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the MCP list door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    std::fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    std::fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let names: Vec<&str> = v["skills"]
+        .as_array()
+        .expect("skills")
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert!(
+        !names.iter().any(|n| *n == "demo"),
+        "must not name demo under newline extra-path: {text}"
+    );
+    assert!(
+        !text.contains("SECRET_BODY"),
+        "body must not appear in list: {text}"
+    );
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().any(|s| {
+            s["kind"] == "unreadable"
+                && s["detail"].as_str().is_some_and(|d| {
+                    d.contains("path") || d.contains("line") || d.contains("control")
+                })
+        }),
+        "newline extra-path must be unreadable: {text}"
+    );
+    for s in skips {
+        if let Some(p) = s["path"].as_str() {
+            assert!(
+                !p.contains('\n') && !p.contains('\u{2028}') && !p.contains('\u{2029}'),
+                "skip path must not echo raw line separators: {p:?}"
+            );
+        }
+        if let Some(d) = s["detail"].as_str() {
+            assert!(
+                !d.contains('\n') && !d.contains('\u{2028}') && !d.contains('\u{2029}'),
+                "skip detail must not echo raw line separators: {d:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
