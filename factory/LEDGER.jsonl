@@ -632,3 +632,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:57:08Z","job_id":"expand1-prop-gap-noop-r3","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"no leftover-path souvenir; back to NC"}
 {"ts":"2026-08-27T21:57:43Z","job_id":"improve-mpi44-nc-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"NC REVIEW 0"}
 {"ts":"2026-08-27T21:58:19Z","job_id":"improve-mpi44-obs-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"cycle 44 done; odd 45 starts QA"}
+{"ts":"2026-08-27T21:59:24Z","job_id":"improve-mpi45-qa-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"QA REVIEW 0; odd skip TA -> Developer"}
