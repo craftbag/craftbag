@@ -1951,6 +1951,88 @@ fn load_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn load_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the CLI load door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus().join("leftover/skills-named-package");
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("wanted")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: wanted]"),
+        "named extra/skills must not hide leftover sibling wanted: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load leftover sibling body: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("skills")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: skills]"),
+        "named extra/skills package must load: {stdout}"
+    );
+    assert!(
+        stdout.contains("PACKAGE_BODY"),
+        "must load named extra/skills body: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("evil")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "nested evil must not load: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
 fn load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
     let extra = tempfile::tempdir().expect("extra");
     fs::write(
