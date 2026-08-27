@@ -50,6 +50,7 @@ jobs:
               - 'deny.toml'
               - '.github/workflows/**'
               - 'factory/scripts/deny-check.sh'
+              - 'Makefile'
               - 'AGENTS.md'
               - 'README.md'
               - 'factory/BLINE_CONSUMER.md'
