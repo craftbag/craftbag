@@ -442,3 +442,4 @@
 {"ts": "2026-08-27T03:16:31Z", "job_id": "mpi32-spec-why-json-success-keys", "work_source": "improve", "result": "landed", "head": "013e6a64180877542e78dccd108887e687c3b9c6", "pr": 245, "tests": "why json success keys", "noop": false}
 {"ts": "2026-08-27T03:28:41Z", "job_id": "mpi32-perf-home-implicit-once", "work_source": "improve", "result": "landed", "head": "75d62cb2d97ca4deaba64fa43929136517dccf45", "pr": 246, "tests": "implicit home walk once", "noop": false}
 {"ts": "2026-08-27T03:40:05Z", "job_id": "mpi32-compat-list-why-content", "work_source": "improve", "result": "landed", "head": "5cbec70e95735191a9adf057c7b39d15c713fd43", "pr": 247, "tests": "list/why omit content", "noop": false}
+{"ts": "2026-08-27T03:51:37Z", "job_id": "mpi32-adv-user-dir-line-separator", "work_source": "improve", "result": "landed", "head": "339b2f77871ef27b92e388680abb83b6f2f56939", "pr": 248, "tests": "user_dir CR component", "noop": false}
