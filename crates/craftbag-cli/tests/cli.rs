@@ -2170,6 +2170,85 @@ fn load_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn load_leftover_skills_fifo_names_wanted() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the CLI load door. FIFO extra/skills/SKILL.md is unreadable, not
+    // exclusive-scan entries. Do not commit a FIFO in the corpus.
+    let extra = tempfile::tempdir().expect("extra");
+    let skills_dir = extra.path().join("skills");
+    fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    mkfifo(&skills_dir.join("SKILL.md"));
+    let wanted_pkg = extra.path().join("wanted");
+    fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    fs::write(
+        wanted_pkg.join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("wanted")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: wanted]"),
+        "FIFO extra/skills/SKILL.md must not hide leftover sibling wanted: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load leftover sibling body: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("skills")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "FIFO extra/skills must not load as a package: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("evil")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "nested evil must not load: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
     let extra = tempfile::tempdir().expect("extra");
