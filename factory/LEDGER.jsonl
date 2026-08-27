@@ -467,3 +467,4 @@
 {"ts": "2026-08-27T07:30:24Z", "job_id": "mpi34-maint-rust-cache-save", "work_source": "improve", "result": "landed", "head": "f1aa961a26e5794390714694fd6e570e56cbe0dc", "pr": 261, "tests": "rust-cache save-if main only", "noop": false}
 {"ts": "2026-08-27T07:37:40Z", "job_id": "mpi34-ops-noop", "work_source": "improve", "result": "noop", "head": "f1aa961a26e5794390714694fd6e570e56cbe0dc", "pr": null, "tests": "CONSTRAINT-4", "noop": true}
 {"ts": "2026-08-27T07:46:27Z", "job_id": "mpi34-sec-validate-symlink", "work_source": "improve", "result": "landed", "head": "8a2f8afb2b6bb29f6a6d69bacd1e1c5f06c11e83", "pr": 262, "tests": "validate pkg-dir SKILL.md symlink escape", "noop": false}
+{"ts": "2026-08-27T07:59:05Z", "job_id": "mpi34-pm-mcp-validate", "work_source": "improve", "result": "landed", "head": "ebe729dd0732f2638a80ab59e5aeca574b7a4fab", "pr": 263, "tests": "MCP skills_validate", "noop": false}

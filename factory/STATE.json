@@ -6,38 +6,40 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "013d5f6635b9ef2e5526bfc7af7a18b1a8004dd3",
+  "ledger_sha": "9737e9de233605a50e623f62a453aaa622830565",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi34-sec-validate-symlink",
+    "id": "mpi34-pm-mcp-validate",
     "work_source": "improve",
-    "started_at": "2026-08-27T07:46:27Z",
-    "finished_at": "2026-08-27T07:46:27Z",
+    "started_at": "2026-08-27T07:59:05Z",
+    "finished_at": "2026-08-27T07:59:05Z",
     "result": "landed",
-    "head": "8a2f8afb2b6bb29f6a6d69bacd1e1c5f06c11e83",
-    "pr": 262,
+    "head": "ebe729dd0732f2638a80ab59e5aeca574b7a4fab",
+    "pr": 263,
     "files": [
-      "src/discover.rs"
+      "crates/craftbag-mcp/src/main.rs",
+      "crates/craftbag-mcp/tests/mcp.rs",
+      "factory/BLINE_CONSUMER.md"
     ],
-    "tests": "validate_path_package_dir_skill_md_symlink_escape_is_unreadable",
+    "tests": "skills_validate_corpus_ok",
     "review": "0"
   },
-  "last_sha": "8a2f8afb2b6bb29f6a6d69bacd1e1c5f06c11e83",
+  "last_sha": "ebe729dd0732f2638a80ab59e5aeca574b7a4fab",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T07:46:27Z",
+    "checked_at": "2026-08-27T07:59:05Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 34,
-    "next_perspective": 8,
+    "next_perspective": 9,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
