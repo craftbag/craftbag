@@ -487,3 +487,4 @@
 {"ts": "2026-08-27T09:42:58Z", "job_id": "mpi35-perf-noop", "work_source": "improve", "result": "noop", "head": "9f62dd92426cd18c23da679b734e42a7fb54c60f", "pr": null, "tests": "consecutive_noop=3 expand incumbent", "noop": true}
 {"ts": "2026-08-27T09:53:29Z", "job_id": "expand-incumbent-vercel-why-load", "work_source": "expand", "result": "landed", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": 270, "tests": "vercel why/load", "noop": false}
 {"ts": "2026-08-27T09:59:38Z", "job_id": "mpi35-compat-noop", "work_source": "improve", "result": "noop", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": null, "tests": "implicit_roots still default true", "noop": true}
+{"ts": "2026-08-27T10:05:16Z", "job_id": "mpi35-adv-noop", "work_source": "improve", "result": "noop", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": null, "tests": "user_dir why/load green", "noop": true}
