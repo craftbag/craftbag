@@ -620,3 +620,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:49:27Z","job_id":"improve-mpi44-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0"}
 {"ts":"2026-08-27T21:50:20Z","job_id":"improve-mpi44-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; Win/macOS still green"}
 {"ts":"2026-08-27T21:51:08Z","job_id":"improve-mpi44-sec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Security REVIEW 0; expand5 steal-list already live"}
+{"ts":"2026-08-27T21:51:13Z","job_id":"expand5-steal-list-noop-r2","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"3 expand no-ops; prove reconfirm then PM"}
