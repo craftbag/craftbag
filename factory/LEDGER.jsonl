@@ -475,3 +475,4 @@
 {"ts": "2026-08-27T08:47:26Z", "job_id": "mpi34-arch-collapse-padded-dot", "work_source": "improve", "result": "landed", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": 266, "tests": "padded / .. refuse", "noop": false}
 {"ts": "2026-08-27T08:50:13Z", "job_id": "mpi34-contrib-noop", "work_source": "improve", "result": "noop", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": null, "tests": "gate + BLINE current", "noop": true}
 {"ts": "2026-08-27T08:52:11Z", "job_id": "mpi34-obs-noop", "work_source": "improve", "result": "noop", "head": "76f1f7e86f3ff735070a8165a2716039109a53a2", "pr": null, "tests": "SkillMiss peel present", "noop": true}
+{"ts": "2026-08-27T09:04:28Z", "job_id": "mpi35-qa-why-load-slash-dotdot", "work_source": "improve", "result": "landed", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": 267, "tests": "why/load extra-path / ..", "noop": false}
