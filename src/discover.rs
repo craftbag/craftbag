@@ -5317,6 +5317,85 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_bline_vendor_layout_loads_project_bline() {
+        let cwd = corpus_dir().join("incumbent/bline-project");
+        let off = empty_home_discover(cwd.as_path(), &DiscoveryOptions::default());
+        assert!(
+            off.skills.iter().all(|s| s.name != "project-bline"),
+            "bline vendor is opt-in"
+        );
+        let on = empty_home_discover(
+            cwd.as_path(),
+            &DiscoveryOptions {
+                vendor_roots: vec!["bline".to_owned()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "project-bline")
+            .expect("project-bline");
+        assert_eq!(
+            skill.source,
+            SkillSource::Vendor {
+                name: "bline".to_owned()
+            }
+        );
+        let why = crate::why(&on, Some("project-bline"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why={why:?}");
+        assert_eq!(why.loaded[0].name, "project-bline");
+        assert_eq!(
+            why.loaded[0].source,
+            SkillSource::Vendor {
+                name: "bline".to_owned()
+            }
+        );
+        let want = cwd
+            .join(".bline")
+            .join("skills")
+            .join("project-bline")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the fixture SKILL.md: got={got:?} want={want:?}"
+        );
+        assert!(
+            why.skips.is_empty(),
+            "project-bline is loaded, not a skip: {:?}",
+            why.skips
+        );
+        let off_why = crate::why(&off, Some("project-bline"), None, None);
+        assert!(off_why.loaded.is_empty(), "off why={off_why:?}");
+        assert!(off_why.skips.is_empty(), "off skips={:?}", off_why.skips);
+        assert!(
+            off_why.unknown_skill_message().is_some(),
+            "why without vendor bline must treat project-bline as unknown"
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.as_path(),
+                &DiscoveryOptions {
+                    vendor_roots: vec!["bline".to_owned()],
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, &cwd.join(".bline").join("skills")),
+            "watch_dirs must list cwd/.bline/skills when vendor bline is on: {dirs:?}"
+        );
+    }
+
+    #[test]
     fn incumbent_claude_user_home_vendor_layout_loads() {
         let cwd = tempfile::tempdir().expect("cwd");
         let home = corpus_dir().join("incumbent/claude-user");
