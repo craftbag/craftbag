@@ -581,3 +581,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:12:48Z","job_id":"expand2-fuzz-smoke-noop","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"6 fuzz targets already in hosted smoke; back to MPI 42 Developer"}
 {"ts":"2026-08-27T21:13:43Z","job_id":"improve-mpi42-dev-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Developer REVIEW 0"}
 {"ts":"2026-08-27T21:15:03Z","job_id":"improve-mpi42-eu-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"End User REVIEW 0"}
+{"ts":"2026-08-27T21:16:19Z","job_id":"improve-mpi42-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0; expand incumbent"}
