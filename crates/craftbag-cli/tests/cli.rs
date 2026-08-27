@@ -3385,6 +3385,14 @@ fn load_unicode_name_skips_with_ascii_names() {
         stderr.contains("parse_error"),
         "ascii-names must skip café: {stderr}"
     );
+    assert!(
+        stderr.contains("--ascii-names"),
+        "ascii-names skip must name --ascii-names so the user can omit it: {stderr}"
+    );
+    assert!(
+        !stderr.contains("invalid YAML"),
+        "ascii-names skip must not claim invalid YAML: {stderr}"
+    );
 }
 
 #[cfg(unix)]

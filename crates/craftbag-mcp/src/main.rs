@@ -2852,6 +2852,15 @@ mod tests {
                 "ascii_names must skip café as parse_error: {listed_ascii_text}"
             );
             assert_eq!(listed_v["skips"][0]["name"], "café", "{listed_ascii_text}");
+            let skip_detail = listed_v["skips"][0]["detail"].as_str().unwrap_or("");
+            assert!(
+                skip_detail.contains("ascii_names"),
+                "ascii_names skip must name ascii_names so the host can omit it: {listed_ascii_text}"
+            );
+            assert!(
+                !skip_detail.contains("invalid YAML"),
+                "ascii_names skip must not claim invalid YAML: {listed_ascii_text}"
+            );
 
             let load_ascii = call(
                 45,

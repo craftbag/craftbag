@@ -1807,6 +1807,12 @@ fn finish_load_skill_file(
     }
 }
 
+/// Skip text when `--ascii-names` / MCP `ascii_names` rejects a valid
+/// Unicode name. Not invalid YAML; name the flag so the user can omit it.
+fn ascii_names_policy_detail() -> String {
+    "name must be lowercase alphanumeric and hyphens only (omit --ascii-names / ascii_names to allow Unicode)".to_owned()
+}
+
 fn finish_load_parsed_skill(
     skill_file: &Path,
     mut skill: Skill,
@@ -1821,10 +1827,7 @@ fn finish_load_parsed_skill(
             path: skill_file.to_path_buf(),
             name: Some(skill.name.clone()),
             kind: SkipKind::ParseError,
-            detail: ParseError::InvalidYaml(
-                "name must be lowercase alphanumeric and hyphens only".to_owned(),
-            )
-            .to_string(),
+            detail: ascii_names_policy_detail(),
             winner_path: None,
         });
         return;
@@ -4307,8 +4310,11 @@ mod tests {
                 s.kind == SkipKind::ParseError
                     && s.name.as_deref() == Some("café")
                     && s.detail.contains("lowercase alphanumeric and hyphens only")
+                    && s.detail.contains("--ascii-names")
+                    && s.detail.contains("ascii_names")
+                    && !s.detail.contains("invalid YAML")
             }),
-            "ascii_names must skip café as parse_error: {:?}",
+            "ascii_names skip must name --ascii-names / ascii_names, not claim invalid YAML: {:?}",
             off.skips
         );
         let ascii_ok = tempfile::tempdir().expect("ascii");
