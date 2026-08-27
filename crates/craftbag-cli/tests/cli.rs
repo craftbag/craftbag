@@ -851,6 +851,103 @@ fn list_watch_dirs_whitespace_extra_path_omits_root() {
 }
 
 #[test]
+fn list_whitespace_user_dir_does_not_scan_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the CLI user-dir list door. `--user-dir " /.."` and
+    // `--user-dir "/ .."` must not rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(cwd.path())
+            .arg("list")
+            .arg("--json")
+            .arg("--user-dir")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "raw={raw:?} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+        let skills = v["skills"].as_array().expect("skills");
+        assert!(
+            skills.is_empty(),
+            "user_dir {raw:?} must not load root packages: {stdout}"
+        );
+        let skips = v["skips"].as_array().expect("skips");
+        assert!(
+            skips.iter().any(|s| {
+                s["kind"] == "unreadable"
+                    && s["detail"]
+                        .as_str()
+                        .is_some_and(|d| d.contains("collapses"))
+            }),
+            "user_dir {raw:?} must skip as collapse, not walk /: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn list_watch_dirs_whitespace_user_dir_omits_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the CLI user-dir watch door. `--user-dir " /.."` and
+    // `--user-dir "/ .."` must not notify-watch `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(cwd.path())
+            .arg("list")
+            .arg("--watch-dirs")
+            .arg("--user-dir")
+            .arg(raw)
+            .arg("--no-implicit-roots")
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "raw={raw:?} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.lines().all(|l| {
+                let p = Path::new(l);
+                p != Path::new("/") && p != Path::new("/..")
+            }),
+            "watch-dirs must not list a collapsed user_dir token {raw:?}: {stdout:?}"
+        );
+        assert!(
+            stdout.trim().is_empty(),
+            "collapsed user_dir {raw:?} must not add a watch root: {stdout:?}"
+        );
+    }
+}
+
+#[test]
 fn why_whitespace_extra_path_demo_is_unknown() {
     // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
     // on the CLI why door. `--path "/ .."` must not rewrite to `/`.

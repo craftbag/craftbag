@@ -609,6 +609,108 @@ fn stdio_skills_list_watch_whitespace_extra_path_omits_root() {
 }
 
 #[test]
+fn stdio_skills_list_whitespace_user_dir_does_not_scan_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the MCP user_dir list door. user_dir: " /.." and "/ .." must not
+    // rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let resp = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_list",
+                    "arguments": {
+                        "user_dir": raw,
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(resp["result"]["isError"], false, "raw={raw:?} {resp}");
+        let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+        let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+        let skills = v["skills"].as_array().expect("skills");
+        assert!(
+            skills.is_empty(),
+            "user_dir {raw:?} must not load root packages: {text}"
+        );
+        let skips = v["skips"].as_array().expect("skips");
+        assert!(
+            skips.iter().any(|s| {
+                s["kind"] == "unreadable"
+                    && s["detail"]
+                        .as_str()
+                        .is_some_and(|d| d.contains("collapses"))
+            }),
+            "user_dir {raw:?} must skip as collapse, not walk /: {text}"
+        );
+    }
+}
+
+#[test]
+fn stdio_skills_list_watch_whitespace_user_dir_omits_root() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the MCP user_dir watch door. user_dir: " /.." and "/ .." must not
+    // notify-watch `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let resp = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 43,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_list",
+                    "arguments": {
+                        "format": "watch",
+                        "user_dir": raw,
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(resp["result"]["isError"], false, "raw={raw:?} {resp}");
+        let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+        assert!(
+            text.lines().all(|l| {
+                let p = Path::new(l);
+                p != Path::new("/") && p != Path::new("/..")
+            }),
+            "watch must not list a collapsed user_dir token {raw:?}: {text:?}"
+        );
+        assert!(
+            text.trim().is_empty(),
+            "collapsed user_dir {raw:?} must not add a watch root: {text:?}"
+        );
+    }
+}
+
+#[test]
 fn stdio_skills_why_whitespace_extra_path_demo_is_unknown() {
     // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
     // on the MCP why door. paths: [" /.."] and ["/ .."] must not rewrite to `/`.

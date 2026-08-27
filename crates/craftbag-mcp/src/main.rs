@@ -905,7 +905,7 @@ mod tests {
     #[test]
     fn skills_validate_line_separator_dotdot_is_error() {
         empty_home(|| {
-            for raw in ["/..\n", "/..\r", "/..\u{2028}"] {
+            for raw in ["/..\n", "/..\r", "/..\u{2028}", "/..\u{2029}"] {
                 let resp = call(79, "skills_validate", json!({"path": raw}));
                 assert_eq!(
                     resp["result"]["isError"],
@@ -927,7 +927,10 @@ mod tests {
                         assert_ne!(p, banned, "must not peel path={banned} for {raw:?}: {resp}");
                     }
                     assert!(
-                        !p.contains('\n') && !p.contains('\r') && !p.contains('\u{2028}'),
+                        !p.contains('\n')
+                            && !p.contains('\r')
+                            && !p.contains('\u{2028}')
+                            && !p.contains('\u{2029}'),
                         "peeled path must not echo a raw line separator: {p:?}"
                     );
                 }
