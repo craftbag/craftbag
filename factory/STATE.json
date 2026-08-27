@@ -6,26 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "5896f11cd48a6133d125cb843e20ada4bd6f61b8",
+  "ledger_sha": "ebad89e15fa4b0595ef71a8b368a6879931c0605",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 0,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi48-new-contributor-noop",
+    "id": "mpi48-observability-noop",
     "work_source": "improve",
-    "started_at": "2026-08-27T23:05:52Z",
-    "finished_at": "2026-08-27T23:05:52Z",
+    "started_at": "2026-08-27T23:06:07Z",
+    "finished_at": "2026-08-27T23:06:07Z",
     "result": "noop",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "Makefile check vs AGENTS.md vs ci.yml; rust-toolchain 1.85",
+    "tests": "SkillMiss peel vs CLI/MCP unknown, parse, unreadable, collision",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -34,8 +34,8 @@
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 48,
-    "next_perspective": 15,
+    "cycle": 49,
+    "next_perspective": 1,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
