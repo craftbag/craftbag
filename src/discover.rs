@@ -1461,11 +1461,29 @@ fn host_token_collapses_after_whitespace(raw: &str) -> bool {
     if trimmed.is_empty() {
         return false;
     }
+    // Padded `.` / `..` (including NFKC) still mean cwd. Extra-path
+    // and ignore already treat those as cwd.
+    let n = crate::parse::normalize_skill_name(trimmed);
+    let n = n.trim();
+    if n == "." || n == ".." {
+        return false;
+    }
     if trimmed != raw && Path::new(trimmed).is_absolute() {
         return true;
     }
     Path::new(raw).components().any(|c| match c {
-        Component::Normal(s) => s.to_str().is_some_and(|t| t != t.trim()),
+        Component::Normal(s) => s.to_str().is_some_and(|t| {
+            let inner = t.trim();
+            if inner.is_empty() {
+                return true;
+            }
+            let n = crate::parse::normalize_skill_name(inner);
+            let n = n.trim();
+            if n == "." || n == ".." {
+                return false;
+            }
+            t != inner
+        }),
         _ => false,
     })
 }
