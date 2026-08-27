@@ -6,39 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "52ba838907ed41369c3bc507be22d0e924c4635e",
+  "ledger_sha": "c7c25655fc6c9432da6241be93fc894fe19dc1f2",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi34-user-validate-pkg",
+    "id": "mpi34-maint-rust-cache-save",
     "work_source": "improve",
-    "started_at": "2026-08-27T07:15:59Z",
-    "finished_at": "2026-08-27T07:15:59Z",
+    "started_at": "2026-08-27T07:30:24Z",
+    "finished_at": "2026-08-27T07:30:24Z",
     "result": "landed",
-    "head": "7bb6487048fd3557c2b82a08f24f9b42f85cf203",
-    "pr": 260,
+    "head": "f1aa961a26e5794390714694fd6e570e56cbe0dc",
+    "pr": 261,
     "files": [
-      "crates/craftbag-cli/src/main.rs",
-      "src/lib.rs"
+      ".github/workflows/ci.yml",
+      "tests/msrv.rs"
     ],
-    "tests": "validate_package_dir_ok",
+    "tests": "rust_cache_save_if_main_only",
     "review": "0"
   },
-  "last_sha": "7bb6487048fd3557c2b82a08f24f9b42f85cf203",
+  "last_sha": "f1aa961a26e5794390714694fd6e570e56cbe0dc",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
-    "main": "success",
+    "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T07:15:59Z",
+    "checked_at": "2026-08-27T07:30:24Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 34,
-    "next_perspective": 5,
+    "next_perspective": 6,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",

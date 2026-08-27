@@ -464,3 +464,4 @@
 {"ts": "2026-08-27T06:49:32Z", "job_id": "mpi34-auditor-honesty", "work_source": "improve", "result": "noop", "head": "f43c096747f598118d8efa57d59d625c356c5496", "pr": null, "tests": "zero git diff", "noop": true}
 {"ts": "2026-08-27T07:00:29Z", "job_id": "mpi34-dev-mcp-miss-expect", "work_source": "improve", "result": "landed", "head": "c8e1204ce2eaed1f8db8dc4c1292d78526b63424", "pr": 259, "tests": "MCP miss peel no panic", "noop": false}
 {"ts": "2026-08-27T07:15:59Z", "job_id": "mpi34-user-validate-pkg", "work_source": "improve", "result": "landed", "head": "7bb6487048fd3557c2b82a08f24f9b42f85cf203", "pr": 260, "tests": "validate package dir joins SKILL.md", "noop": false}
+{"ts": "2026-08-27T07:30:24Z", "job_id": "mpi34-maint-rust-cache-save", "work_source": "improve", "result": "landed", "head": "f1aa961a26e5794390714694fd6e570e56cbe0dc", "pr": 261, "tests": "rust-cache save-if main only", "noop": false}
