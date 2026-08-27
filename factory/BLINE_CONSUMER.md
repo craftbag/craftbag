@@ -120,7 +120,9 @@ JSON both serialize `SkillSummary` so those keys cannot drift. A new
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
 (name + description, plus `Use when:` when set). CLI `list --catalog` and
 `list --xml` print the same `skip\tkind\tpath\tdetail` stderr rows as
-default list. Prompt stdout stays skip-free. `list --json` keeps skips
+default list. Prompt stdout stays skip-free. MCP `skills_list`
+`format=catalog` / `format=xml` append those same skip rows after the
+prompt fragment (stdio has no stderr). `list --json` keeps skips
 in the object. CLI `load` /
 MCP `skills_load` is the text envelope, not that JSON object. CLI
 `load --help` and MCP `skills_load` name `argument-hint`, `when-to-use`,

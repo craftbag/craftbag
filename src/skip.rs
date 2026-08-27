@@ -1,6 +1,6 @@
 //! Skip-kind taxonomy. Frozen after this PR.
 
-use std::fmt;
+use std::fmt::{self, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -164,6 +164,22 @@ pub(crate) fn skill_md_package_name(path: &Path) -> Option<&str> {
 pub struct DiscoveryReport {
     pub skills: Vec<Skill>,
     pub skips: Vec<SkillSkip>,
+}
+
+/// TSV skip rows (`skip\tkind\tpath\tdetail`) for CLI list stderr and
+/// MCP catalog/xml text (stdio has no stderr).
+pub fn format_skip_tsv(skips: &[SkillSkip]) -> String {
+    let mut out = String::new();
+    for skip in skips {
+        let _ = writeln!(
+            out,
+            "skip\t{}\t{}\t{}",
+            skip.kind.as_str(),
+            skip.path.display(),
+            skip.detail
+        );
+    }
+    out
 }
 
 #[cfg(test)]

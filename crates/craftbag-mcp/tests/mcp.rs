@@ -175,6 +175,50 @@ fn stdio_skills_list_corpus() {
 }
 
 #[test]
+fn stdio_skills_list_catalog_and_xml_emit_skips() {
+    // Sibling of list_catalog_and_xml_emit_skips_on_stderr. MCP stdio
+    // has no stderr; catalog/xml used to return an empty prompt fragment
+    // with no skip row, so a leftover-only tree looked like success.
+    let tmp = tempfile::tempdir().expect("tmp");
+    let skills = tmp.path().join(".agents").join("skills");
+    std::fs::create_dir_all(&skills).expect("mkdir");
+    std::fs::write(
+        skills.join("SKILL.md"),
+        "---\nname: loose\ndescription: leftover root file\n---\nbody\n",
+    )
+    .expect("write");
+    let home = tempfile::tempdir().expect("home");
+    for format in ["catalog", "xml"] {
+        let resp = rpc_in(
+            tmp.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 36,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_list",
+                    "arguments": {"format": format}
+                }
+            }),
+        );
+        assert_eq!(
+            resp["result"]["isError"], false,
+            "{format} leftover list is not a tool error: {resp}"
+        );
+        let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+        assert!(
+            !text.contains("- **loose**") && !text.contains("<name>loose</name>"),
+            "{format} prompt fragment must not list the leftover as a skill: {text}"
+        );
+        assert!(
+            text.contains("skip\troot_file"),
+            "{format} must emit leftover skip TSV like CLI catalog stderr: {text:?}"
+        );
+    }
+}
+
+#[test]
 fn stdio_skills_list_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the MCP door. Default vendor stays off. Empty extra/skills
