@@ -6,28 +6,27 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "9737e9de233605a50e623f62a453aaa622830565",
+  "ledger_sha": "05015c381cff52d7b1f7b715431188197d3430c7",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi34-pm-mcp-validate",
+    "id": "mpi34-spec-validate-help",
     "work_source": "improve",
-    "started_at": "2026-08-27T07:59:05Z",
-    "finished_at": "2026-08-27T07:59:05Z",
+    "started_at": "2026-08-27T08:09:29Z",
+    "finished_at": "2026-08-27T08:09:29Z",
     "result": "landed",
-    "head": "ebe729dd0732f2638a80ab59e5aeca574b7a4fab",
-    "pr": 263,
+    "head": "9799c4e199a21f9019dcce930706ce63e6807456",
+    "pr": 264,
     "files": [
-      "crates/craftbag-mcp/src/main.rs",
-      "crates/craftbag-mcp/tests/mcp.rs",
-      "factory/BLINE_CONSUMER.md"
+      "crates/craftbag-cli/src/main.rs",
+      "src/lib.rs"
     ],
-    "tests": "skills_validate_corpus_ok",
+    "tests": "validate_help names ValidationReport",
     "review": "0"
   },
-  "last_sha": "ebe729dd0732f2638a80ab59e5aeca574b7a4fab",
+  "last_sha": "9799c4e199a21f9019dcce930706ce63e6807456",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
@@ -39,7 +38,7 @@
   },
   "mpi": {
     "cycle": 34,
-    "next_perspective": 9,
+    "next_perspective": 10,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
