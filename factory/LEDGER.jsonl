@@ -471,3 +471,4 @@
 {"ts": "2026-08-27T08:09:29Z", "job_id": "mpi34-spec-validate-help", "work_source": "improve", "result": "landed", "head": "9799c4e199a21f9019dcce930706ce63e6807456", "pr": 264, "tests": "validate --help ValidationReport", "noop": false}
 {"ts": "2026-08-27T08:13:23Z", "job_id": "mpi34-perf-noop", "work_source": "improve", "result": "noop", "head": "9799c4e199a21f9019dcce930706ce63e6807456", "pr": null, "tests": "CONSTRAINT-4 leftover analog green", "noop": true}
 {"ts": "2026-08-27T08:18:56Z", "job_id": "mpi34-compat-noop", "work_source": "improve", "result": "noop", "head": "9799c4e199a21f9019dcce930706ce63e6807456", "pr": null, "tests": "pre-263 ValidationReport", "noop": true}
+{"ts": "2026-08-27T08:33:29Z", "job_id": "mpi34-adv-validate-hostile-token", "work_source": "improve", "result": "landed", "head": "fbecba5a5fe1f9a92d776cc58d655bd380586c49", "pr": 265, "tests": "validate hostile token refuse", "noop": false}
