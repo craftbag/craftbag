@@ -601,3 +601,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:36:25Z","job_id":"improve-mpi43-maint-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Maintainer REVIEW 0"}
 {"ts":"2026-08-27T21:37:10Z","job_id":"improve-mpi43-ops-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Ops REVIEW 0; Node20 annotation not live-red"}
 {"ts":"2026-08-27T21:37:54Z","job_id":"improve-mpi43-sec-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Security REVIEW 0; expand1 props already covered"}
+{"ts":"2026-08-27T21:37:59Z","job_id":"expand1-prop-gap-noop-r2","work_source":"expand","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"prop gap still empty; back to PM"}
