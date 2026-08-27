@@ -137,12 +137,14 @@ Empty `metadata` adds no line.
 Omitted fields add no line. Description, When to use, Triggers, License, Compatibility,
 Metadata, Allowed tools, Argument hint, User arguments, and Activate hint fold
 Unicode whitespace to spaces so each stays one envelope
-line. Package root and `scripts/` / `references/` / `assets/`
-listings use the same fold so a newline in a path or file name
-cannot inject a header field. The skill body after `---` keeps
+line. Leftover implicit package paths in the load envelope (`Skill
+package root` and `scripts/` / `references/` / `assets/` dir listings)
+and list XML `<location>` go through `sanitize_error_token` like leftover
+TSV (`evil?root`, em dash to ASCII). File names still fold Unicode
+whitespace so a newline cannot inject a header field. The skill body after `---` keeps
 its newlines. Catalog markdown is one list item per skill:
 newlines in a literal `|` or folded `>` description or
-`when-to-use` become spaces (JSON and XML keep the raw text). When `when-to-use` is set, the catalog line appends
+`when-to-use` become spaces (JSON and XML keep the raw frontmatter; location is sanitized). When `when-to-use` is set, the catalog line appends
 `Use when: …`. List XML also emits `<source>` (`agents`, `user`, `extra`,
 or the vendor token), matching `SkillSource::as_str`. Keys stay snake_case on those wires (same as frontmatter),
 not Skill's camelCase serialize. Skill deserialize also accepts those

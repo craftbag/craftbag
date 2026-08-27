@@ -402,6 +402,9 @@ pub fn unknown_list_format(format: &str) -> String {
 
 /// Official skills-ref `<available_skills>` XML for host system prompts.
 ///
+/// `<location>` sanitizes leftover implicit paths like leftover TSV
+/// (`evil?root`). Frontmatter fields stay raw (JSON/XML contract).
+///
 /// Also emits `user_invocable`, `disable_model_invocation`,
 /// `argument_hint`, `when_to_use`, `triggers`, `allowed_tools`,
 /// `license`, `compatibility`, and `metadata` so a host that lists via
@@ -414,7 +417,7 @@ pub fn format_available_skills_xml(skills: &[Skill]) -> String {
         let location = skill
             .source_path
             .as_ref()
-            .map(|p| p.display().to_string())
+            .map(|p| leftover_path_one_line(p))
             .unwrap_or_default();
         out.push_str("<skill>\n");
         out.push_str("<name>");
@@ -486,6 +489,18 @@ fn catalog_one_line(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Leftover implicit walk path on a text surface (load envelope,
+/// list XML `<location>`).
+///
+/// Extra-path refuse already drops a line-separator token. A leftover
+/// package under `evil\u{2028}root/.agents/skills` still loads.
+/// [`crate::sanitize_error_token`] matches leftover TSV (`evil?root`,
+/// em dash to ASCII). Then fold remaining Unicode whitespace so the
+/// envelope / XML location stays one field.
+fn leftover_path_one_line(path: &Path) -> String {
+    catalog_one_line(&crate::sanitize_error_token(&path.display().to_string()))
+}
+
 /// One markdown list item. Optional `when_to_use` stays on the same line.
 fn catalog_skill_line(skill: &Skill) -> String {
     let name = catalog_one_line(&skill.name);
@@ -555,8 +570,9 @@ fn truncate_at_char_boundary(s: &mut String, max: usize) {
 
 /// Skill package root plus capped listings of scripts/references/assets.
 ///
-/// Does not inline file contents. Path and file names fold Unicode
-/// whitespace so a newline cannot inject a load-header field.
+/// Does not inline file contents. Leftover implicit paths go through
+/// [`crate::sanitize_error_token`] (same as leftover TSV). File names
+/// fold Unicode whitespace so a newline cannot inject a load-header field.
 pub fn format_package_envelope(skill: &Skill) -> String {
     let mut out = String::new();
     let Some(root) = skill.package_root() else {
@@ -567,7 +583,7 @@ pub fn format_package_envelope(skill: &Skill) -> String {
     };
     out.push_str(&format!(
         "Skill package root: {}\n",
-        catalog_one_line(&root.display().to_string())
+        leftover_path_one_line(root)
     ));
     out.push_str(
         "Relative paths in this skill (scripts/…, references/…, assets/…) are relative to the skill package root, not the project cwd.\n",
@@ -587,7 +603,7 @@ pub fn format_package_envelope(skill: &Skill) -> String {
             continue;
         }
         let listing = list_dir_names_capped(&dir, 30);
-        let shown_dir = catalog_one_line(&dir.display().to_string());
+        let shown_dir = leftover_path_one_line(&dir);
         if listing.is_empty() {
             out.push_str(&format!("  {dir_name}/: {shown_dir} (empty)\n"));
         } else {
@@ -1283,8 +1299,8 @@ mod tests {
             "illegal controls are dropped, text remains: {xml}"
         );
         assert!(
-            xml.contains("<location>/tmp/ctrl/SKILL.md</location>"),
-            "location must drop NUL: {xml}"
+            xml.contains("<location>/tmp/ctrl?/SKILL.md</location>"),
+            "leftover location must sanitize NUL like TSV, not drop it: {xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
     }
@@ -1382,6 +1398,66 @@ mod tests {
         assert!(
             scripts_line.contains("pwn") && scripts_line.contains("Allowed tools: * more"),
             "folded scripts name must stay on the files line: {scripts_line}"
+        );
+    }
+
+    #[test]
+    fn format_package_envelope_sanitizes_leftover_hostile_path() {
+        // format_skip_tsv / format_list_tsv sanitize leftover implicit
+        // paths (PR 279-282). Load still echos source_path through
+        // catalog_one_line only, so U+2028 becomes a space and U+2014
+        // stays. Hosts that scrape Skill package root must see the same
+        // leftover sanitize as TSV (evil?root, em dash to ASCII).
+        let mut skill = Skill::new("demo", "leftover pkg", "body");
+        skill.source_path = Some(PathBuf::from(
+            "/tmp/evil\u{2028}root\u{2014}/.agents/skills/demo/SKILL.md",
+        ));
+        let load = format_load_message(&skill, "", FormatOptions::default());
+        let header = load.split("\n---\n").next().expect("header");
+        let root_line = header
+            .lines()
+            .find(|l| l.starts_with("Skill package root:"))
+            .expect("root line");
+        assert_eq!(
+            header
+                .lines()
+                .filter(|l| l.starts_with("Skill package root:"))
+                .count(),
+            1,
+            "leftover package root must stay one envelope line: {header}"
+        );
+        assert!(
+            !root_line.contains('\u{2028}') && !root_line.contains('\u{2014}'),
+            "U+2028 / em dash must not leak into load envelope path: {root_line}"
+        );
+        assert!(
+            root_line.contains("evil?root-"),
+            "hostile leftover path must be sanitized like TSV: {root_line}"
+        );
+        assert!(
+            !root_line.contains("evil root"),
+            "leftover U+2028 must not fold to a space the way catalog text does: {root_line}"
+        );
+    }
+
+    #[test]
+    fn format_available_skills_xml_sanitizes_leftover_hostile_location() {
+        // List XML keeps raw frontmatter (JSON/XML contract). Location is
+        // a leftover walk path. U+2028 is a legal XML 1.0 Char, so
+        // xml_escape leaves it and a host that splits the prompt fragment
+        // on Unicode line breaks sees a fake skill.
+        let mut skill = Skill::new("demo", "leftover pkg", "body");
+        skill.source_path = Some(PathBuf::from(
+            "/tmp/evil\u{2028}root\u{2014}/.agents/skills/demo/SKILL.md",
+        ));
+        let xml = format_available_skills_xml(&[skill]);
+        assert!(
+            !xml.contains('\u{2028}') && !xml.contains('\u{2014}'),
+            "U+2028 / em dash must not leak into list XML location: {xml}"
+        );
+        assert!(
+            xml.contains("<location>/tmp/evil?root-/.agents/skills/demo/SKILL.md</location>"),
+            "hostile leftover location must be sanitized like TSV: {xml}"
         );
     }
 
