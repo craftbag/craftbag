@@ -956,6 +956,16 @@ fn load_extra_path(
         if extra_skills_named {
             walk_skip.push(skills_subdir.as_path());
         }
+        if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
+            skip_classified_extra_skills_leftover(
+                skill_file,
+                &skills_subdir,
+                ignore,
+                classified,
+                skips,
+            );
+            walk_skip.push(skills_subdir.as_path());
+        }
         load_skills_from_dir(
             &expanded,
             &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
@@ -3575,6 +3585,14 @@ mod tests {
             find_skill_by_name(&report.skills, "loose").is_none(),
             "leftover extra/skills/SKILL.md must not load as a package: {:?}",
             report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose") }),
+            "leftover extra/skills/SKILL.md must stay a root_file skip: {:?}",
+            report.skips
         );
         let home = tempfile::tempdir().expect("home");
         let dirs = with_home_override(Some(home.path().to_path_buf()), || {
