@@ -1406,6 +1406,14 @@ fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf
     })
 }
 
+/// True when a host token contains a line separator (U+000A, U+000D,
+/// U+2028, U+2029). Used before Path join so Windows cannot drop the
+/// control character as a component.
+fn str_has_line_separator(s: &str) -> bool {
+    s.chars()
+        .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+}
+
 /// True when a path component contains a line separator (U+000A, U+000D,
 /// U+2028, U+2029). Hosts that split `watch_dirs` on newline would see
 /// a fake root. Discover refuses the extra-path or user_dir instead of
@@ -1415,8 +1423,7 @@ fn path_has_line_separator(p: &Path) -> bool {
         let Some(s) = c.as_os_str().to_str() else {
             return false;
         };
-        s.chars()
-            .any(|ch| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+        str_has_line_separator(s)
     })
 }
 
@@ -1471,6 +1478,12 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
             // Empty or whitespace-only is not a prefix (not discover cwd).
             let raw = p.trim();
             if raw.is_empty() {
+                return None;
+            }
+            // Host token first. Windows Path::components can drop a
+            // control-char component, so `evil\n/..` would collapse to
+            // cwd after lexical normalize if we only inspected Path.
+            if str_has_line_separator(raw) {
                 return None;
             }
             let expanded = expand_tilde(raw);
@@ -1916,9 +1929,9 @@ mod tests {
     use super::{
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
         extra_path_is_loose_collection, find_skill_by_name, load_classified_extra_path_package,
-        path_has_line_separator, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
-        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-        with_home_override,
+        path_has_line_separator, str_has_line_separator, unknown_or_skipped_skill,
+        unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
+        walk_cwd_to_git_root, watch_dirs, with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -3120,6 +3133,10 @@ mod tests {
             "evil\u{2028}root"
         )));
         assert!(!path_has_line_separator(std::path::Path::new("wanted")));
+        assert!(str_has_line_separator("evil\n/.."));
+        assert!(str_has_line_separator("evil\r/.."));
+        assert!(str_has_line_separator("evil\u{2028}/.."));
+        assert!(!str_has_line_separator("evil/.."));
     }
 
     #[test]
