@@ -6,34 +6,33 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a5737eba95d750f89b4c9c9d37defab5bb33fb1b",
+  "ledger_sha": "2f4da4d28dc49ab32f1a598adb7e2c55972284a2",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "list-newline-extra-path-cli-mcp",
+    "id": "why-newline-extra-path-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:40:00Z",
-    "finished_at": "2026-08-27T02:44:31Z",
+    "started_at": "2026-08-27T02:45:00Z",
+    "finished_at": "2026-08-27T02:50:40Z",
     "result": "landed",
-    "head": "ee616385854ae7dde782185e1fb7ecc6181c6abd",
-    "pr": 241,
+    "head": "5941d3a78528dbc5657abc1bb429b9021b0928e0",
+    "pr": 242,
     "files": [
       "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs",
-      "src/discover.rs"
+      "crates/craftbag-mcp/tests/mcp.rs"
     ],
-    "tests": "list_newline_extra_path_does_not_name_demo,stdio_skills_list_newline_extra_path_does_not_name_demo",
+    "tests": "why_newline_extra_path_demo_is_unknown,stdio_skills_why_newline_extra_path_demo_is_unknown",
     "review": "0"
   },
-  "last_sha": "ee616385854ae7dde782185e1fb7ecc6181c6abd",
+  "last_sha": "5941d3a78528dbc5657abc1bb429b9021b0928e0",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T02:44:31Z",
+    "checked_at": "2026-08-27T02:50:40Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -61,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP list newline extra-path does not name demo; skip.path sanitized."
+    "last_why_summary": "CLI/MCP why newline extra-path does not name demo."
   },
   "budgets": {
     "max_cycles": null,
