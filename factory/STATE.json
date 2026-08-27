@@ -6,39 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "cb956781034f3a4194ccae2d30103b6a657ed100",
+  "ledger_sha": "9310bda000d9294dcbd89239db3e685a896c25f2",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-skills-fifo-load-cli-mcp",
+    "id": "improve-mpi32-ops-readme-path-filter",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:05:00Z",
-    "finished_at": "2026-08-27T02:09:27Z",
+    "started_at": "2026-08-27T02:10:00Z",
+    "finished_at": "2026-08-27T02:19:32Z",
     "result": "landed",
-    "head": "f84a28a7084c3c81dac717381d1f3ef9286fa899",
-    "pr": 238,
+    "head": "6c597c739ff4353b0ad6d9183eb4280983f1dce6",
+    "pr": 239,
     "files": [
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs"
+      ".github/workflows/ci.yml",
+      "tests/ci_hygiene.rs"
     ],
-    "tests": "load_leftover_skills_fifo_names_wanted,stdio_skills_load_leftover_skills_fifo_names_wanted",
+    "tests": "readme_stealth_placeholder_is_path_filtered",
     "review": "0"
   },
-  "last_sha": "f84a28a7084c3c81dac717381d1f3ef9286fa899",
+  "last_sha": "6c597c739ff4353b0ad6d9183eb4280983f1dce6",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T02:09:27Z",
+    "checked_at": "2026-08-27T02:19:32Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 6,
+    "next_perspective": 7,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +60,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "CLI/MCP load leftover FIFO extra/skills names wanted."
+    "last_why_summary": "README stealth placeholder locked and path-filtered."
   },
   "budgets": {
     "max_cycles": null,
