@@ -629,14 +629,6 @@ fn list_dir_names_capped(dir: &Path, max: usize) -> Vec<String> {
     names
 }
 
-/// Header for auto-injected skill bodies.
-pub fn format_body_header(skill: &Skill) -> String {
-    let mut out = format!("### Skill: {}\n{}\n\n", skill.name, skill.description);
-    out.push_str(&format_package_envelope(skill));
-    out.push('\n');
-    out
-}
-
 /// Fold a load-envelope field to one line (same whitespace rule as catalog).
 ///
 /// Empty or whitespace-only values omit the line so a `|` / `>` scalar
