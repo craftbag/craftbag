@@ -15,6 +15,14 @@ fn rust_toolchain_toml_matches_cargo_msrv_and_ci() {
         toolchain.contains("channel = \"1.85\""),
         "rust-toolchain.toml must pin 1.85: {toolchain}"
     );
+    assert!(
+        toolchain.contains("profile = \"minimal\""),
+        "rust-toolchain.toml must use profile = minimal so a first clone does not fetch rust-docs: {toolchain}"
+    );
+    assert!(
+        toolchain.contains("\"rustfmt\"") && toolchain.contains("\"clippy\""),
+        "minimal profile must still list rustfmt and clippy for make check: {toolchain}"
+    );
     let ci = repo_file(".github/workflows/ci.yml");
     assert!(
         ci.contains("toolchain: \"1.85\""),
@@ -30,6 +38,48 @@ fn rust_toolchain_toml_matches_cargo_msrv_and_ci() {
         assert!(
             text.contains("rust-version = \"1.85\""),
             "{cargo} rust-version must stay 1.85"
+        );
+    }
+}
+
+/// Isolated HOME fixtures (`incumbent/*-user`) are real directories.
+/// rustup/cargo write `$HOME/.cargo` and `$HOME/.rustup` if a command
+/// runs with HOME pointed at the fixture. A first clone must not be
+/// able to `git add` those trees.
+#[test]
+fn corpus_home_fixtures_ignore_rustup_writes() {
+    let gitignore = repo_file(".gitignore");
+    for pat in ["tests/corpus/**/.cargo/", "tests/corpus/**/.rustup/"] {
+        assert!(
+            gitignore.lines().any(|l| l.trim() == pat),
+            ".gitignore must ignore rustup/cargo writes under isolated HOME fixtures: {pat}"
+        );
+    }
+    let ci = repo_file(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("- '.gitignore'"),
+        "rust path-filter must include .gitignore so an ignore-line delete runs this lock"
+    );
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let output = std::process::Command::new("git")
+        .args(["ls-files", "tests/corpus"])
+        .current_dir(&root)
+        .output()
+        .expect("git ls-files");
+    assert!(
+        output.status.success(),
+        "git ls-files failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tracked = String::from_utf8_lossy(&output.stdout);
+    for line in tracked.lines() {
+        let junk = line.contains("/.cargo/")
+            || line.contains("/.rustup/")
+            || line.ends_with("/.cargo")
+            || line.ends_with("/.rustup");
+        assert!(
+            !junk,
+            "corpus must not track rustup/cargo HOME writes: {line}"
         );
     }
 }

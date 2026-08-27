@@ -7,3 +7,6 @@
 .idea/
 .vscode/
 *.swp
+# Isolated HOME fixtures. rustup/cargo write here if HOME is the fixture.
+tests/corpus/**/.cargo/
+tests/corpus/**/.rustup/
