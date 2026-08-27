@@ -23,6 +23,11 @@ fn corpus_leftover_empty_nested_skills() -> PathBuf {
         .join("../../tests/corpus/leftover/empty-nested-skills")
 }
 
+fn corpus_leftover_skills_named_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/corpus/leftover/skills-named-package")
+}
+
 fn rpc(req: &serde_json::Value) -> serde_json::Value {
     let tmp = tempfile::tempdir().expect("tmp");
     let home = tempfile::tempdir().expect("home");
@@ -197,6 +202,70 @@ fn stdio_skills_list_leftover_empty_nested_skills_names_wanted() {
     assert_eq!(got, want, "list path must be the fixture SKILL.md: {text}");
     let skips = v["skips"].as_array().expect("skips");
     assert!(skips.is_empty(), "empty extra/skills is not a skip: {text}");
+}
+
+#[test]
+fn stdio_skills_list_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the MCP door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus_leftover_skills_named_package();
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let mut names: Vec<&str> = skills.iter().filter_map(|s| s["name"].as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        ["skills", "wanted"],
+        "named extra/skills must not hide leftover sibling or scan nested evil: {text}"
+    );
+    let wanted_row = skills
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("list must name wanted: {text}"));
+    assert_eq!(
+        wanted_row["source"], "extra",
+        "list JSON source must be the wire token extra: {text}"
+    );
+    let path = wanted_row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize list path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "list path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "named extra/skills is not a leftover root file: {text}"
+    );
 }
 
 #[test]
