@@ -1981,6 +1981,73 @@ fn why_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn why_leftover_skills_fifo_names_wanted() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the CLI why door. FIFO extra/skills/SKILL.md is unreadable and must
+    // not hide leftover extra/wanted. Do not commit a FIFO in the corpus.
+    let extra = tempfile::tempdir().expect("extra");
+    let skills_dir = extra.path().join("skills");
+    fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    mkfifo(&skills_dir.join("SKILL.md"));
+    let wanted_pkg = extra.path().join("wanted");
+    fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    let wanted = wanted_pkg.join("SKILL.md");
+    fs::write(
+        &wanted,
+        "---
+name: wanted
+description: from-sibling
+---
+from-sibling
+",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("wanted")
+        .arg("--json")
+        .arg("--path")
+        .arg(extra.path())
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "wanted")
+        .unwrap_or_else(|| panic!("why must name wanted: {stdout}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = wanted
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize wanted: {e}"));
+    assert_eq!(got, want, "why path must be the wanted SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.iter().all(|s| s["kind"] != "root_file"),
+        "FIFO extra/skills/SKILL.md must not become a root_file peek: {stdout}"
+    );
+}
+
 #[test]
 fn load_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
