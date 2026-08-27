@@ -6,36 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "fd925dc8a8dd9dab6cdb6fd1163a47ad2391a68c",
+  "ledger_sha": "1c5a16c7cf3327ae10d03bce2e1dc4c457972c48",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-qa-ignore-cli-mcp",
+    "id": "mpi33-dev-user-dir-nfkc",
     "work_source": "improve",
-    "started_at": "2026-08-27T04:34:44Z",
-    "finished_at": "2026-08-27T04:34:44Z",
-    "result": "noop",
-    "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
-    "pr": null,
-    "files": [],
-    "tests": "CLI/MCP ignore line-separator already green",
+    "started_at": "2026-08-27T04:45:16Z",
+    "finished_at": "2026-08-27T04:45:16Z",
+    "result": "landed",
+    "head": "71cc7d560b1e311bba58b7955112d5069c7a04c5",
+    "pr": 251,
+    "files": [
+      "src/discover.rs"
+    ],
+    "tests": "user_dir_nfkc_dotdot_component_collapses_like_extra_path",
     "review": "0"
   },
-  "last_sha": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
+  "last_sha": "71cc7d560b1e311bba58b7955112d5069c7a04c5",
   "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "success",
-    "ready_pr": null,
-    "checked_at": "2026-08-27T04:31:07Z",
+    "main": "in_progress",
+    "ready_pr": "merged",
+    "checked_at": "2026-08-27T04:45:16Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 3,
+    "next_perspective": 4,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -57,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 QA no-op: CLI/MCP ignore evil\\\\n/.. already keep cwd."
+    "last_why_summary": "user_dir NFKC dots collapse like extra-path."
   },
   "budgets": {
     "max_cycles": null,
