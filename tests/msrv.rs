@@ -3,7 +3,9 @@
 
 fn repo_file(rel: &str) -> String {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
+    std::fs::read_to_string(root.join(rel))
+        .unwrap_or_else(|e| panic!("read {rel}: {e}"))
+        .replace("\r\n", "\n")
 }
 
 #[test]
