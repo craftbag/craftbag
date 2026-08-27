@@ -26,16 +26,17 @@ enum Cmd {
         /// Print `{ skills, skips }` (same shape as MCP skills_list).
         #[arg(long)]
         json: bool,
-        /// Official skills-ref `<available_skills>` XML for host prompts.
+        /// Official skills-ref `<available_skills>` XML inventory (includes disable_model_invocation for slash palettes).
         #[arg(long, conflicts_with = "json")]
         xml: bool,
-        /// Markdown catalog (name + description) for host prompts.
+        /// Markdown catalog (name + description) for model prompts. Omits disable_model_invocation (official client-guide). JSON, XML, and TSV still list those rows.
         #[arg(long, conflicts_with_all = ["json", "xml"])]
         catalog: bool,
         /// Print notify-watch roots (same walk as discover). Does not load SKILL.md.
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
         /// Same tokens as MCP skills_list format: json (`{ skills, skips }`), xml (`<available_skills>`), catalog, watch.
+        /// catalog omits disable_model_invocation (official client-guide); json, xml, and TSV still list those rows.
         /// xml and catalog also emit `skip\tkind\tpath\tdetail` (CLI stderr; MCP text after the prompt fragment).
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]

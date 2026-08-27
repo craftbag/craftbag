@@ -14,7 +14,9 @@
 //! (`description`, invocation flags, `argument_hint`, `when_to_use`,
 //! `triggers`, `allowed_tools`, `license`, `compatibility`, `metadata`).
 //! A new field on that type must land in all three wires
-//! (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap.
+//! (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
+//! and omits `disable_model_invocation` (official client-guide). JSON, XML,
+//! and TSV still list those rows.
 //! [`format_load_message`] is the text envelope (`License`,
 //! `Compatibility`, `Metadata`, `Allowed tools`, and host extras
 //! when set).
@@ -143,6 +145,11 @@ mod tests {
         assert!(
             docs.contains("Catalog stays cheap"),
             "crate-root rustdoc must say catalog stays cheap (not SkillSummary JSON): {docs}"
+        );
+        assert!(
+            docs.contains("omits `disable_model_invocation`")
+                && docs.contains("official client-guide"),
+            "crate-root rustdoc must name the catalog filter like format_catalog: {docs}"
         );
         assert!(
             docs.contains("text envelope"),

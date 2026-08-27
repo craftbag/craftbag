@@ -433,6 +433,13 @@ fn bline_consumer_names_skill_summary_sibling_lock() {
         "BLINE_CONSUMER must say catalog stays cheap for a new SkillSummary field"
     );
     assert!(
+        notes.contains("official client-guide catalog filter")
+            && notes.contains("list --catalog")
+            && notes.contains("skills_list")
+            && notes.contains("full inventory"),
+        "BLINE_CONSUMER must say list --help / skills_list name the catalog omit"
+    );
+    assert!(
         notes.contains("text envelope"),
         "BLINE_CONSUMER must say load is the text envelope, not SkillSummary JSON"
     );
@@ -447,6 +454,21 @@ fn bline_consumer_names_skill_summary_sibling_lock() {
             && notes.contains("metadata"),
         "BLINE_CONSUMER must name CLI load --help / MCP skills_load envelope fields"
     );
+}
+
+/// CLI `list --help` and MCP `skills_list` must both name the catalog
+/// omit. PR 296 filtered `format_catalog`; a leftover host that reads
+/// only one surface must still see the official client-guide filter.
+#[test]
+fn catalog_help_and_mcp_name_disable_model_invocation_omit() {
+    let cli = repo_file("crates/craftbag-cli/src/main.rs");
+    let mcp = repo_file("crates/craftbag-mcp/src/main.rs");
+    for (label, src) in [("CLI list", &cli), ("MCP skills_list", &mcp)] {
+        assert!(
+            src.contains("disable_model_invocation") && src.contains("omits"),
+            "{label} must name the catalog omit: leftover analog of load --help / skills_load"
+        );
+    }
 }
 
 /// why --json success is WhyReport. list already names `{ skills, skips }`.

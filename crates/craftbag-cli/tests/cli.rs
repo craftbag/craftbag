@@ -6379,6 +6379,37 @@ fn list_json_context_does_not_reorder() {
 }
 
 #[test]
+fn list_help_names_catalog_omits_disable_model_invocation() {
+    // PR 296 filters catalog. --help must say so before a host injects
+    // --catalog as a full inventory or --xml as the model catalog.
+    let (_home, mut cmd) = bin();
+    let help = String::from_utf8_lossy(
+        &cmd.arg("list")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    let catalog = help_own_flag_block(&help, "--catalog");
+    assert!(
+        catalog.contains("disable_model_invocation") && catalog.contains("Omits"),
+        "list --catalog must name the official client-guide omit: {catalog}"
+    );
+    let xml = help_own_flag_block(&help, "--xml");
+    assert!(
+        xml.contains("disable_model_invocation") && xml.contains("inventory"),
+        "list --xml must stay the host inventory, not the filtered catalog: {xml}"
+    );
+    let format = help_own_flag_block(&help, "--format");
+    assert!(
+        format.contains("disable_model_invocation") && format.contains("omits"),
+        "list --format must name the catalog omit like MCP skills_list format: {format}"
+    );
+}
+
+#[test]
 fn list_help_names_catalog_context() {
     let (_home, mut cmd) = bin();
     let stdout = String::from_utf8_lossy(

@@ -388,7 +388,9 @@ pub fn unknown_list_format(format: &str) -> String {
     }
 }
 
-/// Official skills-ref `<available_skills>` XML for host system prompts.
+/// Official skills-ref `<available_skills>` XML inventory for hosts.
+/// Includes `disable_model_invocation` rows (slash palette). The
+/// model-facing catalog is [`format_catalog`].
 ///
 /// `<location>` sanitizes leftover implicit paths like leftover TSV
 /// (`evil?root`). Frontmatter fields stay raw (JSON/XML contract).

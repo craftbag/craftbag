@@ -123,6 +123,8 @@ JSON both serialize `SkillSummary` so those keys cannot drift. A new
 (name + description, plus `Use when:` when set) and omits
 `disable_model_invocation` (official client-guide catalog filter).
 JSON, XML, and TSV still list those rows for a slash palette.
+CLI `list --catalog` / `--format` help and MCP `skills_list` format
+name that omit so a host does not inject catalog as a full inventory.
 CLI `list --catalog` /
 `--format catalog` and MCP `skills_list` `format=catalog` pass
 `--context` / `context` and `--context-tokens` / `context_tokens`

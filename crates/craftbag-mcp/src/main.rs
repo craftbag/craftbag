@@ -401,7 +401,7 @@ fn tools() -> Value {
         "type": "string",
         "enum": ListFormat::CANONICAL_TOKENS,
         "description": format!(
-            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). xml and catalog also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
+            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills> inventory; includes disable_model_invocation), catalog (markdown name + description; omits disable_model_invocation), or watch (notify-watch roots; does not load SKILL.md). xml and catalog also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
             ListFormat::ALIAS_TOKENS.join(" and ")
         )
     });
@@ -438,7 +438,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "skills_list",
-            "description": "List discovered skills. format is json (default `{ skills, skips }`), xml (skills-ref <available_skills>), catalog, or watch.",
+            "description": "List discovered skills. format is json (default `{ skills, skips }`), xml (skills-ref <available_skills> inventory), catalog (omits disable_model_invocation), or watch.",
             "inputSchema": {"type": "object", "properties": list_props}
         },
         {
@@ -3931,6 +3931,36 @@ mod tests {
         assert!(
             desc.contains("skip\\tkind\\tpath\\tdetail"),
             "skills_list format catalog/xml must name skip TSV like CLI list --format: {desc}"
+        );
+    }
+
+    #[test]
+    fn tools_list_format_names_catalog_omits_disable_model_invocation() {
+        // PR 296 filters catalog. tools/list must say so before a host
+        // injects format=catalog as a full inventory.
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(59)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let desc = list["inputSchema"]["properties"]["format"]["description"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            desc.contains("disable_model_invocation") && desc.contains("omits"),
+            "skills_list format catalog must name the official client-guide omit like CLI list --format: {desc}"
+        );
+        let tool_desc = list["description"].as_str().unwrap_or("");
+        assert!(
+            tool_desc.contains("disable_model_invocation"),
+            "skills_list must name the catalog omit so tools/list cannot drift from --help: {tool_desc}"
         );
     }
 
