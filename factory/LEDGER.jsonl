@@ -568,3 +568,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-27T20:54:12Z", "job_id": "improve-mpi41-spec-noop", "work_source": "improve", "result": "noop", "sha": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "note": "SkillSummary/SkillMiss keys unchanged; next Perf"}
 {"ts": "2026-08-27T20:56:59Z", "job_id": "improve-mpi41-perf-stall", "work_source": "improve", "result": "noop", "sha": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "note": "Perf idle-timeout; 1MiB/stat-first already locked; prove name-mismatch"}
 {"ts": "2026-08-27T20:58:42Z", "job_id": "prove-name-mismatch", "work_source": "prove", "result": "proved", "sha": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "note": "good-name vs wrong-dir skip; return Compat 41"}
+{"ts": "2026-08-27T20:59:56Z", "job_id": "improve-mpi41-compat-noop", "work_source": "improve", "result": "noop", "sha": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "note": "host JSON still additive; next Adv"}
