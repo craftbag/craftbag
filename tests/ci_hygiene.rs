@@ -298,3 +298,46 @@ fn readme_stealth_placeholder_is_path_filtered() {
         "rust path-filter must include README.md so a README-only edit runs this lock"
     );
 }
+
+/// Quoted SPDX ids in `deny.toml` `[licenses].allow`.
+fn deny_allow_licenses(deny: &str) -> Vec<&str> {
+    let after = deny
+        .split("allow = [")
+        .nth(1)
+        .expect("deny.toml must have licenses.allow");
+    let body = after
+        .split(']')
+        .next()
+        .expect("deny.toml licenses.allow must close");
+    let mut out = Vec::new();
+    for line in body.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = t.strip_prefix('"') {
+            if let Some(name) = rest.split('"').next() {
+                out.push(name);
+            }
+        }
+    }
+    out
+}
+
+/// Unused allow entries are deny.toml drift. cargo-deny only warns
+/// (`license-not-encountered`). A BSD-only crate would then pass.
+/// NCSA stays for fuzz `libfuzzer-sys`.
+#[test]
+fn deny_toml_allow_list_matches_used_licenses() {
+    let deny = read_rel("deny.toml");
+    assert_eq!(
+        deny_allow_licenses(&deny),
+        ["Apache-2.0", "MIT", "NCSA", "Unicode-3.0", "Zlib"],
+        "deny.toml allow must stay the licenses on the workspace or fuzz graphs"
+    );
+    let ci = read_rel(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("- 'deny.toml'"),
+        "rust path-filter must include deny.toml so an allow-list edit runs this lock"
+    );
+}

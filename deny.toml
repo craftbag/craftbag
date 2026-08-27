@@ -8,11 +8,11 @@ yanked = "warn"
 
 [licenses]
 version = 2
+# Only licenses on the workspace or fuzz graphs. Unused allowances
+# (LLVM-exception, BSD-2, BSD-3) let a future crate in without review.
+# NCSA is unused on the library graph; fuzz libfuzzer-sys needs it.
 allow = [
     "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
     "MIT",
     "NCSA",
     "Unicode-3.0",
