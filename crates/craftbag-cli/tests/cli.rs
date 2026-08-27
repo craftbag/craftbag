@@ -6084,6 +6084,160 @@ fn list_catalog_includes_when_to_use() {
         ));
 }
 
+fn two_trigger_skills() -> tempfile::TempDir {
+    let extra = tempfile::tempdir().expect("extra");
+    let other = extra.path().join("aaa-other");
+    fs::create_dir_all(&other).expect("mkdir other");
+    fs::write(
+        other.join("SKILL.md"),
+        "---\nname: aaa-other\ndescription: other helper\ntriggers: other\n---\nbody\n",
+    )
+    .expect("write other");
+    let debug = extra.path().join("zzz-debug");
+    fs::create_dir_all(&debug).expect("mkdir debug");
+    fs::write(
+        debug.join("SKILL.md"),
+        "---\nname: zzz-debug\ndescription: debug helper\ntriggers: debug\n---\nbody\n",
+    )
+    .expect("write debug");
+    extra
+}
+
+fn catalog_name_order(stdout: &str) -> Vec<&str> {
+    stdout
+        .lines()
+        .filter_map(|line| {
+            line.strip_prefix("- **")
+                .and_then(|rest| rest.split("**:").next())
+        })
+        .collect()
+}
+
+#[test]
+fn list_catalog_context_ranks_matching_trigger_first() {
+    // format_catalog already ranks by context. CLI list --catalog used
+    // to pass "" so hosts had no way to prefer a matching skill.
+    let extra = two_trigger_skills();
+    let (_home, mut bare) = bin();
+    let bare_out = bare
+        .arg("list")
+        .arg("--catalog")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        bare_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&bare_out.stderr)
+    );
+    let bare_stdout = String::from_utf8_lossy(&bare_out.stdout);
+    assert_eq!(
+        catalog_name_order(&bare_stdout),
+        ["aaa-other", "zzz-debug"],
+        "empty context stays name order: {bare_stdout}"
+    );
+
+    let (_home, mut ranked) = bin();
+    let ranked_out = ranked
+        .arg("list")
+        .arg("--catalog")
+        .arg("--context")
+        .arg("debug")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        ranked_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&ranked_out.stderr)
+    );
+    let ranked_stdout = String::from_utf8_lossy(&ranked_out.stdout);
+    assert_eq!(
+        catalog_name_order(&ranked_stdout),
+        ["zzz-debug", "aaa-other"],
+        "list --catalog --context must rank like format_catalog, not name order: {ranked_stdout}"
+    );
+
+    let (_home, mut format_ranked) = bin();
+    format_ranked
+        .arg("list")
+        .arg("--format")
+        .arg("catalog")
+        .arg("--context")
+        .arg("debug")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("- **zzz-debug**:"))
+        .stdout(predicates::function::function(|s: &str| {
+            catalog_name_order(s) == ["zzz-debug", "aaa-other"]
+        }));
+}
+
+#[test]
+fn list_json_context_does_not_reorder() {
+    let extra = two_trigger_skills();
+    let names = |args: &[&str]| {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .args(args)
+            .arg("--path")
+            .arg(extra.path())
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let v: serde_json::Value = serde_json::from_str(&stdout).expect("list json");
+        v["skills"]
+            .as_array()
+            .expect("skills")
+            .iter()
+            .map(|s| s["name"].as_str().unwrap_or("").to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names(&["list", "--json"]),
+        names(&["list", "--json", "--context", "debug"]),
+        "list --json must stay discover order; only --catalog ranks"
+    );
+}
+
+#[test]
+fn list_help_names_catalog_context() {
+    let (_home, mut cmd) = bin();
+    let stdout = String::from_utf8_lossy(
+        &cmd.arg("list")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout,
+    )
+    .into_owned();
+    assert!(
+        stdout.contains("--context"),
+        "list --help must name --context like why: {stdout}"
+    );
+    assert!(
+        stdout.contains("--context-tokens"),
+        "list --help must name --context-tokens like why: {stdout}"
+    );
+    assert!(
+        stdout.contains("catalog"),
+        "list --context help must say it ranks catalog: {stdout}"
+    );
+}
+
 #[test]
 fn list_xml_includes_when_to_use() {
     let extra = tempfile::tempdir().expect("extra");

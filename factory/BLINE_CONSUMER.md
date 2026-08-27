@@ -120,7 +120,11 @@ empty XML tag. List and why
 JSON both serialize `SkillSummary` so those keys cannot drift. A new
 `SkillSummary` field must land on list JSON, why JSON, and list XML
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
-(name + description, plus `Use when:` when set). CLI `list --catalog` and
+(name + description, plus `Use when:` when set). CLI `list --catalog` /
+`--format catalog` and MCP `skills_list` `format=catalog` pass
+`--context` / `context` and `--context-tokens` / `context_tokens`
+(default 8000) into `format_catalog` so a matching trigger ranks first.
+JSON, XML, TSV, and watch stay discover order. CLI `list --catalog` and
 `list --xml` print the same `skip\tkind\tpath\tdetail` stderr rows as
 default list. Prompt stdout stays skip-free. MCP `skills_list`
 `format=catalog` / `format=xml` append those same skip rows after the

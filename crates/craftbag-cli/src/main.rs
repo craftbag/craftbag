@@ -61,6 +61,12 @@ enum Cmd {
         /// Path prefix never loaded (silent; no skip row). Relative prefixes join cwd. Example: --ignore ./secret
         #[arg(long = "ignore", value_name = "PATH")]
         ignore: Vec<String>,
+        /// Catalog ranking text (`--catalog` / `--format catalog`). JSON, XML, TSV, and watch ignore this. Example: --context rebase
+        #[arg(long)]
+        context: Option<String>,
+        /// Model context window size for catalog listing (default 8000). Used by `--catalog` / `--format catalog`.
+        #[arg(long, default_value_t = 8_000)]
+        context_tokens: usize,
     },
     /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
     Load {
@@ -165,6 +171,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             no_implicit_roots,
             disabled,
             ignore,
+            context,
+            context_tokens,
         } => {
             let mode = list_output_mode(json, xml, catalog, watch, format)?;
             if matches!(mode, ListOutput::Watch) {
@@ -196,8 +204,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     "{}",
                     format_catalog(
                         &report.skills,
-                        "",
-                        progressive_budgets(8_000),
+                        context.as_deref().unwrap_or(""),
+                        progressive_budgets(context_tokens),
                         FormatOptions::default(),
                     )
                 );

@@ -56,6 +56,12 @@ struct DiscoverArgs {
     /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
+    /// Catalog ranking text (`format=catalog`). JSON, XML, and watch ignore this.
+    #[serde(default, deserialize_with = "present_non_null")]
+    context: Option<String>,
+    /// Token budget for catalog listing (`format=catalog`). Omitted is 8000.
+    #[serde(default, deserialize_with = "present_non_null")]
+    context_tokens: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,8 +194,8 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
         return Ok(with_skip_tsv(
             format_catalog(
                 &report.skills,
-                "",
-                progressive_budgets(8_000),
+                args.context.as_deref().unwrap_or(""),
+                progressive_budgets(args.context_tokens.unwrap_or(8_000)),
                 FormatOptions::default(),
             ),
             &report.skips,
@@ -403,6 +409,14 @@ fn tools() -> Value {
             "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills>), catalog (markdown name + description), or watch (notify-watch roots; does not load SKILL.md). xml and catalog also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
             ListFormat::ALIAS_TOKENS.join(" and ")
         )
+    });
+    list_props["context"] = json!({
+        "type": "string",
+        "description": "Catalog ranking text (format=catalog). JSON, XML, and watch ignore this. Example: \"rebase\"."
+    });
+    list_props["context_tokens"] = json!({
+        "type": "integer",
+        "description": "Token budget for catalog listing (format=catalog; default 8000). JSON, XML, and watch ignore this."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({"type": "string", "description": "Frontmatter skill name."});
@@ -1140,6 +1154,95 @@ mod tests {
         assert!(
             out.contains("Use the host activate command"),
             "catalog must stay host-neutral: {out}"
+        );
+    }
+
+    fn two_trigger_skill_root() -> tempfile::TempDir {
+        let extra = tempfile::tempdir().expect("extra");
+        let other = extra.path().join("aaa-other");
+        std::fs::create_dir_all(&other).expect("mkdir other");
+        std::fs::write(
+            other.join("SKILL.md"),
+            "---\nname: aaa-other\ndescription: other helper\ntriggers: other\n---\nbody\n",
+        )
+        .expect("write other");
+        let debug = extra.path().join("zzz-debug");
+        std::fs::create_dir_all(&debug).expect("mkdir debug");
+        std::fs::write(
+            debug.join("SKILL.md"),
+            "---\nname: zzz-debug\ndescription: debug helper\ntriggers: debug\n---\nbody\n",
+        )
+        .expect("write debug");
+        extra
+    }
+
+    fn catalog_name_order(out: &str) -> Vec<&str> {
+        out.lines()
+            .filter_map(|line| {
+                line.strip_prefix("- **")
+                    .and_then(|rest| rest.split("**:").next())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn list_catalog_context_ranks_matching_trigger_first() {
+        let extra = two_trigger_skill_root();
+        let path = extra.path().to_string_lossy().into_owned();
+        let bare = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path.clone()],
+                format: Some("catalog".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("catalog")
+        });
+        assert_eq!(
+            catalog_name_order(&bare),
+            ["aaa-other", "zzz-debug"],
+            "empty context stays name order: {bare}"
+        );
+        let ranked = empty_home(|| {
+            list_json(DiscoverArgs {
+                paths: vec![path],
+                format: Some("catalog".to_owned()),
+                context: Some("debug".to_owned()),
+                ..DiscoverArgs::default()
+            })
+            .expect("ranked catalog")
+        });
+        assert_eq!(
+            catalog_name_order(&ranked),
+            ["zzz-debug", "aaa-other"],
+            "skills_list format=catalog context must rank like format_catalog: {ranked}"
+        );
+    }
+
+    #[test]
+    fn list_json_context_does_not_reorder() {
+        let extra = two_trigger_skill_root();
+        let path = extra.path().to_string_lossy().into_owned();
+        let names = |context: Option<String>| {
+            let out = empty_home(|| {
+                list_json(DiscoverArgs {
+                    paths: vec![path.clone()],
+                    context,
+                    ..DiscoverArgs::default()
+                })
+                .expect("json")
+            });
+            let v: serde_json::Value = serde_json::from_str(&out).expect("json");
+            v["skills"]
+                .as_array()
+                .expect("skills")
+                .iter()
+                .map(|s| s["name"].as_str().unwrap_or("").to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(None),
+            names(Some("debug".to_owned())),
+            "skills_list json must stay discover order; only format=catalog ranks"
         );
     }
 
@@ -2760,6 +2863,58 @@ mod tests {
     }
 
     #[test]
+    fn skills_list_null_context_tokens_is_error_not_default_catalog() {
+        empty_home(|| {
+            let resp = call(
+                23,
+                "skills_list",
+                json!({"format": "catalog", "context_tokens": null}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says context_tokens is integer; null must not default catalog: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("## Skills"),
+                "must not return default catalog for null context_tokens: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_null_context_is_error_not_unranked_catalog() {
+        empty_home(|| {
+            let resp = call(
+                25,
+                "skills_list",
+                json!({"format": "catalog", "context": null}),
+            );
+            assert_eq!(
+                resp["result"]["isError"],
+                true,
+                "schema says context is string; null must not mean omitted: {}",
+                call_text(&resp)
+            );
+            let text = call_text(&resp);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "error must name the type mismatch: {text}"
+            );
+            assert!(
+                !text.contains("## Skills"),
+                "must not return default catalog for null context: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn skills_why_null_context_tokens_is_error_not_default_budget() {
         empty_home(|| {
             let resp = call(22, "skills_why", json!({"context_tokens": null}));
@@ -3601,6 +3756,46 @@ mod tests {
             .map(|v| v.as_str().expect("token"))
             .collect();
         assert_eq!(tokens, ["json", "text"], "{format}");
+    }
+
+    #[test]
+    fn tools_list_advertises_catalog_context() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(58)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let list = tools
+            .iter()
+            .find(|t| t["name"] == "skills_list")
+            .expect("skills_list");
+        let props = &list["inputSchema"]["properties"];
+        let context = &props["context"];
+        assert_eq!(context["type"], "string", "{context}");
+        let desc = context["description"].as_str().unwrap_or("");
+        assert!(
+            desc.contains("catalog") && desc.contains("format=catalog"),
+            "skills_list context must say it ranks format=catalog like CLI list --context: {desc}"
+        );
+        let tokens = &props["context_tokens"];
+        assert_eq!(tokens["type"], "integer", "{tokens}");
+        let tokens_desc = tokens["description"].as_str().unwrap_or("");
+        assert!(
+            tokens_desc.contains("catalog") && tokens_desc.contains("8000"),
+            "skills_list context_tokens must name catalog budget like why: {tokens_desc}"
+        );
+        let load = tools
+            .iter()
+            .find(|t| t["name"] == "skills_load")
+            .expect("skills_load");
+        assert!(
+            load["inputSchema"]["properties"].get("context").is_none(),
+            "context ranks catalog only; do not advertise it on load: {}",
+            load["inputSchema"]["properties"]
+        );
     }
 
     #[test]
