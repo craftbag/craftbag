@@ -6,38 +6,41 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "17ac200e6d639365af6751a7320222de290f699e",
+  "ledger_sha": "be45e9dd52c925eda70b42c123b5fadd366363aa",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi32-arch-ignore-line-separator",
+    "id": "mpi32-contrib-make-check-lock",
     "work_source": "improve",
-    "started_at": "2026-08-27T04:08:12Z",
-    "finished_at": "2026-08-27T04:08:12Z",
+    "started_at": "2026-08-27T04:23:31Z",
+    "finished_at": "2026-08-27T04:23:31Z",
     "result": "landed",
-    "head": "5d8de557327fd58b700ad166d8d1494920dbe583",
-    "pr": 249,
+    "head": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
+    "pr": 250,
     "files": [
-      "src/discover.rs"
+      "Makefile",
+      "AGENTS.md",
+      "tests/msrv.rs",
+      ".github/workflows/ci.yml"
     ],
-    "tests": "ignore_line_separator_dotdot_does_not_hide_discover_cwd",
+    "tests": "local_gate_commands_run_in_ci",
     "review": "0"
   },
-  "last_sha": "5d8de557327fd58b700ad166d8d1494920dbe583",
+  "last_sha": "3bd9126b5f3cd539ce21a778fd1772ed36b788cd",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T04:08:12Z",
+    "checked_at": "2026-08-27T04:23:31Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 14,
+    "next_perspective": 15,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -59,7 +62,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "Refuse ignore tokens that contain a line separator before Path join."
+    "last_why_summary": "make check plus exact local-gate fence lock."
   },
   "budgets": {
     "max_cycles": null,
