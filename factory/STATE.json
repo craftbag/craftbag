@@ -6,39 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ab4db02a09f385114344c5a5b0a3f4604996a845",
+  "ledger_sha": "a785ebc53084f4352d6ca4c0ca6596452f30c0bb",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi37-maint-body-header",
+    "id": "improve-mpi37-ops-pin-tools",
     "work_source": "improve",
-    "started_at": "2026-08-27T13:53:37Z",
-    "finished_at": "2026-08-27T13:53:37Z",
+    "started_at": "2026-08-27T14:05:27Z",
+    "finished_at": "2026-08-27T14:05:27Z",
     "result": "landed",
-    "head": "cce8c065cefffb94fb6d9b93ba2a09a70dc61549",
-    "pr": 284,
+    "head": "d17b4345e906ec1b2e3638e5e242ab79e32c2278",
+    "pr": 285,
     "files": [
-      "src/activate.rs",
-      "src/lib.rs"
+      ".github/workflows/ci.yml",
+      "tests/ci_hygiene.rs"
     ],
-    "tests": "crate_root_does_not_export_unused_format_body_header",
+    "tests": "ci_pins_install_action_rust_tools",
     "review": "0"
   },
-  "last_sha": "cce8c065cefffb94fb6d9b93ba2a09a70dc61549",
+  "last_sha": "d17b4345e906ec1b2e3638e5e242ab79e32c2278",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T13:53:37Z",
+    "checked_at": "2026-08-27T14:05:27Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 37,
-    "next_perspective": 6,
+    "next_perspective": 7,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
