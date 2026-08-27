@@ -28,6 +28,10 @@ fn corpus_leftover_skills_named_package() -> PathBuf {
         .join("../../tests/corpus/leftover/skills-named-package")
 }
 
+fn corpus_vercel_npx() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/vercel-npx")
+}
+
 fn rpc(req: &serde_json::Value) -> serde_json::Value {
     let tmp = tempfile::tempdir().expect("tmp");
     let home = tempfile::tempdir().expect("home");
@@ -1391,6 +1395,105 @@ fn stdio_skills_load_leftover_skills_fifo_names_wanted() {
     assert_eq!(
         resp["result"]["error_kind"], "unknown_skill",
         "nested evil must stay unknown: {resp}"
+    );
+}
+
+#[test]
+fn stdio_skills_why_incumbent_vercel_npx_names_deploy_hint() {
+    // Sibling lock of incumbent_vercel_skills_dir_as_extra_path
+    // on the MCP why door. Isolated HOME; default vendor stays off.
+    let extra = corpus_vercel_npx();
+    let skill = extra.join("skills/deploy-hint/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed vercel-npx extra-path fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "name": "deploy-hint",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "deploy-hint")
+        .unwrap_or_else(|| panic!("why must name deploy-hint: {text}"));
+    assert_eq!(
+        row["source"], "extra",
+        "why JSON source must be the wire token extra: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "vercel-npx extra/skills is not a skip: {text}"
+    );
+}
+
+#[test]
+fn stdio_skills_load_incumbent_vercel_npx_names_deploy_hint() {
+    // Sibling lock of incumbent_vercel_skills_dir_as_extra_path
+    // on the MCP load door. Isolated HOME; default vendor stays off.
+    let extra = corpus_vercel_npx();
+    let skill = extra.join("skills/deploy-hint/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed vercel-npx extra-path fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "deploy-hint",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: deploy-hint]"),
+        "vercel-npx extra-path must load deploy-hint: {text}"
+    );
+    assert!(
+        text.contains("Read this when deploying."),
+        "must load deploy-hint body: {text}"
     );
 }
 
