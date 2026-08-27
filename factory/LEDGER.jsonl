@@ -440,3 +440,4 @@
 {"ts": "2026-08-27T03:03:00Z", "job_id": "load-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "8079ffa7e7509d6c595873260c444f438330e212", "pr": 244, "tests": "load newline extra-path", "noop": false}
 {"ts": "2026-08-27T03:05:35Z", "job_id": "mpi32-pm-steal-list", "work_source": "improve", "result": "noop", "head": "8079ffa7e7509d6c595873260c444f438330e212", "pr": null, "tests": "steal-list callers exist", "noop": true}
 {"ts": "2026-08-27T03:16:31Z", "job_id": "mpi32-spec-why-json-success-keys", "work_source": "improve", "result": "landed", "head": "013e6a64180877542e78dccd108887e687c3b9c6", "pr": 245, "tests": "why json success keys", "noop": false}
+{"ts": "2026-08-27T03:28:41Z", "job_id": "mpi32-perf-home-implicit-once", "work_source": "improve", "result": "landed", "head": "75d62cb2d97ca4deaba64fa43929136517dccf45", "pr": 246, "tests": "implicit home walk once", "noop": false}

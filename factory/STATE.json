@@ -6,42 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "073dddefc3f7fed3567ccd0acbcfb4d850e19e1a",
+  "ledger_sha": "cc1c9e7a41d8ae1b9c77c2712cbbfd81513e8d9f",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi32-spec-why-json-success-keys",
+    "id": "mpi32-perf-home-implicit-once",
     "work_source": "improve",
-    "started_at": "2026-08-27T03:16:31Z",
-    "finished_at": "2026-08-27T03:16:31Z",
+    "started_at": "2026-08-27T03:28:41Z",
+    "finished_at": "2026-08-27T03:28:41Z",
     "result": "landed",
-    "head": "013e6a64180877542e78dccd108887e687c3b9c6",
-    "pr": 245,
+    "head": "75d62cb2d97ca4deaba64fa43929136517dccf45",
+    "pr": 246,
     "files": [
-      "crates/craftbag-cli/src/main.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/src/main.rs",
-      "factory/BLINE_CONSUMER.md",
-      "tests/msrv.rs"
+      "src/discover.rs"
     ],
-    "tests": "why_help_names_json_success_keys,tools_why_describes_success_keys,bline_consumer_names_why_json_success_keys",
+    "tests": "implicit_home_agents_skill_md_is_opened_once_when_cwd_is_home",
     "review": "0"
   },
-  "last_sha": "013e6a64180877542e78dccd108887e687c3b9c6",
+  "last_sha": "75d62cb2d97ca4deaba64fa43929136517dccf45",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T03:16:31Z",
+    "checked_at": "2026-08-27T03:28:41Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 10,
+    "next_perspective": 11,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -63,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "why --help and MCP name WhyReport { loaded, skips, activation }."
+    "last_why_summary": "Skip implicit HOME walk when cwd-to-git already covers HOME."
   },
   "budgets": {
     "max_cycles": null,
