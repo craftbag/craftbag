@@ -110,6 +110,21 @@ fn validate_help_names_package_dir() {
 }
 
 #[test]
+fn validate_help_names_validation_report() {
+    // MCP skills_validate already names ValidationReport (no error_kind).
+    // CLI validate --help must keep the same success shape so the two
+    // surfaces cannot drift independently.
+    let (_home, mut cmd) = bin();
+    cmd.arg("validate")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("package directory"))
+        .stdout(predicates::str::contains("ValidationReport"))
+        .stdout(predicates::str::contains("no error_kind"));
+}
+
+#[test]
 fn validate_invalid_name_fails() {
     let path = corpus().join("agentskills/invalid-name/Bad_Name/SKILL.md");
     let (_home, mut cmd) = bin();

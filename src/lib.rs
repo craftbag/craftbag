@@ -18,6 +18,11 @@
 //! [`format_load_message`] is the text envelope (`License`,
 //! `Compatibility`, `Metadata`, `Allowed tools`, and host extras
 //! when set).
+//!
+//! [`validate_path_with_options`] accepts a SKILL.md file or package directory
+//! (joins `SKILL.md` / `skill.md`). Success is [`ValidationReport`]
+//! (no `error_kind`). A miss is [`ValidationReport::miss`]. CLI
+//! `validate --json` and MCP `skills_validate` share that report.
 
 mod activate;
 mod discover;
@@ -175,6 +180,34 @@ mod tests {
         assert!(
             unknown.path.is_none(),
             "documented unknown_skill miss must omit path"
+        );
+    }
+
+    /// A leftover-only host should see [`super::ValidationReport`] on the
+    /// crate root, not only in discover.rs. CLI `validate --json` and MCP
+    /// `skills_validate` share that success shape (no `error_kind`).
+    #[test]
+    fn crate_root_docs_name_validation_report() {
+        let docs: String = include_str!("lib.rs")
+            .lines()
+            .filter(|line| line.starts_with("//!"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            docs.contains("[`ValidationReport`]"),
+            "crate-root rustdoc must name ValidationReport like MCP skills_validate: {docs}"
+        );
+        assert!(
+            docs.contains("package directory") && docs.contains("SKILL.md"),
+            "crate-root rustdoc must name package dir like CLI validate --help: {docs}"
+        );
+        assert!(
+            docs.contains("no `error_kind`") || docs.contains("no error_kind"),
+            "crate-root rustdoc must say success has no error_kind: {docs}"
+        );
+        assert!(
+            docs.contains("validate --json") && docs.contains("skills_validate"),
+            "crate-root rustdoc must map CLI validate --json and MCP skills_validate: {docs}"
         );
     }
 }

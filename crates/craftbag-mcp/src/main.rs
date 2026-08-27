@@ -627,6 +627,12 @@ mod tests {
                 v.get("error_kind").is_none(),
                 "ok validate must not peel a miss: {text}"
             );
+            let path = v["path"].as_str().expect("path");
+            assert!(
+                path.ends_with("minimal-valid/SKILL.md")
+                    || path.ends_with("minimal-valid\\SKILL.md"),
+                "package dir success path must be the joined SKILL.md like CLI validate --json: {text}"
+            );
         });
     }
 

@@ -279,6 +279,39 @@ fn bline_consumer_host_table_names_skill_miss() {
     );
 }
 
+/// CLI `validate --help` and MCP `skills_validate` must both name the
+/// package directory and ValidationReport. PR 263 added the MCP sibling;
+/// a leftover host that reads only one surface must still see the same
+/// success shape.
+#[test]
+fn validate_help_and_mcp_describe_package_dir_and_report() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("MCP `skills_validate`")
+            && notes.contains("ValidationReport")
+            && notes.contains("package directory"),
+        "BLINE_CONSUMER must name MCP skills_validate package dir + ValidationReport"
+    );
+    assert!(
+        notes.lines().any(|l| {
+            l.contains('|') && l.contains("MCP `skills_validate`") && l.contains("ValidationReport")
+        }),
+        "BLINE_CONSUMER host table must keep the MCP skills_validate row"
+    );
+    let cli = repo_file("crates/craftbag-cli/src/main.rs");
+    let mcp = repo_file("crates/craftbag-mcp/src/main.rs");
+    for (label, src) in [("CLI validate", &cli), ("MCP skills_validate", &mcp)] {
+        assert!(
+            src.contains("package directory") && src.contains("ValidationReport"),
+            "{label} must name package dir + ValidationReport: leftover analog of load --help / skills_load"
+        );
+        assert!(
+            src.contains("no error_kind"),
+            "{label} must say success has no error_kind"
+        );
+    }
+}
+
 /// A host adding a SkillSummary field must see the sibling lock here,
 /// not only in why.rs. Catalog stays cheap. Load is the text envelope.
 #[test]
