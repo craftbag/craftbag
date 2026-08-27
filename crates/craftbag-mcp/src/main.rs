@@ -267,11 +267,26 @@ fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
 /// Copy `{ error_kind, error }`, optional `path`, and `winner_path` on
 /// `name_collision` from [`SkillMiss`] so MCP cannot drop a peel key
 /// that CLI `why --json` / `validate --json` already serialize.
+///
+/// CLI maps SkillMiss serde errors. A miss must not crash the stdio
+/// server; if serde fails, still peel the known wire keys.
 fn merge_skill_miss(result: &mut Value, miss: &SkillMiss) {
-    let peel = serde_json::to_value(miss).expect("SkillMiss serde");
-    let obj = peel.as_object().expect("SkillMiss is a JSON object");
-    for (key, value) in obj {
-        result[key] = value.clone();
+    match serde_json::to_value(miss) {
+        Ok(Value::Object(obj)) => {
+            for (key, value) in obj {
+                result[key] = value;
+            }
+        }
+        _ => {
+            result["error_kind"] = json!(miss.error_kind);
+            result["error"] = json!(&miss.error);
+            if let Some(path) = &miss.path {
+                result["path"] = json!(path);
+            }
+            if let Some(winner) = &miss.winner_path {
+                result["winner_path"] = json!(winner);
+            }
+        }
     }
 }
 
@@ -1736,6 +1751,24 @@ mod tests {
             result["winner_path"].as_str().map(std::path::Path::new),
             Some(std::path::Path::new("/tmp/a/foo/SKILL.md")),
             "MCP must peel SkillMiss.winner_path, not scrape lost to: {result}"
+        );
+    }
+
+    /// CLI `why --json` / `load --json` maps SkillMiss serde errors.
+    /// MCP must not `expect` on the same peel (a miss must not crash the
+    /// stdio server).
+    #[test]
+    fn merge_skill_miss_does_not_expect_serde() {
+        let src = include_str!("main.rs");
+        let start = src
+            .find("fn merge_skill_miss")
+            .expect("merge_skill_miss must exist");
+        let rest = &src[start..];
+        let end = rest.find("\nfn ").unwrap_or(rest.len());
+        let body = &rest[..end];
+        assert!(
+            !body.contains(".expect("),
+            "merge_skill_miss must map SkillMiss serde like CLI, not panic: {body}"
         );
     }
 
