@@ -382,22 +382,44 @@ fn one_line_error(raw: impl std::fmt::Display) -> String {
 
 /// Validate a SKILL.md path: readable, parse, and name/dir match.
 ///
-/// Unknown frontmatter keys are ignored so host extensions still load.
+/// A package directory joins `SKILL.md` / `skill.md` (same filenames
+/// as extra-path). Unknown frontmatter keys are ignored so host
+/// extensions still load.
 pub fn validate_path(path: &Path) -> ValidationReport {
     validate_path_with_options(path, false)
 }
 
-/// Validate a SKILL.md path.
+/// Validate a SKILL.md path or a package directory.
 ///
 /// When `strict` is true, unknown frontmatter keys are errors. Default
 /// discover and [`validate_path`] stay ignore-unknown so host extensions
 /// (`triggers`, `disable_model_invocation`, …) still load.
+/// A directory joins `SKILL.md` / `skill.md` like extra-path. A
+/// collection root with no package file is unreadable, not a walk.
 pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport {
     // Same NFKC `.` / `..` rewrite as extra-path, so
     // `wanted/evil/‥/SKILL.md` is the `wanted` package.
     let path = nfkc_dot_path_components(path);
-    let path = path.as_path();
-    let path_buf = path.to_path_buf();
+    let path_buf = match resolve_validate_target(&path) {
+        Ok(p) => p,
+        Err(detail) => {
+            let detail = one_line_error(detail);
+            return ValidationReport {
+                path: path.clone(),
+                ok: false,
+                name: None,
+                errors: vec![detail.clone()],
+                skip: Some(SkillSkip {
+                    path,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail,
+                    winner_path: None,
+                }),
+            };
+        }
+    };
+    let path = path_buf.as_path();
     let content = match read_skill_md(path) {
         Ok(c) => c,
         Err(e) => {
@@ -1942,6 +1964,21 @@ fn finish_load_parsed_skill(
 fn is_skill_md_filename(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
+}
+
+/// Join `SKILL.md` / `skill.md` when `path` is a package directory.
+///
+/// Same filenames as extra-path. A collection root (no package file)
+/// is an error so validate does not walk children.
+fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
+    if !skill_md_is_dir(path) {
+        return Ok(path.to_path_buf());
+    }
+    ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|name| path.join(name))
+        .find(|p| skill_md_inode_exists(p))
+        .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())
 }
 
 /// True when `path` exists as any inode (regular, FIFO, socket, device, symlink).
@@ -5553,6 +5590,89 @@ mod tests {
         assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
         assert_eq!(report.skills[0].name, "padded");
         assert!(report.skips.is_empty(), "skips={:?}", report.skips);
+    }
+
+    #[test]
+    fn validate_path_package_dir_joins_skill_md() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("wanted");
+        write_skill(&pkg, "wanted", "PACKAGE_BODY");
+        let skill = pkg.join("SKILL.md");
+        let report = validate_path(&pkg);
+        assert!(
+            report.ok,
+            "package dir must join SKILL.md like extra-path: {:?}",
+            report
+        );
+        assert_eq!(report.name.as_deref(), Some("wanted"));
+        assert_eq!(
+            report.path.as_path(),
+            skill.as_path(),
+            "report.path must be the joined SKILL.md, not the directory"
+        );
+        assert!(report.skip.is_none());
+    }
+
+    #[test]
+    fn validate_path_package_dir_joins_lowercase_skill_md() {
+        let root = tempfile::tempdir().expect("tmp");
+        let pkg = root.path().join("lc-pack");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("skill.md"),
+            "---\nname: lc-pack\ndescription: d\n---\nbody\n",
+        )
+        .expect("write");
+        let report = validate_path(&pkg);
+        assert!(
+            report.ok,
+            "package dir must join skill.md like extra-path: {:?}",
+            report
+        );
+        assert_eq!(report.name.as_deref(), Some("lc-pack"));
+        assert_eq!(
+            report.path.parent(),
+            Some(pkg.as_path()),
+            "joined file must stay in the package dir: {:?}",
+            report.path
+        );
+        let file_name = report.path.file_name().and_then(|n| n.to_str());
+        assert!(
+            file_name == Some("skill.md") || file_name == Some("SKILL.md"),
+            "APFS may resolve skill.md as SKILL.md: {:?}",
+            report.path
+        );
+    }
+
+    #[test]
+    fn validate_path_dir_without_skill_md_is_unreadable() {
+        let root = tempfile::tempdir().expect("tmp");
+        let dir = root.path().join("collection");
+        fs::create_dir_all(dir.join("wanted")).expect("mkdir");
+        write_skill(&dir.join("wanted"), "wanted", "child");
+        let report = validate_path(&dir);
+        assert!(!report.ok, "collection root is not a package: {:?}", report);
+        assert!(report.name.is_none());
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("not a skill package")),
+            "must not say SKILL.md is not a regular file: {:?}",
+            report.errors
+        );
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable);
+        assert_eq!(
+            skip.path.as_path(),
+            dir.as_path(),
+            "miss path stays the directory the user passed"
+        );
+        assert!(
+            !skip.detail.contains("regular file"),
+            "directory miss must name the package hole: {}",
+            skip.detail
+        );
     }
 
     #[test]

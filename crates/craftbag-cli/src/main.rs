@@ -126,8 +126,9 @@ enum Cmd {
         #[arg(long = "ignore", value_name = "PATH")]
         ignore: Vec<String>,
     },
-    /// Validate one SKILL.md path.
+    /// Validate one SKILL.md file or package directory.
     Validate {
+        /// SKILL.md file, or a package directory that contains SKILL.md / skill.md. Example: ./my-skill
         path: PathBuf,
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
