@@ -721,6 +721,102 @@ fn stdio_skills_load_leftover_skills_named_package_names_wanted() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn stdio_skills_load_leftover_skills_fifo_names_wanted() {
+    // Sibling lock of extra_path_skills_fifo_skill_md_does_not_hide_sibling
+    // on the MCP load door. FIFO extra/skills/SKILL.md is unreadable, not
+    // exclusive-scan entries. Do not commit a FIFO in the corpus.
+    let extra = tempfile::tempdir().expect("extra");
+    let skills_dir = extra.path().join("skills");
+    std::fs::create_dir_all(&skills_dir).expect("mkdir skills");
+    mkfifo(&skills_dir.join("SKILL.md"));
+    let wanted_pkg = extra.path().join("wanted");
+    std::fs::create_dir_all(&wanted_pkg).expect("mkdir wanted");
+    std::fs::write(
+        wanted_pkg.join("SKILL.md"),
+        "---\nname: wanted\ndescription: from-sibling\n---\nfrom-sibling\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let extra_path = extra.path();
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra_path],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: wanted]"),
+        "FIFO extra/skills/SKILL.md must not hide leftover sibling wanted: {text}"
+    );
+    assert!(
+        text.contains("from-sibling"),
+        "must load leftover sibling body: {text}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "skills",
+                    "paths": [extra_path],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    assert!(
+        matches!(
+            resp["result"]["error_kind"].as_str(),
+            Some("unknown_skill") | Some("unreadable")
+        ),
+        "FIFO extra/skills must not load (unknown or skip): {resp}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "evil",
+                    "paths": [extra_path],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    assert_eq!(
+        resp["result"]["error_kind"], "unknown_skill",
+        "nested evil must stay unknown: {resp}"
+    );
+}
+
 #[test]
 fn stdio_skills_why_vendor_cursor_names_create_rule() {
     let cwd = corpus_cursor_project();
