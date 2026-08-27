@@ -673,3 +673,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:22:36Z","job_id":"improve-mpi46-obs-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"cycle 46 done; odd 47 starts QA"}
 {"ts":"2026-08-27T22:24:07Z","job_id":"improve-mpi47-qa-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"QA REVIEW 0; odd skip TA -> Developer"}
 {"ts":"2026-08-27T22:24:45Z","job_id":"improve-mpi47-dev-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Developer REVIEW 0"}
+{"ts":"2026-08-27T22:25:49Z","job_id":"improve-mpi47-eu-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"EU REVIEW 0; expand4 no unused tree"}
