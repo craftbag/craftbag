@@ -6209,6 +6209,47 @@ fn list_catalog_includes_when_to_use() {
         ));
 }
 
+#[test]
+fn list_catalog_omits_disable_model_invocation() {
+    // Official client-guide catalog filter. JSON/XML keep slash-only
+    // for palettes. Catalog is the model prompt.
+    let extra = tempfile::tempdir().expect("extra");
+    let hidden = extra.path().join("hidden-slash");
+    fs::create_dir_all(&hidden).expect("mkdir hidden");
+    fs::write(
+        hidden.join("SKILL.md"),
+        "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nbody\n",
+    )
+    .expect("write hidden");
+    let slash = extra.path().join("slash-only");
+    fs::create_dir_all(&slash).expect("mkdir slash");
+    fs::write(
+        slash.join("SKILL.md"),
+        "---\nname: slash-only\ndescription: user only\ndisable-model-invocation: true\n---\nbody\n",
+    )
+    .expect("write slash");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("list")
+        .arg("--catalog")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        catalog_name_order(&stdout),
+        ["hidden-slash"],
+        "list --catalog must omit disable_model_invocation: {stdout}"
+    );
+}
+
 fn two_trigger_skills() -> tempfile::TempDir {
     let extra = tempfile::tempdir().expect("extra");
     let other = extra.path().join("aaa-other");

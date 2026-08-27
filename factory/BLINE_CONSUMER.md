@@ -120,7 +120,10 @@ empty XML tag. List and why
 JSON both serialize `SkillSummary` so those keys cannot drift. A new
 `SkillSummary` field must land on list JSON, why JSON, and list XML
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
-(name + description, plus `Use when:` when set). CLI `list --catalog` /
+(name + description, plus `Use when:` when set) and omits
+`disable_model_invocation` (official client-guide catalog filter).
+JSON, XML, and TSV still list those rows for a slash palette.
+CLI `list --catalog` /
 `--format catalog` and MCP `skills_list` `format=catalog` pass
 `--context` / `context` and `--context-tokens` / `context_tokens`
 (default 8000) into `format_catalog` so a matching trigger ranks first.

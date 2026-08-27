@@ -215,6 +215,11 @@ pub fn rank_skills_for_catalog<'a>(skills: &'a [Skill], context: &str) -> Vec<&'
 /// descriptions and when-to-use text can contain newlines; those
 /// become spaces so `list --catalog` and MCP `format=catalog` stay
 /// one item per skill.
+///
+/// Omits `disable_model_invocation` skills (official client-guide
+/// catalog filter). JSON, XML, and TSV still list those rows so a
+/// host can build a slash palette. `user_invocable` does not change
+/// this catalog.
 pub fn format_catalog(
     skills: &[Skill],
     context: &str,
@@ -225,7 +230,10 @@ pub fn format_catalog(
         return String::new();
     }
 
-    let ranked = rank_skills_for_catalog(skills, context);
+    let ranked: Vec<&Skill> = rank_skills_for_catalog(skills, context)
+        .into_iter()
+        .filter(|s| !s.disable_model_invocation)
+        .collect();
     let header = format!(
         "## Skills\n{}\nPrefer a matching skill over improvising process.\n\n",
         fmt.activate_hint
@@ -1080,6 +1088,39 @@ mod tests {
         assert!(
             one.contains("more skills not listed"),
             "omitted name-order skill must still be counted: {one}"
+        );
+    }
+
+    #[test]
+    fn format_catalog_omits_disable_model_invocation() {
+        let mut slash = make_skill("slash-only", &["slash"], 10);
+        slash.disable_model_invocation = true;
+        let mut hidden = make_skill("hidden-slash", &[], 10);
+        hidden.user_invocable = false;
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 4_000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(
+            &[slash.clone(), hidden.clone()],
+            "slash please",
+            budgets,
+            FormatOptions::default(),
+        );
+        assert_eq!(
+            catalog_name_order(&cat),
+            ["hidden-slash"],
+            "catalog is model-facing; omit disable_model_invocation, keep user_invocable=false: {cat}"
+        );
+        assert!(
+            !cat.contains("more skills not listed"),
+            "slash-only is filtered, not budget-omitted: {cat}"
+        );
+        let xml = format_available_skills_xml(&[slash, hidden]);
+        assert!(
+            xml.contains("<name>slash-only</name>"),
+            "XML stays the host inventory (flags), not the filtered catalog: {xml}"
         );
     }
 
