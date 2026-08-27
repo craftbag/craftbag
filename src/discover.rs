@@ -5662,6 +5662,67 @@ mod tests {
     }
 
     #[test]
+    fn incumbent_vercel_user_home_agents_layout_loads() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = corpus_dir().join("incumbent/vercel-user");
+        let off = with_home_override(Some(home.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+            .expect("discover")
+        });
+        assert!(
+            off.skills.iter().all(|s| s.name != "home-vercel"),
+            "HOME .agents is implicit_roots"
+        );
+        let on = with_home_override(Some(home.clone()), || {
+            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+        });
+        let skill = on
+            .skills
+            .iter()
+            .find(|s| s.name == "home-vercel")
+            .expect("home-vercel");
+        assert_eq!(skill.source, SkillSource::Agents);
+        let why = crate::why(&on, Some("home-vercel"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why={why:?}");
+        assert_eq!(why.loaded[0].name, "home-vercel");
+        assert_eq!(why.loaded[0].source, SkillSource::Agents);
+        let want = home
+            .join(".agents")
+            .join("skills")
+            .join("home-vercel")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the fixture SKILL.md: got={got:?} want={want:?}"
+        );
+        assert!(
+            why.skips.is_empty(),
+            "home-vercel is loaded, not a skip: {:?}",
+            why.skips
+        );
+        let dirs = with_home_override(Some(home.clone()), || {
+            watch_dirs(cwd.path(), &DiscoveryOptions::default())
+        });
+        assert!(
+            watch_paths_contain(&dirs, &home.join(".agents").join("skills")),
+            "watch_dirs must list HOME/.agents/skills: {dirs:?}"
+        );
+    }
+
+    #[test]
     fn extra_path_file_loads() {
         let cwd = tempfile::tempdir().expect("cwd");
         let path = cwd.path().join("one").join("SKILL.md");
