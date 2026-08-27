@@ -118,7 +118,10 @@ empty XML tag. List and why
 JSON both serialize `SkillSummary` so those keys cannot drift. A new
 `SkillSummary` field must land on list JSON, why JSON, and list XML
 (`skill_summary_json_keys_have_list_xml_siblings`). Catalog stays cheap
-(name + description, plus `Use when:` when set). CLI `load` /
+(name + description, plus `Use when:` when set). CLI `list --catalog` and
+`list --xml` print the same `skip\tkind\tpath\tdetail` stderr rows as
+default list. Prompt stdout stays skip-free. `list --json` keeps skips
+in the object. CLI `load` /
 MCP `skills_load` is the text envelope, not that JSON object. CLI
 `load --help` and MCP `skills_load` name `argument-hint`, `when-to-use`,
 `triggers`, `allowed-tools`, `license`, `compatibility`, and `metadata`.

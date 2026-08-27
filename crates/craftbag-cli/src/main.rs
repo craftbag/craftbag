@@ -223,6 +223,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                             .unwrap_or_default()
                     );
                 }
+            }
+            if !matches!(mode, ListOutput::Json) {
                 for skip in &report.skips {
                     let _ = writeln!(
                         io::stderr(),
