@@ -6,38 +6,39 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ba963822e1c390085edbecff7412e204f7e1976c",
+  "ledger_sha": "52ba838907ed41369c3bc507be22d0e924c4635e",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi34-dev-mcp-miss-expect",
+    "id": "mpi34-user-validate-pkg",
     "work_source": "improve",
-    "started_at": "2026-08-27T07:00:29Z",
-    "finished_at": "2026-08-27T07:00:29Z",
+    "started_at": "2026-08-27T07:15:59Z",
+    "finished_at": "2026-08-27T07:15:59Z",
     "result": "landed",
-    "head": "c8e1204ce2eaed1f8db8dc4c1292d78526b63424",
-    "pr": 259,
+    "head": "7bb6487048fd3557c2b82a08f24f9b42f85cf203",
+    "pr": 260,
     "files": [
-      "crates/craftbag-mcp/src/main.rs"
+      "crates/craftbag-cli/src/main.rs",
+      "src/lib.rs"
     ],
-    "tests": "merge_skill_miss_does_not_expect_serde",
+    "tests": "validate_package_dir_ok",
     "review": "0"
   },
-  "last_sha": "c8e1204ce2eaed1f8db8dc4c1292d78526b63424",
+  "last_sha": "7bb6487048fd3557c2b82a08f24f9b42f85cf203",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
-    "main": "in_progress",
+    "main": "success",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T07:00:29Z",
+    "checked_at": "2026-08-27T07:15:59Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 34,
-    "next_perspective": 4,
+    "next_perspective": 5,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
