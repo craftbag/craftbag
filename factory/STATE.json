@@ -6,26 +6,31 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "1e7f6bd16eadbdf1307d97bbabe713d1ec2a2ffe",
+  "ledger_sha": "1fdf6290c5f65000f866157e2c1a17f599deab61",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-prop-leftover-tsv",
-    "work_source": "expand",
-    "started_at": "2026-08-27T15:02:19Z",
-    "finished_at": "2026-08-27T15:02:19Z",
+    "id": "improve-mpi37-adv-watch-dirs",
+    "work_source": "improve",
+    "started_at": "2026-08-27T15:15:04Z",
+    "finished_at": "2026-08-27T15:15:04Z",
     "result": "landed",
-    "head": "be9a743671002d86cef0856e703a16d2e42fa5fc",
-    "pr": 288,
+    "head": "1452f6fc9551ef2459dbdb964cacd58a53902ffe",
+    "pr": 289,
     "files": [
-      "tests/prop_parse.rs"
+      "src/discover.rs",
+      "src/lib.rs",
+      "crates/craftbag-cli/src/main.rs",
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/src/main.rs",
+      "factory/BLINE_CONSUMER.md"
     ],
-    "tests": "leftover_tsv_path_sanitizes_non_fixture_controls",
+    "tests": "list_watch_dirs_leftover_hostile_path_stays_one_line",
     "review": "0"
   },
-  "last_sha": "be9a743671002d86cef0856e703a16d2e42fa5fc",
+  "last_sha": "1452f6fc9551ef2459dbdb964cacd58a53902ffe",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
@@ -37,7 +42,7 @@
   },
   "mpi": {
     "cycle": 37,
-    "next_perspective": 12,
+    "next_perspective": 13,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
