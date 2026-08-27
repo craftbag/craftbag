@@ -7950,6 +7950,76 @@ mod tests {
     }
 
     #[test]
+    fn why_load_whitespace_extra_path_does_not_scan_filesystem_root() {
+        // Sibling of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+        // on the why / load doors. List and watch already refuse `/ ..`.
+        // why/load must not surface a root package from the same token.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let home = tempfile::tempdir().expect("home");
+        for raw in [
+            " /..",
+            "\t/..",
+            "\u{85}/..",
+            "\u{00a0}/..",
+            "/ ..",
+            "/\t..",
+            "/\u{00a0}..",
+        ] {
+            let opts = DiscoveryOptions {
+                paths: vec![raw.to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            };
+            let report = with_home_override(Some(home.path().to_path_buf()), || {
+                discover(cwd.path(), &opts).expect("discover")
+            });
+            assert!(
+                report.skills.is_empty(),
+                "extra-path {raw:?} must not load root packages: {:?}",
+                report.skills
+            );
+            assert!(
+                find_skill_by_name(&report.skills, "demo").is_none(),
+                "load must not find demo via extra-path {raw:?}: {:?}",
+                report.skills
+            );
+            assert!(
+                report
+                    .skips
+                    .iter()
+                    .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("collapses") }),
+                "extra-path {raw:?} must skip as collapse, not walk /: {:?}",
+                report.skips
+            );
+            let why_named = crate::why(&report, Some("demo"), None, None);
+            assert!(
+                why_named.loaded.is_empty(),
+                "why demo must not load via extra-path {raw:?}: {:?}",
+                why_named.loaded
+            );
+            let why_all = crate::why(&report, None, None, None);
+            assert!(
+                why_all.loaded.is_empty(),
+                "why unfiltered must not load via extra-path {raw:?}: {:?}",
+                why_all.loaded
+            );
+            assert!(
+                why_all
+                    .skips
+                    .iter()
+                    .any(|s| s.kind == SkipKind::Unreadable && s.detail.contains("collapses")),
+                "why must keep the collapse skip for extra-path {raw:?}: {:?}",
+                why_all.skips
+            );
+            let miss = unknown_or_skipped_skill("demo", &report.skips);
+            assert_eq!(
+                miss.error_kind, "unknown_skill",
+                "nameless collapse skip is not demo: {miss:?}"
+            );
+        }
+    }
+
+    #[test]
     fn empty_user_dir_does_not_scan_discover_cwd() {
         let cwd = tempfile::tempdir().expect("cwd");
         write_skill(&cwd.path().join("planted"), "planted", "FROM_CWD");

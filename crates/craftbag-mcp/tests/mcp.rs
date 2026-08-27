@@ -608,6 +608,168 @@ fn stdio_skills_list_watch_whitespace_extra_path_omits_root() {
     }
 }
 
+#[test]
+fn stdio_skills_why_whitespace_extra_path_demo_is_unknown() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the MCP why door. paths: [" /.."] and ["/ .."] must not rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let named = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 21,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_why",
+                    "arguments": {
+                        "name": "demo",
+                        "paths": [raw],
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(
+            named["result"]["isError"], true,
+            "why demo via extra-path {raw:?} must miss: {named}"
+        );
+        let kind = named["result"]["error_kind"].as_str().unwrap_or("");
+        assert!(
+            kind == "unknown_skill" || kind == "unreadable",
+            "why miss must be unknown or unreadable for {raw:?}: {named}"
+        );
+        let named_text = named["result"]["content"][0]["text"]
+            .as_str()
+            .expect("text");
+        assert_eq!(
+            named_text.lines().count(),
+            1,
+            "why miss must stay one line: {named_text:?}"
+        );
+        assert!(
+            !named_text.contains("[Activated skill:"),
+            "why must not activate via extra-path {raw:?}: {named_text}"
+        );
+        if let Some(p) = named["result"].get("path").and_then(|x| x.as_str()) {
+            assert_ne!(p, "/", "must not peel path=/ for {raw:?}: {named}");
+            assert_ne!(
+                p, "/SKILL.md",
+                "must not peel path=/SKILL.md for {raw:?}: {named}"
+            );
+        }
+
+        let all = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 22,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_why",
+                    "arguments": {
+                        "paths": [raw],
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(
+            all["result"]["isError"], false,
+            "unfiltered why via extra-path {raw:?} must stay ok: {all}"
+        );
+        let all_text = all["result"]["content"][0]["text"].as_str().expect("text");
+        let v: serde_json::Value = serde_json::from_str(all_text).expect("why json");
+        let loaded = v["loaded"].as_array().expect("loaded");
+        assert!(
+            loaded.is_empty(),
+            "unfiltered why must not load root via extra-path {raw:?}: {all_text}"
+        );
+        let skips = v["skips"].as_array().expect("skips");
+        assert!(
+            skips.iter().any(|s| {
+                s["kind"] == "unreadable"
+                    && s["detail"]
+                        .as_str()
+                        .is_some_and(|d| d.contains("collapses"))
+            }),
+            "why must keep the collapse skip for extra-path {raw:?}: {all_text}"
+        );
+    }
+}
+
+#[test]
+fn stdio_skills_load_whitespace_extra_path_demo_is_unknown() {
+    // Sibling lock of extra_path_whitespace_dotdot_does_not_scan_filesystem_root
+    // on the MCP load door. paths: [" /.."] and ["/ .."] must not rewrite to `/`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in [
+        " /..",
+        "\t/..",
+        "\u{85}/..",
+        "\u{00a0}/..",
+        "/ ..",
+        "/\t..",
+        "/\u{00a0}..",
+    ] {
+        let resp = rpc_in(
+            cwd.path(),
+            home.path(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 23,
+                "method": "tools/call",
+                "params": {
+                    "name": "skills_load",
+                    "arguments": {
+                        "name": "demo",
+                        "paths": [raw],
+                        "implicit_roots": false
+                    }
+                }
+            }),
+        );
+        assert_eq!(
+            resp["result"]["isError"], true,
+            "load demo via extra-path {raw:?} must miss: {resp}"
+        );
+        let kind = resp["result"]["error_kind"].as_str().unwrap_or("");
+        assert!(
+            kind == "unknown_skill" || kind == "unreadable",
+            "load miss must be unknown or unreadable for {raw:?}: {resp}"
+        );
+        let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+        assert_eq!(
+            text.lines().count(),
+            1,
+            "load miss must stay one line: {text:?}"
+        );
+        assert!(
+            !text.contains("[Activated skill:"),
+            "must not activate demo via extra-path {raw:?}: {text}"
+        );
+        if let Some(p) = resp["result"].get("path").and_then(|x| x.as_str()) {
+            assert_ne!(p, "/", "must not peel path=/ for {raw:?}: {resp}");
+            assert_ne!(
+                p, "/SKILL.md",
+                "must not peel path=/SKILL.md for {raw:?}: {resp}"
+            );
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn stdio_skills_load_newline_extra_path_demo_is_unknown() {
