@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
-    format_skip_tsv, parse_list_format, progressive_budgets, unknown_or_skipped_skill,
-    validate_path_with_options, watch_dirs, why,
+    format_skip_tsv, format_why_text, parse_list_format, progressive_budgets,
+    unknown_or_skipped_skill, validate_path_with_options, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -109,6 +109,9 @@ struct WhyArgs {
     /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
+    /// json (default WhyReport) or text (same rows as CLI why).
+    #[serde(default, deserialize_with = "present_non_null")]
+    format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -261,8 +264,38 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
     }
 }
 
+/// MCP `skills_why` format. Default is JSON (WhyReport). `text` is
+/// [`format_why_text`] (same rows as CLI why).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WhyFormat {
+    Json,
+    Text,
+}
+
+/// Parse `skills_why` format. Surrounding whitespace is ignored.
+/// Tokens stay lowercase. A case-only miss is an error with a hint.
+fn parse_why_format(raw: &str) -> Result<WhyFormat, String> {
+    let trimmed = raw.trim();
+    if trimmed == "json" {
+        return Ok(WhyFormat::Json);
+    }
+    if trimmed == "text" {
+        return Ok(WhyFormat::Text);
+    }
+    if trimmed.is_empty() {
+        return Err("unknown format: empty (use json or text)".to_owned());
+    }
+    let shown = craftbag::sanitize_error_token(trimmed);
+    let lower = trimmed.to_ascii_lowercase();
+    if lower == "json" || lower == "text" {
+        return Err(format!("unknown format: {shown} (did you mean {lower}?)"));
+    }
+    Err(format!("unknown format: {shown} (use json or text)"))
+}
+
 fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let format = parse_why_format(args.format.as_deref().unwrap_or("json"))?;
     let report = discover(
         &cwd,
         &opts_from(
@@ -286,7 +319,10 @@ fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     if let Some(miss) = why.unknown_skill_miss() {
         return Err(miss.into());
     }
-    Ok(serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)
+    match format {
+        WhyFormat::Text => Ok(format_why_text(&why)),
+        WhyFormat::Json => Ok(serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?),
+    }
 }
 
 fn validate_text(args: ValidateArgs) -> Result<String, ToolError> {
@@ -379,6 +415,11 @@ fn tools() -> Value {
     why_props["context"] = json!({"type": "string", "description": "Activation context text."});
     why_props["context_tokens"] =
         json!({"type": "integer", "description": "Token budget for activation (default 8000)."});
+    why_props["format"] = json!({
+        "type": "string",
+        "enum": ["json", "text"],
+        "description": "json (default `{ loaded, skips, activation }`) or text (`loaded\\tname\\tpath`, skip TSV, then `activation\\tname\\treason\\tdetail`; same as CLI why). Paths sanitized like skip TSV."
+    });
     json!([
         {
             "name": "skills_list",
@@ -396,7 +437,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions (`{ loaded, skips, activation }`). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
+            "description": "Explain loaded, skipped, and activation decisions. format is json (default `{ loaded, skips, activation }`) or text (same rows as CLI why). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
             "inputSchema": {"type": "object", "properties": why_props}
         },
         {
@@ -3547,6 +3588,19 @@ mod tests {
             desc.contains("{ loaded, skips, activation }"),
             "skills_why must name WhyReport keys like CLI why --json / list {{ skills, skips }}: {desc}"
         );
+        assert!(
+            desc.contains("format") && desc.contains("text"),
+            "skills_why must name format=text like CLI why (not --json): {desc}"
+        );
+        let format = &why["inputSchema"]["properties"]["format"];
+        assert_eq!(format["type"], "string", "{format}");
+        let tokens: Vec<&str> = format["enum"]
+            .as_array()
+            .expect("enum")
+            .iter()
+            .map(|v| v.as_str().expect("token"))
+            .collect();
+        assert_eq!(tokens, ["json", "text"], "{format}");
     }
 
     #[test]

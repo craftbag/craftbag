@@ -1096,6 +1096,59 @@ fn stdio_skills_load_newline_extra_path_demo_is_unknown() {
 }
 
 #[test]
+fn stdio_skills_why_text_leftover_hostile_loaded_tsv_stays_one_row() {
+    // CLI why (not --json) uses format_why_text (PR 282). MCP skills_why
+    // was JSON-only, so leftover implicit paths stayed raw in the tool
+    // text. format=text must share those sanitized TSV rows.
+    let tmp = tempfile::tempdir().expect("tmp");
+    let root = tmp.path().join("evil\u{2028}root");
+    let pkg = root.join(".agents").join("skills").join("demo");
+    std::fs::create_dir_all(&pkg).expect("mkdir");
+    std::fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: leftover\u{2014}pkg\n---\nbody\n",
+    )
+    .expect("write");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        &root,
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 80,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {
+                    "format": "text"
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let loaded: Vec<&str> = text.lines().filter(|l| l.starts_with("loaded\t")).collect();
+    assert_eq!(
+        loaded.len(),
+        1,
+        "MCP why text leftover loaded TSV must stay one row: {text:?}"
+    );
+    let row = loaded[0];
+    assert!(
+        row.starts_with("loaded\tdemo\t"),
+        "MCP why format=text must emit loaded TSV like CLI why: {row:?}"
+    );
+    assert!(
+        !row.contains('\u{2028}') && !row.contains('\u{2014}'),
+        "U+2028 / em dash must not leak into MCP why text: {row:?}"
+    );
+    assert!(
+        row.contains("evil?root"),
+        "hostile leftover path must be sanitized on MCP why text: {row:?}"
+    );
+}
+
+#[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
     // on the MCP why door. Default vendor stays off. Empty extra/skills
