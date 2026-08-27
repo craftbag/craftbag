@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "expand",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a2923e87ebc399ced9038159be39c467824fd61d",
+  "ledger_sha": "ee62071256602f7575d4e6befa4dc9cc6019c3f6",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "expand_cursor": 4,
-  "expand_noop_streak": 2,
+  "expand_cursor": 5,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi40-ops-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-27T20:23:10Z",
-    "finished_at": "2026-08-27T20:23:10Z",
-    "result": "noop",
+    "id": "expand-cursor-4-leftover-empty-skills",
+    "work_source": "expand",
+    "started_at": "2026-08-27T20:24:48Z",
+    "finished_at": "2026-08-27T20:24:48Z",
+    "result": "proved",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "Makefile vs ci.yml match",
+    "tests": "craftbag why --path leftover/empty-nested-skills -> wanted",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -58,9 +58,10 @@
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)",
       "tests/corpus/incumbent/bline-project (cwd + --vendor bline)",
       "/Users/sebastientardif/skills/grok/skills (--path, no implicit roots)",
-      "tests/corpus/root-file (--path, no implicit roots)"
+      "tests/corpus/root-file (--path, no implicit roots)",
+      "tests/corpus/leftover/empty-nested-skills (--path, no implicit roots)"
     ],
-    "last_why_summary": "why --path tests/corpus/root-file skip name_directory_mismatch loose (package dir, not root_file)"
+    "last_why_summary": "why --path leftover/empty-nested-skills names wanted"
   },
   "budgets": {
     "max_cycles": null,
