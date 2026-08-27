@@ -17,9 +17,9 @@ Local gate before every commit (`make check`):
 
 ```bash
 cargo fmt --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo nextest run --locked --workspace
-cargo test --locked --workspace --doc
+RUSTFLAGS="-D warnings" cargo clippy --locked --workspace --all-targets -- -D warnings
+RUSTFLAGS="-D warnings" cargo nextest run --locked --workspace
+RUSTFLAGS="-D warnings" cargo test --locked --workspace --doc
 bash factory/scripts/deny-check.sh
 bash factory/scripts/assert-stealth.sh craftbag/craftbag
 bash factory/scripts/write-ledger.sh --self-test
