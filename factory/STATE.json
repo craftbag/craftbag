@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "0b5c8eaa5f9872c29afc6626e459d87f2755ddd7",
+  "ledger_sha": "31940221a8462324385f44ddd97cd6e2900c20c3",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 0,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand5-steal-list-noop-r5",
-    "work_source": "expand",
-    "started_at": "2026-08-27T22:57:27Z",
-    "finished_at": "2026-08-27T22:57:27Z",
-    "result": "noop",
+    "id": "prove-skills-named-package-reconfirm-r4",
+    "work_source": "prove",
+    "started_at": "2026-08-27T23:01:47Z",
+    "finished_at": "2026-08-27T23:01:47Z",
+    "result": "ok",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "steal 1-4 live; item 5 catalog copy banned",
+    "tests": "why leftover/skills-named-package loads wanted+skills; evil unknown_skill",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -65,7 +65,7 @@
       "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
       "tests/corpus/agentskills (--path collection, no implicit roots)"
     ],
-    "last_why_summary": "why --json leftover/empty-nested-skills still loads wanted"
+    "last_why_summary": "why --json leftover/skills-named-package loads wanted+skills; evil unknown"
   },
   "budgets": {
     "max_cycles": null,
