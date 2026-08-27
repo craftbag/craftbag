@@ -541,6 +541,68 @@ fn stdio_skills_list_watch_newline_extra_path_omits_root() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn stdio_skills_load_newline_extra_path_demo_is_unknown() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the MCP load door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    std::fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    std::fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "demo",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    let kind = resp["result"]["error_kind"].as_str().unwrap_or("");
+    assert!(
+        kind == "unknown_skill" || kind == "unreadable",
+        "load miss must be unknown or unreadable: {resp}"
+    );
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        !text.contains("SECRET_BODY"),
+        "body must not load via skills_load: {text}"
+    );
+    assert_eq!(
+        text.lines().count(),
+        1,
+        "load miss must stay one line: {text:?}"
+    );
+    assert!(
+        !text.contains('\n') && !text.contains('\u{2028}') && !text.contains('\u{2029}'),
+        "load miss must not echo raw line separators: {text:?}"
+    );
+    for key in ["error", "path", "detail"] {
+        if let Some(s) = resp["result"].get(key).and_then(|x| x.as_str()) {
+            assert!(
+                !s.contains('\n') && !s.contains('\u{2028}') && !s.contains('\u{2029}'),
+                "miss {key} must not echo raw line separators: {s:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
