@@ -4545,6 +4545,83 @@ fn list_vendor_claude_loads_user_home_layout() {
 }
 
 #[test]
+fn why_vendor_claude_names_home_note() {
+    // Sibling lock of incumbent_claude_user_home_vendor_layout_loads
+    // on the CLI why door. Isolated cwd; HOME is the committed fixture.
+    let home = corpus().join("incumbent/claude-user");
+    let skill = home.join(".claude/skills/home-note/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Claude user-home fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let mut off = Command::cargo_bin("craftbag").expect("bin");
+    let off_out = off
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("home-note")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(
+        off_out.status.code(),
+        Some(1),
+        "claude vendor is opt-in: stderr={}",
+        String::from_utf8_lossy(&off_out.stderr)
+    );
+    let off_err = String::from_utf8_lossy(&off_out.stderr);
+    assert!(
+        off_err.contains("unknown skill: home-note"),
+        "why without --vendor claude must not see home-note: {off_err}"
+    );
+    let mut cmd = Command::cargo_bin("craftbag").expect("bin");
+    let out = cmd
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .current_dir(cwd.path())
+        .arg("why")
+        .arg("home-note")
+        .arg("--json")
+        .arg("--vendor")
+        .arg("claude")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "home-note")
+        .unwrap_or_else(|| panic!("why must name home-note: {stdout}"));
+    assert_eq!(
+        row["source"], "claude",
+        "why JSON source must be the wire token: {stdout}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {stdout}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "home-note is a loaded vendor skill, not a skip: {stdout}"
+    );
+}
+
+#[test]
 fn list_vendor_cursor_loads_user_home_layout() {
     let home = corpus().join("incumbent/cursor-user");
     let cwd = tempfile::tempdir().expect("cwd");

@@ -5312,6 +5312,43 @@ mod tests {
                 name: "claude".to_owned()
             }
         );
+        let why = crate::why(&on, Some("home-note"), None, None);
+        assert_eq!(why.loaded.len(), 1, "why={why:?}");
+        assert_eq!(why.loaded[0].name, "home-note");
+        assert_eq!(
+            why.loaded[0].source,
+            SkillSource::Vendor {
+                name: "claude".to_owned()
+            }
+        );
+        let want = home
+            .join(".claude")
+            .join("skills")
+            .join("home-note")
+            .join("SKILL.md");
+        let got = why.loaded[0].path.as_deref().expect("why path");
+        let same = got == want.as_path()
+            || got
+                .canonicalize()
+                .ok()
+                .zip(want.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
+        assert!(
+            same,
+            "why path must be the fixture SKILL.md: got={got:?} want={want:?}"
+        );
+        assert!(
+            why.skips.is_empty(),
+            "home-note is loaded, not a skip: {:?}",
+            why.skips
+        );
+        let off_why = crate::why(&off, Some("home-note"), None, None);
+        assert!(off_why.loaded.is_empty(), "off why={off_why:?}");
+        assert!(off_why.skips.is_empty(), "off skips={:?}", off_why.skips);
+        assert!(
+            off_why.unknown_skill_message().is_some(),
+            "why without vendor claude must treat home-note as unknown"
+        );
         let dirs = with_home_override(Some(home.clone()), || {
             watch_dirs(
                 cwd.path(),

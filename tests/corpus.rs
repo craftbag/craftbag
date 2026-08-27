@@ -40,6 +40,17 @@ fn corpus_package_full_parses_license() {
 }
 
 #[test]
+fn corpus_incumbent_claude_user_parses() {
+    let rel = "incumbent/claude-user/.claude/skills/home-note/SKILL.md";
+    assert!(
+        corpus().join(rel).is_file(),
+        "committed Claude user-home fixture must exist: {rel}"
+    );
+    let skill = parse_skill(&read(rel)).expect("parse");
+    assert_eq!(skill.name, "home-note");
+}
+
+#[test]
 fn corpus_incumbent_cursor_project_parses() {
     let rel = "incumbent/cursor-project/.cursor/skills/create-rule/SKILL.md";
     assert!(

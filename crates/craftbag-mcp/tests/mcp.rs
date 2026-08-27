@@ -14,6 +14,10 @@ fn corpus_cursor_project() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/cursor-project")
 }
 
+fn corpus_claude_user() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/claude-user")
+}
+
 fn corpus_grok_project() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/incumbent/grok-project")
 }
@@ -1796,6 +1800,87 @@ fn stdio_skills_why_vendor_grok_names_project_grok() {
     assert!(
         skips.is_empty(),
         "project-grok is a loaded vendor skill, not a skip: {text}"
+    );
+}
+
+#[test]
+fn stdio_skills_why_vendor_claude_names_home_note() {
+    // Sibling lock of incumbent_claude_user_home_vendor_layout_loads
+    // on the MCP why door. Isolated cwd; HOME is the committed fixture.
+    let home = corpus_claude_user();
+    let skill = home.join(".claude/skills/home-note/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Claude user-home fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let off = rpc_in(
+        cwd.path(),
+        &home,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "home-note"}
+            }
+        }),
+    );
+    assert_eq!(
+        off["result"]["isError"], true,
+        "claude vendor is opt-in: {off}"
+    );
+    assert_eq!(
+        off["result"]["error_kind"], "unknown_skill",
+        "why without vendor claude must peel unknown_skill: {off}"
+    );
+    let off_text = off["result"]["content"][0]["text"]
+        .as_str()
+        .expect("off text");
+    assert!(
+        off_text.contains("unknown skill: home-note"),
+        "why without vendor claude must not see home-note: {off_text}"
+    );
+
+    let on = rpc_in(
+        cwd.path(),
+        &home,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_why",
+                "arguments": {"name": "home-note", "vendor": ["claude"]}
+            }
+        }),
+    );
+    assert_eq!(on["result"]["isError"], false, "{on}");
+    let text = on["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("why json");
+    let loaded = v["loaded"].as_array().expect("loaded");
+    let row = loaded
+        .iter()
+        .find(|s| s["name"] == "home-note")
+        .unwrap_or_else(|| panic!("why must name home-note: {text}"));
+    assert_eq!(
+        row["source"], "claude",
+        "why JSON source must be the wire token: {text}"
+    );
+    let path = row["path"].as_str().expect("path");
+    let got = Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize why path {path}: {e}"));
+    let want = skill
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize fixture: {e}"));
+    assert_eq!(got, want, "why path must be the fixture SKILL.md: {text}");
+    let skips = v["skips"].as_array().expect("skips");
+    assert!(
+        skips.is_empty(),
+        "home-note is a loaded vendor skill, not a skip: {text}"
     );
 }
 
