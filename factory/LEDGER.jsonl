@@ -719,3 +719,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-27T23:18:01Z", "job_id": "mpi49-ops-noop", "work_source": "improve", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "Win/mac/fuzz still green; Security next"}
 {"ts": "2026-08-27T23:19:54Z", "job_id": "mpi49-security-noop", "work_source": "improve", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "no missing hostile-walk caller; PM next"}
 {"ts": "2026-08-27T23:20:45Z", "job_id": "mpi49-pm-noop", "work_source": "improve", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 2 fuzz next"}
+{"ts": "2026-08-27T23:21:58Z", "job_id": "expand2-fuzz-smoke-noop-r6", "work_source": "expand", "result": "noop", "head": "b9135794f95cb182a704c18ab591543a4d398b0b", "pr": null, "review": 0, "notes": "3 expand no-ops; prove new tree"}
