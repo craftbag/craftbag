@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ae1b82e3c1f28ee4275b39c1890d9bed5113ae17",
+  "ledger_sha": "50ddb96776e6a3f24bf4573b781e757d9d795992",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 3,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand2-fuzz-smoke-noop-r3",
-    "work_source": "expand",
-    "started_at": "2026-08-27T22:01:09Z",
-    "finished_at": "2026-08-27T22:01:09Z",
-    "result": "noop",
+    "id": "prove-empty-nested-reconfirm-r2",
+    "work_source": "prove",
+    "started_at": "2026-08-27T22:01:13Z",
+    "finished_at": "2026-08-27T22:01:13Z",
+    "result": "ok",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
     "files": [],
-    "tests": "6 fuzz targets still in fuzz/fuzz_targets and ci.yml",
+    "tests": "why --json leftover/empty-nested-skills still loads wanted",
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -65,7 +65,7 @@
       "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
       "tests/corpus/agentskills (--path collection, no implicit roots)"
     ],
-    "last_why_summary": "why --json leftover/skills-named-package still loads wanted+skills"
+    "last_why_summary": "why --json leftover/empty-nested-skills still loads wanted"
   },
   "budgets": {
     "max_cycles": null,
