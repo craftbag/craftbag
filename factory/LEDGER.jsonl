@@ -478,3 +478,4 @@
 {"ts": "2026-08-27T09:04:28Z", "job_id": "mpi35-qa-why-load-slash-dotdot", "work_source": "improve", "result": "landed", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": 267, "tests": "why/load extra-path / ..", "noop": false}
 {"ts": "2026-08-27T09:06:40Z", "job_id": "mpi35-dev-noop", "work_source": "improve", "result": "noop", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": null, "tests": "no third refuse copy", "noop": true}
 {"ts": "2026-08-27T09:09:57Z", "job_id": "mpi35-user-noop", "work_source": "improve", "result": "noop", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": null, "tests": "help already names ValidationReport", "noop": true}
+{"ts": "2026-08-27T09:11:27Z", "job_id": "mpi35-maint-noop", "work_source": "improve", "result": "noop", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": null, "tests": "consecutive_noop=3 switch expand", "noop": true}
