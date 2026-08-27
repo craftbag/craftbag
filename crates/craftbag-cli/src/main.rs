@@ -64,7 +64,7 @@ enum Cmd {
     /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
     Load {
         name: String,
-        /// Print `{ error_kind, error }` on a miss (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
+        /// Print `{ error_kind, error }` on a miss, and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Unknown omits `path` (same unknown peel as `why --json`).
         #[arg(long)]
         json: bool,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
@@ -95,7 +95,7 @@ enum Cmd {
     /// Explain loaded, skipped, and activation decisions.
     Why {
         name: Option<String>,
-        /// Print `{ error_kind, error }` on a miss (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
+        /// Print `{ error_kind, error }` on an unknown name only (no matching skill or skip; no `path`). A matching skip stays in WhyReport `skips` (not a SkillMiss peel).
         #[arg(long)]
         json: bool,
         /// Activation context text. Example: --context rebase
@@ -132,7 +132,7 @@ enum Cmd {
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
-        /// Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
+        /// Print `{ error_kind, error }` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
     },

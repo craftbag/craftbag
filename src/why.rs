@@ -173,6 +173,9 @@ impl WhyReport {
     }
 
     /// Same miss as [`Self::unknown_skill_message`], with `error_kind`.
+    ///
+    /// Only fires when the query matched neither a loaded skill nor a skip
+    /// (`unknown_skill`, no `path`). A matching skip stays in [`Self::skips`].
     pub fn unknown_skill_miss(&self) -> Option<SkillMiss> {
         let want = self.query.as_deref()?;
         if self.loaded.is_empty() && self.skips.is_empty() {
@@ -454,6 +457,10 @@ mod tests {
         assert_eq!(miss.error_kind, "unknown_skill");
         assert_eq!(miss.error, "unknown skill: no-such");
         assert!(miss.is_not_found());
+        assert!(
+            miss.path.is_none() && miss.winner_path.is_none(),
+            "unknown why miss omits path and winner_path"
+        );
         let json = serde_json::to_string(&miss).expect("ser");
         let v: serde_json::Value = serde_json::from_str(&json).expect("json");
         assert_eq!(v["error_kind"], "unknown_skill", "json={json}");
@@ -461,6 +468,34 @@ mod tests {
         assert!(
             v.get("errorKind").is_none(),
             "error_kind must stay snake_case: {json}"
+        );
+        assert!(
+            v.get("path").is_none() && v.get("winner_path").is_none(),
+            "unknown why peel has no path keys: {json}"
+        );
+    }
+
+    /// A matching skip is WhyReport.skips, not a SkillMiss peel. Hosts must
+    /// not expect load-style path/winner_path on why --json / skills_why.
+    #[test]
+    fn why_matching_skip_is_not_skill_miss_peel() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/Bad_Name/SKILL.md"),
+            name: Some("Bad_Name".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid name".to_owned(),
+            winner_path: None,
+        };
+        let report = DiscoveryReport {
+            skills: vec![],
+            skips: vec![skip],
+        };
+        let why = why(&report, Some("Bad_Name"), None, None);
+        assert_eq!(why.skips.len(), 1);
+        assert_eq!(why.skips[0].kind, SkipKind::ParseError);
+        assert!(
+            why.unknown_skill_miss().is_none(),
+            "matching skip must not peel SkillMiss on why"
         );
     }
 

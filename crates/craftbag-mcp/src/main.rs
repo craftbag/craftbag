@@ -324,7 +324,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -333,7 +333,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
+            "description": "Explain loaded, skipped, and activation decisions. An unknown name (no matching skill or skip) sets isError and peels SkillMiss.error_kind plus error (no path). A matching skip stays in WhyReport skips (not isError).",
             "inputSchema": {"type": "object", "properties": why_props}
         }
     ])
@@ -2929,27 +2929,44 @@ mod tests {
         })
         .expect("list");
         let tools = names["result"]["tools"].as_array().expect("tools");
-        for name in ["skills_load", "skills_why"] {
-            let tool = tools.iter().find(|t| t["name"] == name).expect(name);
-            let desc = tool["description"].as_str().unwrap_or("");
-            assert!(
-                desc.contains("error_kind plus error"),
-                "{name} must name SkillMiss.error as its own key, not a substring of error_kind: {desc}"
-            );
-            assert!(
-                desc.contains("winner_path") && desc.contains("name_collision"),
-                "{name} must name SkillMiss.winner_path on name_collision so hosts do not scrape lost to: {desc}"
-            );
-            assert!(
-                desc.contains("path when a skip"),
-                "{name} must name SkillMiss.path when a skip is known like CLI why --json: {desc}"
-            );
-        }
         let load = tools
             .iter()
             .find(|t| t["name"] == "skills_load")
             .expect("skills_load");
         let load_desc = load["description"].as_str().unwrap_or("");
+        assert!(
+            load_desc.contains("error_kind plus error"),
+            "skills_load must name SkillMiss.error as its own key, not a substring of error_kind: {load_desc}"
+        );
+        assert!(
+            load_desc.contains("winner_path") && load_desc.contains("name_collision"),
+            "skills_load must name SkillMiss.winner_path on name_collision so hosts do not scrape lost to: {load_desc}"
+        );
+        assert!(
+            load_desc.contains("path when a skip"),
+            "skills_load must name SkillMiss.path when a skip is known: {load_desc}"
+        );
+        assert!(
+            !load_desc.contains("same as why"),
+            "skills_load must not claim skip peels match why (why only peels unknown): {load_desc}"
+        );
+        let why = tools
+            .iter()
+            .find(|t| t["name"] == "skills_why")
+            .expect("skills_why");
+        let why_desc = why["description"].as_str().unwrap_or("");
+        assert!(
+            why_desc.contains("error_kind plus error"),
+            "skills_why must name SkillMiss.error as its own key, not a substring of error_kind: {why_desc}"
+        );
+        assert!(
+            why_desc.contains("unknown") && why_desc.contains("skips"),
+            "skills_why must say unknown peels and matching skips stay in skips: {why_desc}"
+        );
+        assert!(
+            !why_desc.contains("path when a skip") && !why_desc.contains("winner_path"),
+            "skills_why must not claim load-style path/winner_path SkillMiss peels: {why_desc}"
+        );
         for field in [
             "argument-hint",
             "when-to-use",

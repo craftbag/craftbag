@@ -194,3 +194,29 @@ fn bline_consumer_does_not_group_catalog_with_skill_summary_json() {
         );
     }
 }
+
+/// why only peels unknown_skill (no path). load peels path on a skip.
+/// Host notes must not group skills_why with skills_load skip peels.
+#[test]
+fn bline_consumer_why_unknown_not_skip_peel() {
+    let notes = repo_file("factory/BLINE_CONSUMER.md");
+    assert!(
+        notes.contains("CLI `why --json` peels")
+            && notes.contains("only when the name matches neither a loaded")
+            && notes.contains("A matching skip stays in `skips`"),
+        "BLINE_CONSUMER must say why peels unknown only; matching skip stays in skips"
+    );
+    assert!(
+        notes.lines().any(|l| {
+            l.contains('|')
+                && l.contains("MCP `skills_why`")
+                && l.contains("no `path`")
+                && l.contains("WhyReport")
+        }),
+        "BLINE_CONSUMER host table must split skills_why (unknown, no path) from skills_load"
+    );
+    assert!(
+        !notes.contains("MCP `skills_load` / `skills_why`"),
+        "BLINE_CONSUMER must not group skills_load skip peels with skills_why"
+    );
+}

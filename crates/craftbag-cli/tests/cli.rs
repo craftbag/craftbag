@@ -3630,29 +3630,35 @@ fn why_help_names_json_error_kind() {
 }
 
 #[test]
-fn why_help_names_json_winner_path() {
-    // SkillMiss.winner_path landed in #191. why --help must name the key so
-    // a leftover host does not scrape `lost to` from Display.
+fn why_help_names_unknown_json_not_skip_peel() {
+    // WhyReport::unknown_skill_miss peels only when loaded and skips are
+    // both empty (unknown_skill, no path). A matching skip stays in
+    // WhyReport.skips. why --help must not claim load-style SkillMiss.path
+    // / winner_path peels.
     let (_home, mut cmd) = bin();
-    cmd.arg("why")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("winner_path"))
-        .stdout(predicates::str::contains("name_collision"));
-}
-
-#[test]
-fn why_help_names_json_path() {
-    // SkillMiss.path landed in #139. `--path` is the extra-root flag, so
-    // a leftover host must see `path when a skip` to peel the SKILL.md
-    // instead of scraping `at ` from Display.
-    let (_home, mut cmd) = bin();
-    cmd.arg("why")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("`path` when a skip"));
+    let out = cmd.arg("why").arg("--help").output().expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let help = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        help.contains("error_kind") && help.contains("{ error_kind, error }"),
+        "why --help must still name the unknown peel: {help}"
+    );
+    assert!(
+        help.contains("unknown") && help.contains("skips"),
+        "why --help must say unknown peels and matching skips stay in skips: {help}"
+    );
+    assert!(
+        !help.contains("`path` when a skip") && !help.contains("path when a skip"),
+        "why --help must not claim SkillMiss.path peel on a skip (load does): {help}"
+    );
+    assert!(
+        !help.contains("winner_path") && !help.contains("name_collision"),
+        "why --help must not claim winner_path / name_collision peel (load does): {help}"
+    );
 }
 
 #[test]

@@ -11,19 +11,23 @@ kinds on one tree, then (if wanted) re-export `Skill` / `SkipKind`.
 `load` and `why` already exist here (`craftbag` CLI and `craftbag-mcp`).
 
 `load` / `why` misses carry a stable `error_kind` so a host can branch
-without scraping Display. Unknown is `unknown_skill`. A matching skip
-reuses that row's `code` (`parse_error`, `root_file`, …). CLI `why --json` and CLI `load --json`
-print `{ "error_kind", "error" }` on stdout and keep the same one-line
-text on stderr. A matching skip also peels `path` (the `SKILL.md`).
-Unknown omits `path`. A `name_collision` skip also peels `winner_path`
-(the loaded `SKILL.md`). Other misses omit it. SkillSkip deserialize
-accepts that snake `winner_path` (serialize still emits `winnerPath`). MCP `skills_load` /
-`skills_why` merge that same `SkillMiss` object next to `isError`
+without scraping Display. Unknown is `unknown_skill`. CLI `load --json`
+on a matching skip reuses that row's `code` (`parse_error`, `root_file`,
+…) and peels `path` (the `SKILL.md`). Unknown omits `path`. A
+`name_collision` skip also peels `winner_path` (the loaded `SKILL.md`).
+Other load misses omit it. CLI `why --json` peels
+`{ "error_kind", "error" }` only when the name matches neither a loaded
+skill nor a skip (unknown; no `path`). A matching skip stays in `skips`
+(WhyReport, not a SkillMiss peel). SkillSkip deserialize accepts that
+snake `winner_path` (serialize still emits `winnerPath`). MCP
+`skills_load` merges that same `SkillMiss` object next to `isError`
 (`error_kind`, `error`, `path` when known, and `winner_path` on
-collision) and leave `content[0].text` unchanged (same text as `error`).
-Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
-`SkillMiss::is_not_found`) from a path-dep. Do not parse
-`unknown skill:` / `skipped skill:`.
+collision) and leaves `content[0].text` unchanged (same text as `error`).
+MCP `skills_why` peels only unknown (`error_kind`, `error`; no `path`)
+next to `isError`; a matching skip is WhyReport JSON in `content` (not
+`isError`). Call `unknown_or_skipped_skill` /
+`WhyReport::unknown_skill_miss` (and `SkillMiss::is_not_found`) from a
+path-dep. Do not parse `unknown skill:` / `skipped skill:`.
 
 CLI `validate --json` uses the same peel on a failed path.
 `error_kind` is the skip code (`parse_error`, `unreadable`,
@@ -36,7 +40,8 @@ names go through `sanitize_error_token` so stderr stays one line.
 | CLI `why --json` | stdout `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
 | CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
-| MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
+| MCP `skills_load` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
+| MCP `skills_why` | unknown peels `error_kind` + `error` (no `path`) next to `isError`; matching skip is WhyReport in `content` (not `isError`) |
 
 ## Path-dep (separate worktree)
 
