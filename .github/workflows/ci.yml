@@ -51,6 +51,7 @@ jobs:
               - '.github/workflows/**'
               - 'factory/scripts/deny-check.sh'
               - 'AGENTS.md'
+              - 'README.md'
               - 'factory/BLINE_CONSUMER.md'
               - 'fuzz/**'
 
