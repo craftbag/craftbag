@@ -6,32 +6,34 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f23f9798db8c86dc995273f5a98229cb7c0dba05",
+  "ledger_sha": "a5737eba95d750f89b4c9c9d37defab5bb33fb1b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "refuse-newline-extra-path-component",
+    "id": "list-newline-extra-path-cli-mcp",
     "work_source": "improve",
-    "started_at": "2026-08-27T02:22:00Z",
-    "finished_at": "2026-08-27T02:38:36Z",
+    "started_at": "2026-08-27T02:40:00Z",
+    "finished_at": "2026-08-27T02:44:31Z",
     "result": "landed",
-    "head": "46fcb0463a6c03cc8f04fe97049cc7ad389c2760",
-    "pr": 240,
+    "head": "ee616385854ae7dde782185e1fb7ecc6181c6abd",
+    "pr": 241,
     "files": [
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/tests/mcp.rs",
       "src/discover.rs"
     ],
-    "tests": "package_path_with_newline_component_is_unreadable_not_loaded,path_has_line_separator_detects_lf",
+    "tests": "list_newline_extra_path_does_not_name_demo,stdio_skills_list_newline_extra_path_does_not_name_demo",
     "review": "0"
   },
-  "last_sha": "46fcb0463a6c03cc8f04fe97049cc7ad389c2760",
+  "last_sha": "ee616385854ae7dde782185e1fb7ecc6181c6abd",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T02:38:36Z",
+    "checked_at": "2026-08-27T02:44:31Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -59,7 +61,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "extra-path line-separator component is Unreadable."
+    "last_why_summary": "CLI/MCP list newline extra-path does not name demo; skip.path sanitized."
   },
   "budgets": {
     "max_cycles": null,

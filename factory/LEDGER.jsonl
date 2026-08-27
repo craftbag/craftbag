@@ -434,3 +434,4 @@
 {"ts": "2026-08-27T02:09:27Z", "job_id": "leftover-skills-fifo-load-cli-mcp", "work_source": "improve", "result": "landed", "head": "f84a28a7084c3c81dac717381d1f3ef9286fa899", "pr": 238, "tests": "load leftover FIFO extra/skills", "noop": false}
 {"ts": "2026-08-27T02:19:32Z", "job_id": "improve-mpi32-ops-readme-path-filter", "work_source": "improve", "result": "landed", "head": "6c597c739ff4353b0ad6d9183eb4280983f1dce6", "pr": 239, "tests": "readme stealth path-filter", "noop": false}
 {"ts": "2026-08-27T02:38:36Z", "job_id": "refuse-newline-extra-path-component", "work_source": "improve", "result": "landed", "head": "46fcb0463a6c03cc8f04fe97049cc7ad389c2760", "pr": 240, "tests": "newline extra-path Unreadable", "noop": false}
+{"ts": "2026-08-27T02:44:31Z", "job_id": "list-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "ee616385854ae7dde782185e1fb7ecc6181c6abd", "pr": 241, "tests": "list newline extra-path", "noop": false}
