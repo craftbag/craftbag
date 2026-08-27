@@ -52,3 +52,10 @@ path = "fuzz_targets/vendor_token.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "sanitize_error_token"
+path = "fuzz_targets/sanitize_error_token.rs"
+test = false
+doc = false
+bench = false
