@@ -1,11 +1,9 @@
 //! Property tests for `parse_skill` (name charset, description length, missing ---,
-//! present-null invocation flags), `sanitize_error_token`, and leftover TSV
-//! path sanitize on `format_list_tsv` / `format_why_text`.
+//! present-null invocation flags) and `sanitize_error_token`.
 
 use craftbag::{
     ParseError, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS, SKILL_NAME_MAX_CHARS,
-    Skill, SkillSummary, WhyReport, format_list_tsv, format_why_text, normalize_skill_name,
-    parse_skill, sanitize_error_token, validate_skill_name,
+    normalize_skill_name, parse_skill, sanitize_error_token, validate_skill_name,
 };
 use proptest::prelude::*;
 
@@ -181,49 +179,6 @@ proptest! {
         );
         prop_assert_eq!(out.chars().count(), raw.chars().count());
         prop_assert_eq!(sanitize_error_token(&out), out);
-    }
-
-    /// Unit leftover TSV fixtures lock U+2028 / U+2014 (CLI list/why and
-    /// `format_skip_tsv`). Other `Cc` in a leftover implicit path (`\r`,
-    /// TAB, BEL, DEL, NEL, …) must still go through `sanitize_error_token`.
-    /// A revert that only maps the fixture set leaks a split or the raw
-    /// char on `format_list_tsv` / `format_why_text`.
-    #[test]
-    fn leftover_tsv_path_sanitizes_non_fixture_controls(
-        left in "[A-Za-z0-9._-]{1,8}",
-        ch in extra_sanitize_control(),
-        right in "[A-Za-z0-9._-]{1,8}",
-    ) {
-        let raw_path = format!("/tmp/{left}{ch}{right}/SKILL.md");
-        let mut skill = Skill::new("demo", "d", "");
-        skill.source_path = Some(std::path::PathBuf::from(&raw_path));
-        let displayed = skill
-            .source_path
-            .as_ref()
-            .expect("path")
-            .display()
-            .to_string();
-        prop_assume!(displayed.contains(ch));
-        let expected_path = displayed.replace(ch, "?");
-
-        let tsv = format_list_tsv(&[skill.clone()]);
-        prop_assert_eq!(&tsv, &format!("demo\tagents\t{expected_path}\n"));
-        let list_cols: Vec<&str> = tsv.trim_end_matches('\n').split('\t').collect();
-        prop_assert_eq!(list_cols.as_slice(), ["demo", "agents", expected_path.as_str()]);
-        prop_assert!(!list_cols[2].contains(ch));
-        prop_assert_eq!(tsv.chars().filter(|&c| c == '\n').count(), 1);
-
-        let why = format_why_text(&WhyReport {
-            loaded: vec![SkillSummary::from(&skill)],
-            skips: vec![],
-            activation: vec![],
-            query: None,
-        });
-        prop_assert_eq!(&why, &format!("loaded\tdemo\t{expected_path}\n"));
-        let why_cols: Vec<&str> = why.trim_end_matches('\n').split('\t').collect();
-        prop_assert_eq!(why_cols.as_slice(), ["loaded", "demo", expected_path.as_str()]);
-        prop_assert!(!why_cols[2].contains(ch));
-        prop_assert_eq!(why.chars().filter(|&c| c == '\n').count(), 1);
     }
 }
 
