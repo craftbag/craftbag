@@ -480,3 +480,4 @@
 {"ts": "2026-08-27T09:09:57Z", "job_id": "mpi35-user-noop", "work_source": "improve", "result": "noop", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": null, "tests": "help already names ValidationReport", "noop": true}
 {"ts": "2026-08-27T09:11:27Z", "job_id": "mpi35-maint-noop", "work_source": "improve", "result": "noop", "head": "8495f5fb90dd9f58a0ad6c711bb1caf79bdc17a2", "pr": null, "tests": "consecutive_noop=3 switch expand", "noop": true}
 {"ts": "2026-08-27T09:20:20Z", "job_id": "expand-fuzz-sanitize-token", "work_source": "expand", "result": "landed", "head": "2200cc0932f6576f0ced43f791b69629eaa94c99", "pr": 268, "tests": "fuzz sanitize_error_token", "noop": false}
+{"ts": "2026-08-27T09:22:30Z", "job_id": "mpi35-ops-noop", "work_source": "improve", "result": "noop", "head": "2200cc0932f6576f0ced43f791b69629eaa94c99", "pr": null, "tests": "fuzz flags match", "noop": true}
