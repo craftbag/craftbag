@@ -6,38 +6,40 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "7761f3ab32ad1f74679de3537217e0cd52429862",
+  "ledger_sha": "50fd345b5e6f9f8382d81edabb4c76ad2591417b",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand-prop-sanitize-token",
-    "work_source": "expand",
-    "started_at": "2026-08-27T06:13:13Z",
-    "finished_at": "2026-08-27T06:13:13Z",
+    "id": "mpi33-arch-vendor-compat",
+    "work_source": "improve",
+    "started_at": "2026-08-27T06:25:36Z",
+    "finished_at": "2026-08-27T06:25:36Z",
     "result": "landed",
-    "head": "244b48129ecb466b2a8b3a5b11b8f9e92b76baec",
-    "pr": 256,
+    "head": "fd25f62e93dc2b7ee88d102b77a73459cb818b6d",
+    "pr": 257,
     "files": [
-      "tests/prop_parse.rs"
+      "src/activate.rs",
+      "src/source.rs",
+      "src/why.rs"
     ],
-    "tests": "sanitize_replaces_non_fixture_controls",
+    "tests": "why_activation_matches_filter_skills_for_every_vendor",
     "review": "0"
   },
-  "last_sha": "244b48129ecb466b2a8b3a5b11b8f9e92b76baec",
+  "last_sha": "fd25f62e93dc2b7ee88d102b77a73459cb818b6d",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T06:13:13Z",
+    "checked_at": "2026-08-27T06:25:36Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 13,
+    "next_perspective": 14,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -59,7 +61,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "Property-test sanitize_error_token beyond fixture controls."
+    "last_why_summary": "filter_skills and why share vendor empty-trigger policy."
   },
   "budgets": {
     "max_cycles": null,
