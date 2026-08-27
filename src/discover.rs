@@ -136,19 +136,26 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         }
     }
 
-    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
-        if !path_has_line_separator(&user_dir) {
-            if !path_is_ignored(&user_dir, &ignore) {
-                push_watch_dir(&mut out, user_dir.clone());
-            }
-            // user_dir is always a skills root. leftover SKILL.md is a
-            // root_file skip, not a named package. Watch user/skills when
-            // discover would walk that collection.
-            let user_skills = user_dir.join("skills");
-            if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names)
-                && !path_is_ignored(&user_skills, &ignore)
-            {
-                push_watch_dir(&mut out, user_skills);
+    if !opts
+        .user_skills_dir
+        .as_deref()
+        .and_then(|p| p.to_str())
+        .is_some_and(str_has_line_separator)
+    {
+        if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+            if !path_has_line_separator(&user_dir) {
+                if !path_is_ignored(&user_dir, &ignore) {
+                    push_watch_dir(&mut out, user_dir.clone());
+                }
+                // user_dir is always a skills root. leftover SKILL.md is a
+                // root_file skip, not a named package. Watch user/skills when
+                // discover would walk that collection.
+                let user_skills = user_dir.join("skills");
+                if user_dir_should_watch_skills_subdir(&user_dir, opts.ascii_names)
+                    && !path_is_ignored(&user_skills, &ignore)
+                {
+                    push_watch_dir(&mut out, user_skills);
+                }
             }
         }
     }
@@ -509,7 +516,16 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
         }
     }
 
-    if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+    if opts
+        .user_skills_dir
+        .as_deref()
+        .and_then(|p| p.to_str())
+        .is_some_and(str_has_line_separator)
+    {
+        if let Some(raw) = opts.user_skills_dir.as_deref() {
+            skip_line_separator_root(raw, &mut skips);
+        }
+    } else if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
         if path_has_line_separator(&user_dir) {
             // Same refuse as extra-path: do not load or echo a user_dir
             // whose component would split list/why TSV or watch_dirs.
@@ -683,6 +699,10 @@ fn load_extra_path(
     skills: &mut Vec<Skill>,
     skips: &mut Vec<SkillSkip>,
 ) {
+    if str_has_line_separator(raw) {
+        skip_line_separator_root(Path::new(&crate::sanitize_error_token(raw)), skips);
+        return;
+    }
     let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
         return;
     };
@@ -1475,15 +1495,17 @@ fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePrefix> {
     paths
         .iter()
         .filter_map(|p| {
+            // Host token first, before trim. `\n/..`.trim() is `/..`,
+            // which Windows treats as a root-relative prefix. Windows
+            // Path::components can also drop a control-char component,
+            // so `evil\n/..` would collapse to cwd after lexical
+            // normalize if we only inspected Path.
+            if str_has_line_separator(p) {
+                return None;
+            }
             // Empty or whitespace-only is not a prefix (not discover cwd).
             let raw = p.trim();
             if raw.is_empty() {
-                return None;
-            }
-            // Host token first. Windows Path::components can drop a
-            // control-char component, so `evil\n/..` would collapse to
-            // cwd after lexical normalize if we only inspected Path.
-            if str_has_line_separator(raw) {
                 return None;
             }
             let expanded = expand_tilde(raw);
@@ -7351,6 +7373,7 @@ mod tests {
             "evil\r/..",
             "evil\u{2028}/..",
             "evil\u{2029}/..",
+            "\n/..",
         ] {
             let opts = DiscoveryOptions {
                 ignore: vec![raw.to_owned()],
