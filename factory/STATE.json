@@ -6,29 +6,27 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "b2f8db5f2379eac478c6513a90daddcb0450ce28",
+  "ledger_sha": "45679c2cf0ae22299840c79abbf888221d594b87",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 3,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "improve-mpi38-user-path-hint",
+    "id": "improve-mpi38-maint-truncate",
     "work_source": "improve",
-    "started_at": "2026-08-27T16:14:40Z",
-    "finished_at": "2026-08-27T16:14:40Z",
+    "started_at": "2026-08-27T16:24:39Z",
+    "finished_at": "2026-08-27T16:24:39Z",
     "result": "landed",
-    "head": "3020cab969b69b8fafb4a14c2326ee9ccb4c22da",
-    "pr": 292,
+    "head": "dac281620ee96c9f80556245f67b42ade0ce4a44",
+    "pr": 293,
     "files": [
-      "src/discover.rs",
-      "crates/craftbag-cli/src/main.rs",
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/src/main.rs"
+      "src/activate.rs",
+      "src/lib.rs"
     ],
-    "tests": "load_path_like_name_hints",
+    "tests": "crate_root_does_not_export_unused_truncate_skill_body_for_budget",
     "review": "0"
   },
-  "last_sha": "3020cab969b69b8fafb4a14c2326ee9ccb4c22da",
+  "last_sha": "dac281620ee96c9f80556245f67b42ade0ce4a44",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
@@ -40,7 +38,7 @@
   },
   "mpi": {
     "cycle": 38,
-    "next_perspective": 5,
+    "next_perspective": 6,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
