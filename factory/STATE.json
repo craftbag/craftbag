@@ -6,36 +6,40 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "c16d638cdc759fda2e33f40b6b2206e011690dbf",
+  "ledger_sha": "a3973d3b0601297b396bb1ecde5b654215d1888c",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-pm-steal-list",
+    "id": "mpi33-spec-watch-collapse",
     "work_source": "improve",
-    "started_at": "2026-08-27T05:33:30Z",
-    "finished_at": "2026-08-27T05:33:30Z",
-    "result": "noop",
-    "head": "e598b29bf99c2c68f9bac7f5a2aa24a255be3d58",
-    "pr": null,
-    "files": [],
-    "tests": "steal-list callers exist",
+    "started_at": "2026-08-27T05:44:53Z",
+    "finished_at": "2026-08-27T05:44:53Z",
+    "result": "landed",
+    "head": "c6e763857bdfafc34967a4dd3a908c294385542a",
+    "pr": 255,
+    "files": [
+      "src/discover.rs",
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/tests/mcp.rs"
+    ],
+    "tests": "list_watch_dirs_whitespace_extra_path_omits_root",
     "review": "0"
   },
-  "last_sha": "e598b29bf99c2c68f9bac7f5a2aa24a255be3d58",
+  "last_sha": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T05:31:43Z",
+    "checked_at": "2026-08-27T05:44:53Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 9,
+    "next_perspective": 10,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -57,7 +61,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 PM steal-list no-op: callers exist."
+    "last_why_summary": "watch_dirs omits extra-path tokens that collapse after whitespace."
   },
   "budgets": {
     "max_cycles": null,
