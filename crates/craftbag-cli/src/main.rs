@@ -64,6 +64,9 @@ enum Cmd {
     /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
     Load {
         name: String,
+        /// Print `{ error_kind, error }` on a miss (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
+        #[arg(long)]
+        json: bool,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
         #[arg(long = "args", default_value = "")]
         args: String,
@@ -233,6 +236,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         Cmd::Load {
             name,
+            json,
             args,
             paths,
             vendor,
@@ -262,6 +266,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 None => {
                     let miss = unknown_or_skipped_skill(&name, &report.skips);
                     let _ = writeln!(io::stderr(), "{miss}");
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
+                        );
+                    }
                     Ok(ExitCode::from(2))
                 }
             }

@@ -917,6 +917,88 @@ fn load_unknown_exits_2() {
 }
 
 #[test]
+fn load_unknown_json_exposes_error_kind() {
+    // CLI load is the last miss surface that only printed Display.
+    // why --json / validate --json already peel SkillMiss.
+    let tmp = tempfile::tempdir().expect("tmp");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(tmp.path())
+        .arg("load")
+        .arg("no-such-skill")
+        .arg("--json")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.trim(),
+        "unknown skill: no-such-skill",
+        "load --json must keep the human one-line: {stderr:?}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("load json");
+    assert_eq!(v["error_kind"], "unknown_skill", "stdout={stdout}");
+    assert_eq!(
+        v["error"], "unknown skill: no-such-skill",
+        "stdout={stdout}"
+    );
+    assert!(
+        v.get("errorKind").is_none(),
+        "error_kind must stay snake_case: {stdout}"
+    );
+    let mut keys: Vec<_> = v.as_object().expect("object").keys().cloned().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        ["error".to_owned(), "error_kind".to_owned()],
+        "load --json unknown peel is {{ error_kind, error }}; path is omitted: {stdout}"
+    );
+    assert!(
+        v.get("winner_path").is_none() && v.get("winnerPath").is_none(),
+        "load --json unknown must omit winner_path like why --json: {stdout}"
+    );
+}
+
+#[test]
+fn load_parse_error_json_exposes_error_kind() {
+    let parent = corpus().join("agentskills/invalid-name");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("Bad_Name")
+        .arg("--json")
+        .arg("--path")
+        .arg(&parent)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("skipped skill: Bad_Name"),
+        "load --json must keep the human one-line: {stderr}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("load json");
+    assert_eq!(v["error_kind"], "parse_error", "stdout={stdout}");
+    assert_eq!(v["error"], stderr.trim(), "stdout={stdout} stderr={stderr}");
+    let peeled = v["path"].as_str().expect("path");
+    assert!(
+        peeled.ends_with("Bad_Name/SKILL.md") || peeled.ends_with("Bad_Name\\SKILL.md"),
+        "load --json skip must peel path, not scrape at : {stdout}"
+    );
+    assert!(
+        v.get("winner_path").is_none() && v.get("winnerPath").is_none(),
+        "load --json parse_error must omit winner_path: {stdout}"
+    );
+}
+
+#[test]
 fn load_parse_error_skip_is_not_unknown() {
     let parent = corpus().join("agentskills/invalid-name");
     let (_home, mut cmd) = bin();
@@ -3727,6 +3809,23 @@ fn load_help_names_args_and_argument_hint() {
         .stdout(predicates::str::contains("compatibility"))
         .stdout(predicates::str::contains("metadata"))
         .stdout(predicates::str::contains("Example:"));
+}
+
+#[test]
+fn load_help_names_json_error_kind() {
+    // SkillMiss peel landed on why/validate first. load --help must name
+    // the same keys so a leftover host does not scrape Display.
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--json"))
+        .stdout(predicates::str::contains("error_kind"))
+        .stdout(predicates::str::contains("{ error_kind, error }"))
+        .stdout(predicates::str::contains("`path` when a skip"))
+        .stdout(predicates::str::contains("winner_path"))
+        .stdout(predicates::str::contains("name_collision"));
 }
 
 #[test]
