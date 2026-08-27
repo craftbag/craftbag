@@ -6,16 +6,16 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "394dbcd2fc4698b4fa54ec0af02ac394be56164a",
+  "ledger_sha": "178f883e48619240a84c615f168c10e4f4a30d77",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-obs-peel",
+    "id": "mpi34-auditor-honesty",
     "work_source": "improve",
-    "started_at": "2026-08-27T06:41:59Z",
-    "finished_at": "2026-08-27T06:41:59Z",
+    "started_at": "2026-08-27T06:49:32Z",
+    "finished_at": "2026-08-27T06:49:32Z",
     "result": "noop",
     "head": "f43c096747f598118d8efa57d59d625c356c5496",
     "pr": null,
@@ -25,7 +25,7 @@
   },
   "last_sha": "f43c096747f598118d8efa57d59d625c356c5496",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -35,7 +35,7 @@
   },
   "mpi": {
     "cycle": 34,
-    "next_perspective": 1,
+    "next_perspective": 3,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -57,7 +57,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 obs no-op; cycle 34 QA next."
+    "last_why_summary": "MPI 34 Test Auditor no-op."
   },
   "budgets": {
     "max_cycles": null,
