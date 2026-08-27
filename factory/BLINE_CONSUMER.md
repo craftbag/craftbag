@@ -33,7 +33,7 @@ names go through `sanitize_error_token` so stderr stays one line.
 
 | Host surface | Miss peel |
 |--------------|-----------|
-| CLI `why --json` | stdout `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
+| CLI `why --json` | stdout `{ loaded, skips, activation }` on success; `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
 | CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
 | MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |

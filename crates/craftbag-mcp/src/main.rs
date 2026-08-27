@@ -333,7 +333,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions. A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
+            "description": "Explain loaded, skipped, and activation decisions (`{ loaded, skips, activation }`). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
             "inputSchema": {"type": "object", "properties": why_props}
         }
     ])
@@ -2984,6 +2984,27 @@ mod tests {
         assert!(
             desc.contains("format") && desc.contains("{ skills, skips }"),
             "skills_list must name format and default json keys like CLI list --json: {desc}"
+        );
+    }
+
+    #[test]
+    fn tools_why_describes_success_keys() {
+        let names = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(57)),
+            method: Some("tools/list".into()),
+            params: json!({}),
+        })
+        .expect("list");
+        let tools = names["result"]["tools"].as_array().expect("tools");
+        let why = tools
+            .iter()
+            .find(|t| t["name"] == "skills_why")
+            .expect("skills_why");
+        let desc = why["description"].as_str().unwrap_or("");
+        assert!(
+            desc.contains("{ loaded, skips, activation }"),
+            "skills_why must name WhyReport keys like CLI why --json / list {{ skills, skips }}: {desc}"
         );
     }
 
