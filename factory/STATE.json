@@ -6,40 +6,40 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "50fd345b5e6f9f8382d81edabb4c76ad2591417b",
+  "ledger_sha": "e5ea317bcdb1409c89402782a9ef3f2ffa2fdc2a",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
   "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-arch-vendor-compat",
+    "id": "mpi33-contrib-empty-trigger-notes",
     "work_source": "improve",
-    "started_at": "2026-08-27T06:25:36Z",
-    "finished_at": "2026-08-27T06:25:36Z",
+    "started_at": "2026-08-27T06:34:54Z",
+    "finished_at": "2026-08-27T06:34:54Z",
     "result": "landed",
-    "head": "fd25f62e93dc2b7ee88d102b77a73459cb818b6d",
-    "pr": 257,
+    "head": "f43c096747f598118d8efa57d59d625c356c5496",
+    "pr": 258,
     "files": [
-      "src/activate.rs",
-      "src/source.rs",
-      "src/why.rs"
+      "factory/BLINE_CONSUMER.md",
+      "src/skill.rs",
+      "tests/msrv.rs"
     ],
-    "tests": "why_activation_matches_filter_skills_for_every_vendor",
+    "tests": "bline_consumer_names_empty_trigger_policy",
     "review": "0"
   },
-  "last_sha": "fd25f62e93dc2b7ee88d102b77a73459cb818b6d",
+  "last_sha": "f43c096747f598118d8efa57d59d625c356c5496",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T06:25:36Z",
+    "checked_at": "2026-08-27T06:34:54Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 33,
-    "next_perspective": 14,
+    "next_perspective": 15,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -61,7 +61,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "filter_skills and why share vendor empty-trigger policy."
+    "last_why_summary": "BLINE_CONSUMER names shared empty-trigger policy."
   },
   "budgets": {
     "max_cycles": null,
