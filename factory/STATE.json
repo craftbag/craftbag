@@ -1,21 +1,21 @@
 {
   "schema_version": 1,
-  "phase": "improve",
+  "phase": "expand",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "f30de4496f11d00195467ca35f7b8b55b992caed",
+  "ledger_sha": "3887a6e90e7c1b5edaabc5bc614025bd2839bff8",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "b9135794f95cb182a704c18ab591543a4d398b0b",
   "expand_cursor": 3,
   "expand_noop_streak": 1,
   "last_job": {
-    "id": "improve-mpi40-auditor-stall",
+    "id": "improve-mpi40-dev-noop",
     "work_source": "improve",
-    "started_at": "2026-08-27T20:15:48Z",
-    "finished_at": "2026-08-27T20:15:48Z",
+    "started_at": "2026-08-27T20:16:50Z",
+    "finished_at": "2026-08-27T20:16:50Z",
     "result": "noop",
     "head": "b9135794f95cb182a704c18ab591543a4d398b0b",
     "pr": null,
@@ -24,8 +24,8 @@
     "review": "0"
   },
   "last_sha": "b9135794f95cb182a704c18ab591543a4d398b0b",
-  "next_work_source": "improve",
-  "consecutive_noop": 2,
+  "next_work_source": "expand",
+  "consecutive_noop": 3,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -35,7 +35,7 @@
   },
   "mpi": {
     "cycle": 40,
-    "next_perspective": 3,
+    "next_perspective": 4,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
