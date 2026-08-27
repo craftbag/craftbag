@@ -510,3 +510,4 @@ ts:2026-08-27T16:02:05Z
 ts:2026-08-27T16:24:36Z
 ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-27T16:53:10Z", "job_id": "improve-rm-leftover-path-souvenirs", "work_source": "improve", "result": "landed", "sha": "a590dab98167e50d29bd269538d1e496e926638a", "pr": 295, "note": "drop leftover-path souvenir tests/fuzz and unused-export locks"}
+{"ts": "2026-08-27T17:03:41Z", "job_id": "improve-mpi38-security-after-295", "work_source": "improve", "result": "noop", "sha": "a590dab98167e50d29bd269538d1e496e926638a", "pr": null, "note": "security live-red hunt after leftover-souvenir removal; leftover sibling ban held"}
