@@ -692,3 +692,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T22:46:55Z","job_id":"improve-mpi47-obs-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"cycle 47 done; even 48 starts Test Auditor"}
 {"ts":"2026-08-27T22:47:19Z","job_id":"improve-mpi48-ta-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"TA REVIEW 0"}
 {"ts":"2026-08-27T22:47:48Z","job_id":"improve-mpi48-dev-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Developer REVIEW 0"}
+{"ts":"2026-08-27T22:48:35Z","job_id":"improve-mpi48-eu-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"EU REVIEW 0; expand2 fuzz already 6 targets"}
