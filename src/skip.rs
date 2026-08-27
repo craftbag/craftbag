@@ -168,6 +168,11 @@ pub struct DiscoveryReport {
 
 /// TSV skip rows (`skip\tkind\tpath\tdetail`) for CLI list stderr and
 /// MCP catalog/xml text (stdio has no stderr).
+///
+/// Path and detail go through [`crate::sanitize_error_token`] so a
+/// leftover SKILL.md skip cannot split the row (U+2028) or leak an
+/// em dash. Extra-path refuse already sanitizes `skip.path` at
+/// construction; leftover implicit paths do not.
 pub fn format_skip_tsv(skips: &[SkillSkip]) -> String {
     let mut out = String::new();
     for skip in skips {
@@ -175,8 +180,8 @@ pub fn format_skip_tsv(skips: &[SkillSkip]) -> String {
             out,
             "skip\t{}\t{}\t{}",
             skip.kind.as_str(),
-            skip.path.display(),
-            skip.detail
+            crate::sanitize_error_token(&skip.path.display().to_string()),
+            crate::sanitize_error_token(&skip.detail)
         );
     }
     out
@@ -533,5 +538,44 @@ mod tests {
         let json = serde_json::to_string(&report).expect("ser");
         let back: DiscoveryReport = serde_json::from_str(&json).expect("de");
         assert_eq!(back, report);
+    }
+
+    #[test]
+    fn format_skip_tsv_leftover_hostile_detail_stays_one_row() {
+        // Leftover analog of extra-path line-sep refuse (skip.path is
+        // sanitized at construction). A leftover SKILL.md skip still
+        // goes through format_skip_tsv raw. U+2028 / U+2014 in path or
+        // detail must not split catalog/xml skip TSV (MCP appends the
+        // same rows after the prompt fragment).
+        assert_eq!(
+            super::format_skip_tsv(&[]),
+            "",
+            "empty skips must not emit a skip row"
+        );
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/evil\u{2028}root/SKILL.md"),
+            name: Some("loose".to_owned()),
+            kind: SkipKind::RootFile,
+            detail: "put the file\u{2028}in a named\u{2014}subdirectory.".to_owned(),
+            winner_path: None,
+        };
+        let tsv = super::format_skip_tsv(&[skip]);
+        assert!(
+            tsv.starts_with("skip\troot_file\t"),
+            "leftover skip must stay a TSV row: {tsv:?}"
+        );
+        assert_eq!(
+            tsv.chars().filter(|&c| c == '\n').count(),
+            1,
+            "leftover skip TSV must stay one row: {tsv:?}"
+        );
+        assert!(
+            !tsv.contains('\u{2028}') && !tsv.contains('\u{2014}'),
+            "U+2028 / em dash must not leak into skip TSV: {tsv:?}"
+        );
+        assert!(
+            tsv.contains("evil?root") && tsv.contains("named-subdirectory"),
+            "hostile leftover path and detail must be sanitized in place: {tsv:?}"
+        );
     }
 }
