@@ -1974,11 +1974,17 @@ fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
     if !skill_md_is_dir(path) {
         return Ok(path.to_path_buf());
     }
-    ["SKILL.md", "skill.md"]
+    let joined = ["SKILL.md", "skill.md"]
         .into_iter()
         .map(|name| path.join(name))
         .find(|p| skill_md_inode_exists(p))
-        .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())
+        .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())?;
+    // Joined SKILL.md is this package unless the inode is a symlink
+    // out of the directory (same as extra-path classify).
+    if !skill_md_stays_in_package(&joined) {
+        return Err("SKILL.md symlink escapes package root".to_owned());
+    }
+    Ok(joined)
 }
 
 /// True when `path` exists as any inode (regular, FIFO, socket, device, symlink).
@@ -6192,6 +6198,44 @@ mod tests {
         assert!(
             skip.detail.contains("regular file"),
             "detail must name the file type: {}",
+            skip.detail
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_path_package_dir_skill_md_symlink_escape_is_unreadable() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let outside = tempfile::tempdir().expect("out");
+        fs::write(
+            outside.path().join("secret.md"),
+            "---\nname: wanted\ndescription: leaked\n---\nSECRET_BODY\n",
+        )
+        .expect("write");
+        let pkg = tmp.path().join("wanted");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        std::os::unix::fs::symlink(outside.path().join("secret.md"), pkg.join("SKILL.md"))
+            .expect("symlink");
+        let report = validate_path(&pkg);
+        assert!(
+            !report.ok,
+            "package dir whose SKILL.md escapes the package must not validate: {:?}",
+            report
+        );
+        assert!(
+            report.name.is_none(),
+            "must not peek escaped SKILL.md: {:?}",
+            report
+        );
+        let skip = report.skip.expect("skip");
+        assert_eq!(skip.kind, SkipKind::Unreadable, "skip={skip:?}");
+        assert!(
+            skip.name.is_none(),
+            "must not peek a symlink escape: {skip:?}"
+        );
+        assert!(
+            skip.detail.contains("escapes"),
+            "detail must name the escape: {}",
             skip.detail
         );
     }
