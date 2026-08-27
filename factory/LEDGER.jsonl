@@ -437,3 +437,4 @@
 {"ts": "2026-08-27T02:44:31Z", "job_id": "list-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "ee616385854ae7dde782185e1fb7ecc6181c6abd", "pr": 241, "tests": "list newline extra-path", "noop": false}
 {"ts": "2026-08-27T02:50:40Z", "job_id": "why-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "5941d3a78528dbc5657abc1bb429b9021b0928e0", "pr": 242, "tests": "why newline extra-path", "noop": false}
 {"ts": "2026-08-27T02:56:42Z", "job_id": "watch-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "99fc8420bfcac726e265825a624310591a548352", "pr": 243, "tests": "watch newline extra-path", "noop": false}
+{"ts": "2026-08-27T03:03:00Z", "job_id": "load-newline-extra-path-cli-mcp", "work_source": "improve", "result": "landed", "head": "8079ffa7e7509d6c595873260c444f438330e212", "pr": 244, "tests": "load newline extra-path", "noop": false}
