@@ -6,39 +6,38 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "e42e21b35d81da3266ae05398f984c4444a9f9e6",
+  "ledger_sha": "d90c17c1afd2af4bfe6f356ad653cbdf2560df04",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "8dc6be3771d4d892a095f75a4b98fd0a17779f21",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "leftover-empty-skills-load-cli-mcp",
+    "id": "extra-skills-named-package-sibling",
     "work_source": "improve",
-    "started_at": "2026-08-27T00:41:25Z",
-    "finished_at": "2026-08-27T00:41:25Z",
+    "started_at": "2026-08-27T01:00:00Z",
+    "finished_at": "2026-08-27T01:05:03Z",
     "result": "landed",
-    "head": "056dbc7660736389a2ef8dd433adb1390294307b",
-    "pr": 228,
+    "head": "83c1bb81934993662402e00da12b0cb0e6c37af0",
+    "pr": 229,
     "files": [
-      "crates/craftbag-cli/tests/cli.rs",
-      "crates/craftbag-mcp/tests/mcp.rs"
+      "src/discover.rs"
     ],
-    "tests": "load_leftover_empty_nested_skills_names_wanted,stdio_skills_load_leftover_empty_nested_skills_names_wanted",
+    "tests": "extra_path_skills_named_package_does_not_hide_sibling",
     "review": "0"
   },
-  "last_sha": "056dbc7660736389a2ef8dd433adb1390294307b",
+  "last_sha": "83c1bb81934993662402e00da12b0cb0e6c37af0",
   "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T00:41:25Z",
+    "checked_at": "2026-08-27T01:05:03Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 32,
-    "next_perspective": 3,
+    "next_perspective": 4,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
@@ -60,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "grok-project MCP skills_list format=watch lists cwd .grok/skills when vendor grok is on."
+    "last_why_summary": "extra/skills named skills plus leftover extra/wanted both load."
   },
   "budgets": {
     "max_cycles": null,
