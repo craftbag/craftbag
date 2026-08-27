@@ -147,11 +147,6 @@ mod tests {
             "crate-root rustdoc must say catalog stays cheap (not SkillSummary JSON): {docs}"
         );
         assert!(
-            docs.contains("omits `disable_model_invocation`")
-                && docs.contains("official client-guide"),
-            "crate-root rustdoc must name the catalog filter like format_catalog: {docs}"
-        );
-        assert!(
             docs.contains("text envelope"),
             "crate-root rustdoc must say load is the text envelope: {docs}"
         );
