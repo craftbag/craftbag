@@ -1753,6 +1753,46 @@ fn why_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn load_leftover_empty_nested_skills_names_wanted() {
+    // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
+    // on the CLI load door. Default vendor stays off. Empty extra/skills
+    // must not hide extra/wanted.
+    let extra = corpus().join("leftover/empty-nested-skills");
+    let skill = extra.join("wanted/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed leftover empty extra/skills fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("wanted")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[Activated skill: wanted]"),
+        "empty extra/skills must not hide leftover sibling wanted: {stdout}"
+    );
+    assert!(
+        stdout.contains("from-sibling"),
+        "must load leftover sibling body: {stdout}"
+    );
+}
+
+#[test]
 fn load_extra_path_root_skill_md_does_not_hide_skills_subdir() {
     let extra = tempfile::tempdir().expect("extra");
     fs::write(

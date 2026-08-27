@@ -255,6 +255,49 @@ fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn stdio_skills_load_leftover_empty_nested_skills_names_wanted() {
+    // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
+    // on the MCP load door. Default vendor stays off. Empty extra/skills
+    // must not hide extra/wanted.
+    let extra = corpus_leftover_empty_nested_skills();
+    let skill = extra.join("wanted/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed leftover empty extra/skills fixture must exist: {}",
+        skill.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: wanted]"),
+        "empty extra/skills must not hide leftover sibling wanted: {text}"
+    );
+    assert!(
+        text.contains("from-sibling"),
+        "must load leftover sibling body: {text}"
+    );
+}
+
+#[test]
 fn stdio_skills_why_vendor_cursor_names_create_rule() {
     let cwd = corpus_cursor_project();
     let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
