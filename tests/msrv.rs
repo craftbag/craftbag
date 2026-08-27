@@ -148,9 +148,9 @@ fn local_gate_commands_run_in_ci() {
     );
     let expected = [
         "cargo fmt --check",
-        "cargo clippy --locked --workspace --all-targets -- -D warnings",
-        "cargo nextest run --locked --workspace",
-        "cargo test --locked --workspace --doc",
+        "RUSTFLAGS=\"-D warnings\" cargo clippy --locked --workspace --all-targets -- -D warnings",
+        "RUSTFLAGS=\"-D warnings\" cargo nextest run --locked --workspace",
+        "RUSTFLAGS=\"-D warnings\" cargo test --locked --workspace --doc",
         "bash factory/scripts/deny-check.sh",
         "bash factory/scripts/assert-stealth.sh craftbag/craftbag",
         "bash factory/scripts/write-ledger.sh --self-test",
@@ -179,12 +179,65 @@ fn local_gate_commands_run_in_ci() {
         make_cmds, expected,
         "Makefile check drifted from the AGENTS.md local-gate fence"
     );
+    // Hosted rust jobs set RUSTFLAGS via workflow env, not a command prefix.
+    assert!(
+        ci.contains("RUSTFLAGS: \"-D warnings\""),
+        "ci.yml must set RUSTFLAGS=-D warnings for the prefixed local-gate rustc commands"
+    );
     for cmd in expected {
+        let ci_cmd = cmd
+            .strip_prefix("RUSTFLAGS=\"-D warnings\" ")
+            .unwrap_or(cmd);
         assert!(
-            ci.contains(cmd),
-            "ci.yml must run {cmd}; a local-only gate command is not CI"
+            ci.contains(ci_cmd),
+            "ci.yml must run {ci_cmd}; a local-only gate command is not CI"
         );
     }
+}
+
+/// Hosted rust jobs set `RUSTFLAGS=-D warnings`. Clippy `-D warnings` is
+/// the clippy lint group only. Unprefixed `cargo nextest` and
+/// `cargo test --doc` accept a rustc warning that fails CI.
+#[test]
+fn local_gate_denies_rustc_warnings_like_ci() {
+    let ci = repo_file(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("RUSTFLAGS: \"-D warnings\""),
+        "ci.yml rust jobs must set RUSTFLAGS=-D warnings"
+    );
+    let agents = repo_file("AGENTS.md");
+    let makefile = repo_file("Makefile");
+    let fence = agents_local_gate_fence(&agents);
+    let make_cmds = makefile_check_commands(&makefile);
+    for cmd in fence.iter().chain(make_cmds.iter()) {
+        let rustc_job = cmd.starts_with("cargo nextest ")
+            || cmd.starts_with("cargo test ")
+            || cmd.starts_with("cargo clippy ");
+        if rustc_job {
+            assert!(
+                cmd.starts_with("RUSTFLAGS=\"-D warnings\" "),
+                "local gate rustc command must set RUSTFLAGS so make check matches CI: {cmd}"
+            );
+        }
+    }
+    let nextest = fence
+        .iter()
+        .chain(make_cmds.iter())
+        .filter(|c| c.contains("cargo nextest "))
+        .count();
+    let doctest = fence
+        .iter()
+        .chain(make_cmds.iter())
+        .filter(|c| c.contains("cargo test ") && c.contains("--doc"))
+        .count();
+    assert_eq!(
+        nextest, 2,
+        "AGENTS fence and Makefile must each run nextest with RUSTFLAGS"
+    );
+    assert_eq!(
+        doctest, 2,
+        "AGENTS fence and Makefile must each run doc tests with RUSTFLAGS"
+    );
 }
 
 fn ci_job_body(ci: &str, job: &str) -> String {
