@@ -126,14 +126,14 @@ enum Cmd {
         #[arg(long = "ignore", value_name = "PATH")]
         ignore: Vec<String>,
     },
-    /// Validate one SKILL.md file or package directory.
+    /// Validate one SKILL.md file or package directory. `--json` success is ValidationReport (no error_kind).
     Validate {
         /// SKILL.md file, or a package directory that contains SKILL.md / skill.md. Example: ./my-skill
         path: PathBuf,
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
-        /// Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
+        /// Success is ValidationReport (no error_kind). Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
     },
