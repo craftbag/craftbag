@@ -472,6 +472,98 @@ fn stdio_skills_load_leftover_empty_nested_skills_names_wanted() {
 }
 
 #[test]
+fn stdio_skills_load_leftover_skills_named_package_names_wanted() {
+    // Sibling lock of extra_path_skills_named_package_does_not_hide_sibling
+    // on the MCP load door. extra/skills/SKILL.md named skills is a package.
+    let extra = corpus_leftover_skills_named_package();
+    let wanted = extra.join("wanted/SKILL.md");
+    let skills_md = extra.join("skills/SKILL.md");
+    assert!(
+        wanted.is_file() && skills_md.is_file(),
+        "committed leftover named extra/skills fixture must exist: {}",
+        extra.display()
+    );
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "wanted",
+                    "paths": [extra.clone()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: wanted]"),
+        "named extra/skills must not hide leftover sibling wanted: {text}"
+    );
+    assert!(
+        text.contains("from-sibling"),
+        "must load leftover sibling body: {text}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "skills",
+                    "paths": [extra.clone()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: skills]"),
+        "named extra/skills package must load: {text}"
+    );
+    assert!(
+        text.contains("PACKAGE_BODY"),
+        "must load named extra/skills body: {text}"
+    );
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "evil",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    assert_eq!(
+        resp["result"]["error_kind"], "unknown_skill",
+        "nested evil must stay unknown: {resp}"
+    );
+}
+
+#[test]
 fn stdio_skills_why_vendor_cursor_names_create_rule() {
     let cwd = corpus_cursor_project();
     let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
