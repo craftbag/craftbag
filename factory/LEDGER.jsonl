@@ -594,3 +594,4 @@ ts:2026-08-27T16:36:41Z
 {"ts":"2026-08-27T21:29:22Z","job_id":"improve-mpi42-arch-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"Architecture still REVIEW 0 same SHA"}
 {"ts":"2026-08-27T21:30:06Z","job_id":"improve-mpi42-nc-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"NC REVIEW 0 same SHA"}
 {"ts":"2026-08-27T21:31:09Z","job_id":"improve-mpi42-obs-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"cycle 42 done; odd 43 starts QA"}
+{"ts":"2026-08-27T21:32:51Z","job_id":"improve-mpi43-qa-noop","work_source":"improve","result":"noop","head":"b9135794f95cb182a704c18ab591543a4d398b0b","pr":null,"review":0,"notes":"QA REVIEW 0; odd cycle skip TA -> Developer"}
