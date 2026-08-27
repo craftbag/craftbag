@@ -489,3 +489,4 @@
 {"ts": "2026-08-27T09:59:38Z", "job_id": "mpi35-compat-noop", "work_source": "improve", "result": "noop", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": null, "tests": "implicit_roots still default true", "noop": true}
 {"ts": "2026-08-27T10:05:16Z", "job_id": "mpi35-adv-noop", "work_source": "improve", "result": "noop", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": null, "tests": "user_dir why/load green", "noop": true}
 {"ts": "2026-08-27T10:06:25Z", "job_id": "mpi35-arch-noop", "work_source": "improve", "result": "noop", "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c", "pr": null, "tests": "consecutive_noop=3 expand prove-tree", "noop": true}
+{"ts": "2026-08-27T10:20:26Z", "job_id": "expand-prove-claude-user-why", "work_source": "expand", "result": "landed", "head": "21d65e057f1c352952340aaa3c5b26073f7a463f", "pr": 271, "tests": "why claude-user home-note", "noop": false}

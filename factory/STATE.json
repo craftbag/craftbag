@@ -6,30 +6,35 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ffeacea1e058c61cf91c8108dbbb56463f1969a1",
+  "ledger_sha": "374bfe57d670b20a78c3428867290edc91fc8e22",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
-  "expand_cursor": 4,
+  "expand_cursor": 5,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi35-arch-noop",
-    "work_source": "improve",
-    "started_at": "2026-08-27T10:06:25Z",
-    "finished_at": "2026-08-27T10:06:25Z",
-    "result": "noop",
-    "head": "0cdf4089e5cea55c70cc7de8d014639a0f76145c",
-    "pr": null,
-    "files": [],
-    "tests": "skip_whitespace_collapse_token already shared",
+    "id": "expand-prove-claude-user-why",
+    "work_source": "expand",
+    "started_at": "2026-08-27T10:20:26Z",
+    "finished_at": "2026-08-27T10:20:26Z",
+    "result": "landed",
+    "head": "21d65e057f1c352952340aaa3c5b26073f7a463f",
+    "pr": 271,
+    "files": [
+      "crates/craftbag-cli/tests/cli.rs",
+      "crates/craftbag-mcp/tests/mcp.rs",
+      "src/discover.rs",
+      "tests/corpus.rs"
+    ],
+    "tests": "why_vendor_claude_names_home_note",
     "review": "0"
   },
-  "last_sha": "0cdf4089e5cea55c70cc7de8d014639a0f76145c",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "last_sha": "21d65e057f1c352952340aaa3c5b26073f7a463f",
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "success",
+    "main": "in_progress",
     "ready_pr": "merged",
-    "checked_at": "2026-08-27T10:06:25Z",
+    "checked_at": "2026-08-27T10:20:26Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -57,7 +62,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MCP SkillMiss peel no longer expects serde."
+    "last_why_summary": "why names home-note on claude-user + --vendor claude"
   },
   "budgets": {
     "max_cycles": null,
