@@ -591,6 +591,59 @@ fn why_newline_extra_path_demo_is_unknown() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn list_watch_dirs_newline_extra_path_omits_root() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the CLI watch door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--watch-dirs")
+        .arg("--path")
+        .arg(&extra)
+        .arg("--no-implicit-roots")
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("evil\nroot")
+            && !stdout.contains('\u{2028}')
+            && !stdout.contains('\u{2029}'),
+        "watch-dirs must not echo a raw newline path: {stdout:?}"
+    );
+    assert!(
+        !stdout_has_path(&stdout, &extra),
+        "must not watch newline extra-path root: {stdout}"
+    );
+    assert!(
+        stdout.lines().all(|l| Path::new(l) != extra.as_path()),
+        "must not list newline extra-path as a watch root: {stdout}"
+    );
+    assert!(
+        !stdout.contains("SECRET_BODY")
+            && !stdout.contains("demo")
+            && !stdout.contains("## Skills"),
+        "watch-dirs must not load SKILL.md: {stdout}"
+    );
+}
+
 #[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();

@@ -493,6 +493,54 @@ fn stdio_skills_why_newline_extra_path_demo_is_unknown() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn stdio_skills_list_watch_newline_extra_path_omits_root() {
+    // Sibling lock of package_path_with_newline_component_is_unreadable_not_loaded
+    // on the MCP watch door. Do not commit a newline path in the corpus.
+    let parent = tempfile::tempdir().expect("parent");
+    let extra = parent.path().join("evil\nroot");
+    std::fs::create_dir_all(extra.join("demo")).expect("mkdir");
+    std::fs::write(
+        extra.join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nSECRET_BODY\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "watch",
+                    "paths": [extra],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        !text.contains("evil\nroot") && !text.contains('\u{2028}') && !text.contains('\u{2029}'),
+        "watch must not echo a raw newline path: {text:?}"
+    );
+    assert!(
+        text.lines().all(|l| Path::new(l) != extra.as_path()),
+        "must not watch newline extra-path root: {text}"
+    );
+    assert!(
+        !text.contains("SECRET_BODY") && !text.contains("demo") && !text.contains("## Skills"),
+        "watch format must not load SKILL.md: {text}"
+    );
+}
+
 #[test]
 fn stdio_skills_why_leftover_empty_nested_skills_names_wanted() {
     // Sibling lock of extra_path_empty_skills_subdir_does_not_hide_sibling
