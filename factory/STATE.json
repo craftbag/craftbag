@@ -6,30 +6,32 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "fa751be1673f3e577d59f7b59a88415b3599f8e8",
+  "ledger_sha": "7761f3ab32ad1f74679de3537217e0cd52429862",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "c6e763857bdfafc34967a4dd3a908c294385542a",
-  "expand_cursor": 1,
+  "expand_cursor": 2,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi33-adv-user-dir-ws-watch",
-    "work_source": "improve",
-    "started_at": "2026-08-27T06:02:09Z",
-    "finished_at": "2026-08-27T06:02:09Z",
-    "result": "noop",
-    "head": "c6e763857bdfafc34967a4dd3a908c294385542a",
-    "pr": null,
-    "files": [],
-    "tests": "user_dir whitespace collapse already green",
+    "id": "expand-prop-sanitize-token",
+    "work_source": "expand",
+    "started_at": "2026-08-27T06:13:13Z",
+    "finished_at": "2026-08-27T06:13:13Z",
+    "result": "landed",
+    "head": "244b48129ecb466b2a8b3a5b11b8f9e92b76baec",
+    "pr": 256,
+    "files": [
+      "tests/prop_parse.rs"
+    ],
+    "tests": "sanitize_replaces_non_fixture_controls",
     "review": "0"
   },
-  "last_sha": "c6e763857bdfafc34967a4dd3a908c294385542a",
-  "next_work_source": "expand",
-  "consecutive_noop": 3,
+  "last_sha": "244b48129ecb466b2a8b3a5b11b8f9e92b76baec",
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
-    "main": "success",
-    "ready_pr": null,
-    "checked_at": "2026-08-27T05:51:49Z",
+    "main": "in_progress",
+    "ready_pr": "merged",
+    "checked_at": "2026-08-27T06:13:13Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -57,7 +59,7 @@
       "tests/corpus/incumbent/grok-user (HOME + --vendor grok)",
       "tests/corpus/incumbent/grok-project (cwd + --vendor grok)"
     ],
-    "last_why_summary": "MPI 33 adv no-op; switch expand cursor 1 property tests."
+    "last_why_summary": "Property-test sanitize_error_token beyond fixture controls."
   },
   "budgets": {
     "max_cycles": null,

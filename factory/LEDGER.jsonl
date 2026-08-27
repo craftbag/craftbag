@@ -457,3 +457,4 @@
 {"ts": "2026-08-27T05:51:49Z", "job_id": "mpi33-perf-extra-io", "work_source": "improve", "result": "noop", "head": "c6e763857bdfafc34967a4dd3a908c294385542a", "pr": null, "tests": "zero git diff", "noop": true}
 {"ts": "2026-08-27T05:58:38Z", "job_id": "mpi33-compat-serde", "work_source": "improve", "result": "noop", "head": "c6e763857bdfafc34967a4dd3a908c294385542a", "pr": null, "tests": "zero git diff", "noop": true}
 {"ts": "2026-08-27T06:02:09Z", "job_id": "mpi33-adv-user-dir-ws-watch", "work_source": "improve", "result": "noop", "head": "c6e763857bdfafc34967a4dd3a908c294385542a", "pr": null, "tests": "user_dir analog green", "noop": true}
+{"ts": "2026-08-27T06:13:13Z", "job_id": "expand-prop-sanitize-token", "work_source": "expand", "result": "landed", "head": "244b48129ecb466b2a8b3a5b11b8f9e92b76baec", "pr": 256, "tests": "sanitize_error_token props", "noop": false}
