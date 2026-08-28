@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "be727d677495edfd3a505cc2359bae0e7b2c2f00",
+  "ledger_sha": "1aecfcf033d27584f43e81f5aef3f7d3f5d7a05a",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 1,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand0-corpus-noop",
-    "work_source": "expand",
-    "started_at": "2026-08-28T01:20:00Z",
-    "finished_at": "2026-08-28T01:20:00Z",
+    "id": "prove-no-unused-tree-noop",
+    "work_source": "prove",
+    "started_at": "2026-08-28T01:20:10Z",
+    "finished_at": "2026-08-28T01:20:10Z",
     "result": "noop",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "leftover family 223/229/234/301 already landed; no new Bline-miss corpus",
+    "tests": "prove.trees already covers every committed corpus package and real HOME skill root",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
-  "next_work_source": "prove",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -69,7 +69,7 @@
       "tests/corpus/leftover/skills-named-package/wanted (--path, no implicit roots)",
       "tests/corpus/leftover/empty-nested-skills/wanted (--path, no implicit roots)"
     ],
-    "last_why_summary": "why leftover wanted extra-path packages still load"
+    "last_why_summary": "no unused real tree after leftover wanted extra-path prove"
   },
   "budgets": {
     "max_cycles": null,
