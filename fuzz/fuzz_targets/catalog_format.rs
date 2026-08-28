@@ -57,10 +57,16 @@ fuzz_target!(|data: &[u8]| {
         catalog_max_chars: chars,
         body_token_budget: 1,
     };
-    let _ = craftbag::format_catalog(
+    let cat = craftbag::format_catalog(
         &[tight_skill],
         "",
         tight,
         craftbag::FormatOptions::default(),
+    );
+    assert!(
+        cat.len() <= chars,
+        "tight catalog must stay within catalog_max_chars: len {} > {}",
+        cat.len(),
+        chars
     );
 });

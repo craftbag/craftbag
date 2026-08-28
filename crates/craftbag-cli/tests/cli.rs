@@ -128,6 +128,33 @@ fn validate_package_dir_json_path_is_skill_md() {
 }
 
 #[test]
+fn validate_missing_path_names_next_step() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let missing = tmp.path().join("no-such-skill");
+    let (_home, mut cmd) = bin();
+    let out = cmd.arg("validate").arg(&missing).output().expect("run");
+    assert_eq!(out.status.code(), Some(1), "missing path must fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("path does not exist:"),
+        "validate missing path must name the hole: {stderr}"
+    );
+    assert!(
+        stderr.contains("SKILL.md") && stderr.contains("package directory"),
+        "validate missing path must name the next step: {stderr}"
+    );
+    assert!(
+        !stderr.contains("os error 2") && !stderr.contains("No such file"),
+        "validate missing path must not leak the raw OS string: {stderr}"
+    );
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "validate missing path must stay one line: {stderr:?}"
+    );
+}
+
+#[test]
 fn validate_collection_dir_names_package() {
     let dir = corpus().join("leftover/empty-nested-skills");
     let (_home, mut cmd) = bin();
@@ -2034,6 +2061,37 @@ fn list_xml_includes_invocation_flags() {
 }
 
 #[test]
+fn load_typo_suggests_extra_path_hyphen_name() {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::create_dir_all(extra.path().join("review-pr")).expect("mkdir");
+    fs::write(
+        extra.path().join("review-pr").join("SKILL.md"),
+        "---\nname: review-pr\ndescription: review a pr\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("load")
+        .arg("reviewpr")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("did you mean review-pr"),
+        "load typo must name the extra-path skill: {stderr}"
+    );
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "load typo must stay one stderr line: {stderr:?}"
+    );
+}
+
+#[test]
 fn load_unknown_exits_2() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();
@@ -2290,6 +2348,40 @@ fn why_parse_skip_without_frontmatter_name_is_not_unknown() {
         "why JSON must keep the package path: {stdout}"
     );
     assert!(!String::from_utf8_lossy(&out.stderr).contains("unknown skill"));
+}
+
+#[test]
+fn why_typo_suggests_extra_path_hyphen_name() {
+    let extra = tempfile::tempdir().expect("extra");
+    fs::create_dir_all(extra.path().join("review-pr")).expect("mkdir");
+    fs::write(
+        extra.path().join("review-pr").join("SKILL.md"),
+        "---\nname: review-pr\ndescription: review a pr\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .arg("why")
+        .arg("review_pr")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("did you mean review-pr"),
+        "why typo must share the load hint: {stderr}"
+    );
+    assert_eq!(
+        stderr
+            .lines()
+            .filter(|l| l.contains("unknown skill") || l.contains("did you mean"))
+            .count(),
+        1,
+        "why typo must stay one miss line: {stderr:?}"
+    );
 }
 
 #[test]

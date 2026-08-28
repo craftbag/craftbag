@@ -52,8 +52,8 @@ pub use activate::{
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
     discover, find_skill_by_name, format_watch_dirs, unknown_or_skipped_skill,
-    unknown_or_skipped_skill_message, validate_path, validate_path_with_options,
-    walk_cwd_to_git_root, watch_dirs, with_home_override,
+    unknown_or_skipped_skill_message, unknown_or_skipped_skill_named, validate_path,
+    validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
 pub use parse::{

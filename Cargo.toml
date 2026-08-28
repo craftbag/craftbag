@@ -14,6 +14,16 @@ repository = "https://github.com/craftbag/craftbag"
 keywords = ["skills", "mcp", "agents"]
 categories = ["command-line-utilities", "development-tools"]
 publish = true
+# crates.io ships compile + license + docs, not factory/demo/brand.
+# Leading / is package-root only. Bare README.md would match demo/.
+include = [
+    "/src/**",
+    "/LICENSE",
+    "/LICENSE-APACHE",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/rustfmt.toml",
+]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

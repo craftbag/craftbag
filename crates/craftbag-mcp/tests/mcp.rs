@@ -32,6 +32,116 @@ fn mcp_unknown_option_exits_2() {
 }
 
 #[test]
+fn mcp_paths_alias_suggests_path() {
+    let out = bin().args(["--paths", "x"]).output().expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown option: --paths") && stderr.contains("did you mean --path?"),
+        "stderr={stderr}"
+    );
+    assert_eq!(stderr.lines().count(), 1, "{stderr:?}");
+}
+
+#[test]
+fn stdio_unknown_tool_list_names_skills_list() {
+    let resp = rpc(&serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "list", "arguments": {}}
+    }));
+    let msg = resp["error"]["message"].as_str().expect("message");
+    assert!(
+        msg.contains("unknown tool: list") && msg.contains("skills_list"),
+        "{resp}"
+    );
+    assert_eq!(msg.lines().count(), 1, "{msg:?}");
+}
+
+#[test]
+fn stdio_skills_load_typo_suggests_extra_path_hyphen_name() {
+    let extra = tempfile::tempdir().expect("extra");
+    std::fs::create_dir_all(extra.path().join("review-pr")).expect("mkdir");
+    std::fs::write(
+        extra.path().join("review-pr").join("SKILL.md"),
+        "---\nname: review-pr\ndescription: review a pr\n---\nbody\n",
+    )
+    .expect("write");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in_args(
+        cwd.path(),
+        home.path(),
+        &["--no-implicit-roots"],
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_load",
+                "arguments": {
+                    "name": "reviewpr",
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("did you mean review-pr"),
+        "skills_load must share the load typo hint: {text}"
+    );
+    assert_eq!(text.lines().count(), 1, "{text:?}");
+}
+
+#[test]
+fn stdio_launch_vendor_lists_when_tool_omits_vendor() {
+    // Sibling of stdio_launch_path_lists_without_tool_paths: launch
+    // --vendor is the walk when tools/call omits vendor.
+    let cwd = corpus_cursor_project();
+    let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Cursor project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in_args(
+        &cwd,
+        home.path(),
+        &["--vendor", "cursor"],
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 92,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {}
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let row = skills
+        .iter()
+        .find(|s| s["name"] == "create-rule")
+        .unwrap_or_else(|| {
+            panic!(
+                "launch --vendor cursor must list create-rule when tools/call omits vendor: {text}"
+            )
+        });
+    assert_eq!(
+        row["source"], "cursor",
+        "list JSON source must be the wire token: {text}"
+    );
+}
+
+#[test]
 fn stdio_launch_path_lists_without_tool_paths() {
     let home = tempfile::tempdir().expect("home");
     let cwd = tempfile::tempdir().expect("cwd");
