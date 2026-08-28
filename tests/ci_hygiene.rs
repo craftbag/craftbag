@@ -443,3 +443,43 @@ fn ci_compiles_once_per_tree() {
         );
     }
 }
+
+/// First public crates share one version and are publishable.
+#[test]
+fn publishable_crates_share_version_and_are_not_hidden() {
+    let lib = read_rel("Cargo.toml");
+    let cli = read_rel("crates/craftbag-cli/Cargo.toml");
+    let mcp = read_rel("crates/craftbag-mcp/Cargo.toml");
+    let fuzz = read_rel("fuzz/Cargo.toml");
+    let version = lib
+        .lines()
+        .find(|line| line.starts_with("version = "))
+        .expect("lib Cargo.toml must set version");
+    assert!(
+        cli.contains(version) && mcp.contains(version),
+        "cli and mcp versions must match the lib: {version}"
+    );
+    for (name, body) in [("lib", &lib), ("cli", &cli), ("mcp", &mcp)] {
+        assert!(
+            !body.contains("publish = false"),
+            "{name} must be publishable"
+        );
+    }
+    assert!(
+        fuzz.contains("publish = false"),
+        "fuzz crate stays unpublished"
+    );
+    assert!(
+        cli.contains("craftbag = { version = ") && mcp.contains("craftbag = { version = "),
+        "cli and mcp path deps must pin the published lib version"
+    );
+    let release = read_rel(".github/workflows/release.yml");
+    assert!(
+        release.contains("cargo publish") || release.contains("publish-crates.sh"),
+        "release.yml must publish crates on a tag"
+    );
+    assert!(
+        release.contains("CARGO_REGISTRY_TOKEN"),
+        "release.yml must use CARGO_REGISTRY_TOKEN"
+    );
+}

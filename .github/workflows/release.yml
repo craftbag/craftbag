@@ -1,0 +1,85 @@
+# Tag or dispatch. One trusted crates.io upload, not the PR test matrix
+# (ci-build-once Recipe E). Do not re-run nextest, clippy, fuzz, or a
+# second compile of the product here.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.1.0)"
+        required: true
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.85"
+      - name: Check publish script
+        run: bash factory/scripts/publish-crates.sh --self-test
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: bash factory/scripts/publish-crates.sh
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${TAG}"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import sys
+
+          tag = os.environ["TAG"]
+          if not tag.startswith("v"):
+              print("FAIL: tag must start with v:", tag)
+              sys.exit(1)
+          version = tag[1:]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          needle = f"## [{version}]"
+          start = text.find(needle)
+          if start < 0:
+              print("FAIL: CHANGELOG missing", needle)
+              sys.exit(1)
+          rest = text[start + len(needle) :]
+          nxt = rest.find("\n## [")
+          body = (rest if nxt < 0 else rest[:nxt]).strip()
+          pathlib.Path("/tmp/release-notes.md").write_text(
+              f"{needle}{body}\n", encoding="utf-8"
+          )
+          PY
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "OK: release $TAG exists"
+            gh release edit "$TAG" --notes-file /tmp/release-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
+          fi
