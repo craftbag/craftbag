@@ -1,6 +1,6 @@
 [package]
 name = "craftbag-cli"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
@@ -8,7 +8,7 @@ description = "CLI to list, load, why, and validate Agent Skills"
 repository = "https://github.com/craftbag/craftbag"
 keywords = ["skills", "mcp", "agents"]
 categories = ["command-line-utilities", "development-tools"]
-publish = false
+publish = true
 
 [[bin]]
 name = "craftbag"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-craftbag = { path = "../.." }
+craftbag = { version = "0.1.0", path = "../.." }
 serde_json = "1"
 
 [dev-dependencies]

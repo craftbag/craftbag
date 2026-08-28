@@ -64,8 +64,8 @@ Use a Bline worktree that is not findbug and not the durable
 bline-skills = { path = "/path/to/craftbag", package = "craftbag" }
 ```
 
-Later, if published: `craftbag = "0.1"`. This repo stays
-`publish = false` until a launch gate.
+Published crate: `craftbag = "0.1"`. Path-dep remains valid for
+unreleased pins.
 
 ## Intended shim
 

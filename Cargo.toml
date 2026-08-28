@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "craftbag"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
@@ -13,7 +13,7 @@ description = "Discover and load Agent Skills (SKILL.md) for CLI and MCP hosts"
 repository = "https://github.com/craftbag/craftbag"
 keywords = ["skills", "mcp", "agents"]
 categories = ["command-line-utilities", "development-tools"]
-publish = false
+publish = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
