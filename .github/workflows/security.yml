@@ -1,6 +1,5 @@
-# Public-repo security jobs that do not compile the crate.
-# Rust CodeQL needs a cargo build. That is a second compile of the
-# same tree. Add language rust (build-mode: manual) only at launch.
+# Dependency review and CodeQL. Rust CodeQL builds the crate once on
+# this workflow (not on push to main, not on a tag).
 name: Security
 
 on:
@@ -37,7 +36,7 @@ jobs:
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
@@ -48,6 +47,8 @@ jobs:
         include:
           - language: actions
             build-mode: none
+          - language: rust
+            build-mode: manual
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
@@ -55,11 +56,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        if: matrix.build-mode == 'manual'
+        with:
+          toolchain: "1.85"
       - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-and-quality
+      - name: Build (Rust)
+        if: matrix.build-mode == 'manual'
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_TARGET_DIR: target/ci-codeql
+        run: cargo build --locked --workspace --all-targets
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: "/language:${{ matrix.language }}"

@@ -9,3 +9,5 @@ rules:
   dangerous-triggers:
     ignore:
       - dependabot-auto-merge.yml
+      # pr-title reads the event payload only. No checkout of PR head.
+      - pr-title.yml
