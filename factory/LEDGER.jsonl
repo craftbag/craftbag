@@ -789,3 +789,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T01:15:10Z", "job_id": "mpi52-adversary-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no live red; expand 5 compete next"}
 {"ts": "2026-08-28T01:15:40Z", "job_id": "expand5-compete-noop", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; MPI 52 Arch next"}
 {"ts": "2026-08-28T01:16:30Z", "job_id": "mpi52-arch-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "layering holds; New Contributor next"}
+{"ts": "2026-08-28T01:17:00Z", "job_id": "mpi52-newcontrib-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Obs next"}
