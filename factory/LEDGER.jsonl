@@ -742,3 +742,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:11:43Z", "job_id": "prove-leftover-extra-skills-loose-301", "work_source": "prove", "result": "ok", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "301 live prove; reset expand streak; MPI 50 PM"}
 {"ts": "2026-08-28T00:12:46Z", "job_id": "mpi50-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal-list still live; Spec next"}
 {"ts": "2026-08-28T00:14:23Z", "job_id": "mpi50-spec-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "sibling lock holds; Perf next"}
+{"ts": "2026-08-28T00:16:39Z", "job_id": "mpi50-perf-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 1 property next"}
