@@ -70,6 +70,19 @@ fn rust_path_filter_covers_install_channel_sources() {
 }
 
 #[test]
+fn cargo_toml_defines_dist_profile() {
+    let cargo = repo_file("Cargo.toml");
+    assert!(
+        cargo.contains("[profile.dist]"),
+        "dist build uses --profile=dist; Cargo.toml must define it"
+    );
+    assert!(
+        cargo.contains("inherits = \"release\""),
+        "profile.dist must inherit release"
+    );
+}
+
+#[test]
 fn dist_workspace_keeps_hand_written_release_ci() {
     let dist = repo_file("dist-workspace.toml");
     assert!(
