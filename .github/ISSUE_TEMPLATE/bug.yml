@@ -1,0 +1,19 @@
+name: Bug
+description: Report a defect
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Observed behavior, expected behavior, and how to reproduce.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Tag, crate version, or git SHA.
+    validations:
+      required: true
