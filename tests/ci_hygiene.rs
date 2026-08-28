@@ -491,3 +491,48 @@ fn publishable_crates_share_version_and_are_not_hidden() {
         "release.yml must use CARGO_REGISTRY_TOKEN"
     );
 }
+
+/// crates.io must ship compile + license + docs, not factory scripts,
+/// brand assets, or demo trees. `include` (or exclude) is the lock;
+/// `cargo package --list` is the proof.
+#[test]
+fn published_lib_crate_omits_factory_demo_brand() {
+    let output = std::process::Command::new("cargo")
+        .args(["package", "--list", "-p", "craftbag", "--allow-dirty"])
+        .current_dir(repo_root())
+        .output()
+        .expect("cargo package --list");
+    assert!(
+        output.status.success(),
+        "cargo package --list failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let listed = String::from_utf8_lossy(&output.stdout);
+    for forbidden in ["factory/", "demo/", "brand/", "AGENTS.md"] {
+        let hit = listed
+            .lines()
+            .any(|line| line == forbidden || line.starts_with(forbidden));
+        assert!(
+            !hit,
+            "published crate must not include {forbidden}: {listed}"
+        );
+    }
+    for required in [
+        "Cargo.toml",
+        "LICENSE",
+        "LICENSE-APACHE",
+        "README.md",
+        "CHANGELOG.md",
+        "src/lib.rs",
+    ] {
+        assert!(
+            listed.lines().any(|line| line == required),
+            "published crate must include {required}: {listed}"
+        );
+    }
+    let lib = read_rel("Cargo.toml");
+    assert!(
+        lib.contains("\"/README.md\"") && lib.contains("\"/LICENSE-APACHE\""),
+        "include must root-anchor README and LICENSE so demo/ and rustup fixtures stay out"
+    );
+}

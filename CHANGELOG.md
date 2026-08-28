@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Published `craftbag` crate no longer ships factory/, demo/, or brand/
+
 ### Added
 
 - `craftbag-mcp --help` and `--version` (stdio server used to ignore argv)
