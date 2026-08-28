@@ -1,0 +1,11 @@
+# zizmor configuration
+# https://docs.zizmor.sh/configuration/
+
+rules:
+  # dependabot-auto-merge uses pull_request_target so GITHUB_TOKEN can
+  # approve and arm auto-merge on Dependabot PRs (pull_request from
+  # dependabot[bot] has a restricted token). Safe: no checkout of PR
+  # head; only gh approve/merge on patch and minor updates.
+  dangerous-triggers:
+    ignore:
+      - dependabot-auto-merge.yml
