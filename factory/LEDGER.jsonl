@@ -865,3 +865,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:33:13Z", "job_id": "mpi56-adversary-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no live red; Arch next"}
 {"ts": "2026-08-28T02:34:05Z", "job_id": "mpi56-arch-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "layering holds; expand 0 corpus already covered"}
 {"ts": "2026-08-28T02:34:15Z", "job_id": "expand0-corpus-noop-r4", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new Bline-miss corpus; MPI 56 New Contributor next"}
+{"ts": "2026-08-28T02:34:49Z", "job_id": "mpi56-newcontrib-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Obs next"}
