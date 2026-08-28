@@ -746,3 +746,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:17:13Z", "job_id": "mpi50-perf-noop-queue-expand", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "queue expand 1 property-gap"}
 {"ts": "2026-08-28T00:19:48Z", "job_id": "expand1-prop-gap-noop-r7", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "props already lock; MPI 50 Compat next"}
 {"ts": "2026-08-28T00:21:07Z", "job_id": "mpi50-compat-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "wire lock holds; Adversarial next"}
+{"ts": "2026-08-28T00:24:00Z", "job_id": "mpi50-adversary-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new leftover analog; Arch next"}
