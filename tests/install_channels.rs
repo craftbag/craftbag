@@ -60,6 +60,10 @@ fn release_tag_workflow_uses_dist_build_not_cargo_build() {
             && release.contains("github.event_name == 'workflow_dispatch'"),
         "dispatch must check out the workflow tip so a post-tag fix can attach archives to an old tag"
     );
+    assert!(
+        release.contains("x-access-token:") && release.contains(".insteadOf"),
+        "tap push must use an App-token insteadOf URL, not persist-credentials"
+    );
 }
 
 #[test]
