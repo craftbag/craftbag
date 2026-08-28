@@ -839,3 +839,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:09:17Z", "job_id": "expand5-compete-noop-r3", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; MPI 55 Security next"}
 {"ts": "2026-08-28T02:10:43Z", "job_id": "mpi55-security-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new live red; PM next"}
 {"ts": "2026-08-28T02:12:44Z", "job_id": "mpi55-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; Spec next"}
+{"ts": "2026-08-28T02:13:36Z", "job_id": "mpi55-spec-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "contract holds; expand 0 corpus already covered"}
