@@ -841,3 +841,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:12:44Z", "job_id": "mpi55-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; Spec next"}
 {"ts": "2026-08-28T02:13:36Z", "job_id": "mpi55-spec-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "contract holds; expand 0 corpus already covered"}
 {"ts": "2026-08-28T02:13:46Z", "job_id": "expand0-corpus-noop-r3", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new Bline-miss corpus; MPI 55 Perf next"}
+{"ts": "2026-08-28T02:16:25Z", "job_id": "mpi55-perf-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no extra IO red; Compat next"}
