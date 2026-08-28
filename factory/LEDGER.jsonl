@@ -801,3 +801,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T01:26:50Z", "job_id": "mpi53-ops-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "CI 33127700233 still green including Win/macOS/Fuzz; Security next"}
 {"ts": "2026-08-28T01:32:00Z", "job_id": "mpi53-security-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new live red; expand 2 fuzz next"}
 {"ts": "2026-08-28T01:32:10Z", "job_id": "expand2-fuzz-smoke-noop-r9", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "fuzz cover holds; MPI 53 PM next"}
+{"ts": "2026-08-28T01:35:00Z", "job_id": "mpi53-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; Spec next"}
