@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="craftbag skill peek, GitHub avatar crop">
+  <title>craftbag skill peek avatar</title>
+  <rect width="512" height="512" fill="#1B2420"/>
+  <g transform="rotate(-11 228 168)">
+    <rect x="156" y="36" width="156" height="208" rx="14" fill="#F3EBE1"/>
+    <rect x="176" y="62" width="116" height="12" rx="6" fill="#C65A2E"/>
+    <rect x="176" y="88" width="88" height="9" rx="4" fill="#8A9A90"/>
+    <rect x="176" y="110" width="100" height="9" rx="4" fill="#8A9A90"/>
+  </g>
+  <g transform="rotate(10 304 172)">
+    <rect x="220" y="42" width="156" height="208" rx="14" fill="#E8D9C4"/>
+    <rect x="240" y="68" width="116" height="12" rx="6" fill="#2F4A3C"/>
+    <rect x="240" y="94" width="76" height="9" rx="4" fill="#8A9A90"/>
+  </g>
+  <path fill="#C65A2E" d="M64 214c0-26 21-47 47-47h290c26 0 47 21 47 47v176c0 52-42 94-94 94H158c-52 0-94-42-94-94V214z"/>
+  <path fill="#8A4320" d="M64 214h384c0 32-28 58-60 58H124c-32 0-60-26-60-58z"/>
+  <path fill="#E0B13A" d="M226 246h60c9 0 16 7 16 16v16c0 9-7 16-16 16h-60c-9 0-16-7-16-16v-16c0-9 7-16 16-16z"/>
+</svg>
