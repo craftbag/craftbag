@@ -6,6 +6,38 @@ fn bin() -> Command {
     Command::cargo_bin("craftbag-mcp").expect("bin")
 }
 
+#[test]
+fn mcp_help_names_tools() {
+    let out = bin()
+        .arg("--help")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8_lossy(&out);
+    assert!(
+        text.contains("skills_list") && text.contains("skills_validate") && text.contains("stdio"),
+        "craftbag-mcp --help must name tools and stdio: {text}"
+    );
+}
+
+#[test]
+fn mcp_version_prints_crate_version() {
+    let out = bin()
+        .arg("--version")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8_lossy(&out);
+    assert!(
+        text.contains(env!("CARGO_PKG_VERSION")),
+        "craftbag-mcp --version must print the crate version: {text}"
+    );
+}
+
 fn corpus_pkg() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/agentskills/minimal-valid")
 }

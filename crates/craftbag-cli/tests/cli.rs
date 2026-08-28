@@ -52,6 +52,32 @@ fn leftover_extra_skills_loose() -> (tempfile::TempDir, PathBuf) {
 }
 
 #[test]
+fn help_names_the_product() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Agent Skills"));
+}
+
+#[test]
+fn demo_workspace_catalog_lists_review_pr() {
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/workspace/.agents/skills");
+    let (_home, mut cmd) = bin();
+    cmd.args([
+        "list",
+        "--no-implicit-roots",
+        "--path",
+        root.to_str().expect("utf8 path"),
+        "--catalog",
+    ])
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("review-pr"));
+}
+
+#[test]
 fn validate_minimal_valid_ok() {
     let path = corpus().join("agentskills/minimal-valid/SKILL.md");
     let (_home, mut cmd) = bin();

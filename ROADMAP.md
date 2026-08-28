@@ -6,10 +6,7 @@ Plans, not promises. Open an issue before a large change.
 
 - Keep the discover, load, why, and validate surfaces stable for
   path-dep hosts.
-- Finish launch-prep files that do not advertise the repo
-  (`CONTRIBUTING.md`, `SECURITY.md`, this file).
-- First tagged release after an explicit launch (crates.io stays
-  unpublished until then).
+- v0.1.0 is on crates.io (`craftbag`, `craftbag-cli`, `craftbag-mcp`).
 
 ## Medium term
 

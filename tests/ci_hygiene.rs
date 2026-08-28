@@ -326,6 +326,14 @@ fn readme_names_the_product_and_is_path_filtered() {
         readme.contains("## Getting started"),
         "README must have a Getting started section"
     );
+    assert!(
+        readme.contains("demo/workspace/.agents/skills"),
+        "Getting started must name the demo tree so clone-and-list is not empty"
+    );
+    assert!(
+        readme.contains("## Library"),
+        "README must show a library embedder path"
+    );
     let ci = read_rel(".github/workflows/ci.yml");
     assert!(
         ci.contains("- 'README.md'"),
