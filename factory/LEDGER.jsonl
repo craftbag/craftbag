@@ -783,3 +783,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T01:05:20Z", "job_id": "mpi52-security-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no live red; PM next"}
 {"ts": "2026-08-28T01:06:20Z", "job_id": "mpi52-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal 1-4 live; Spec next"}
 {"ts": "2026-08-28T01:07:20Z", "job_id": "mpi52-spec-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "contract holds; expand 4 new-prove-tree next"}
+{"ts": "2026-08-28T01:10:00Z", "job_id": "expand4-prove-tree-noop", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no unused real tree; do not invent leftover parent; MPI 52 Perf next"}
