@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "13159950258ea00118ab1265aa372cdb71b00cd4",
+  "ledger_sha": "6a2920e73676c4944ff67215799b39135095b71d",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 4,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand3-incumbent-noop",
-    "work_source": "expand",
-    "started_at": "2026-08-28T00:58:30Z",
-    "finished_at": "2026-08-28T00:58:30Z",
-    "result": "noop",
+    "id": "prove-leftover-wanted-extrapath",
+    "work_source": "prove",
+    "started_at": "2026-08-28T01:04:10Z",
+    "finished_at": "2026-08-28T01:04:10Z",
+    "result": "ok",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "all named Vercel/Anthropic walks already in incumbent or implicit .agents",
+    "tests": "why leftover/skills-named-package/wanted and leftover/empty-nested-skills/wanted load wanted",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
-  "next_work_source": "prove",
-  "consecutive_noop": 3,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -65,9 +65,11 @@
       "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
       "tests/corpus/agentskills (--path collection, no implicit roots)",
       "~/.grok/bundled/skills (--path, no implicit roots)",
-      "temp leftover extra/skills/SKILL.md name=loose + extra/wanted (--path, no implicit roots)"
+      "temp leftover extra/skills/SKILL.md name=loose + extra/wanted (--path, no implicit roots)",
+      "tests/corpus/leftover/skills-named-package/wanted (--path, no implicit roots)",
+      "tests/corpus/leftover/empty-nested-skills/wanted (--path, no implicit roots)"
     ],
-    "last_why_summary": "why leftover/empty-nested-skills still loads wanted"
+    "last_why_summary": "why leftover wanted extra-path packages still load"
   },
   "budgets": {
     "max_cycles": null,
