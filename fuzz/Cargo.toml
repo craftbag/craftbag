@@ -2,7 +2,7 @@
 name = "craftbag-fuzz"
 version = "0.0.0"
 edition = "2024"
-license = "Apache-2.0"
+license = "Apache-2.0 OR MIT"
 description = "Reserved."
 keywords = []
 categories = []
