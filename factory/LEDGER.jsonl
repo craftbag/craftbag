@@ -762,3 +762,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:37:04Z", "job_id": "mpi51-security-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "301 locks hold; PM next"}
 {"ts": "2026-08-28T00:39:01Z", "job_id": "mpi51-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 5 steal-list next"}
 {"ts": "2026-08-28T00:39:37Z", "job_id": "expand5-steal-list-noop-r7", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal-list still live; MPI 51 Spec next"}
+{"ts": "2026-08-28T00:40:55Z", "job_id": "mpi51-spec-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "sibling lock holds; Perf next"}
