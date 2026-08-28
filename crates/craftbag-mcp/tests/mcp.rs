@@ -32,6 +32,50 @@ fn mcp_unknown_option_exits_2() {
 }
 
 #[test]
+fn stdio_launch_vendor_lists_when_tool_omits_vendor() {
+    // Sibling of stdio_launch_path_lists_without_tool_paths: launch
+    // --vendor is the walk when tools/call omits vendor.
+    let cwd = corpus_cursor_project();
+    let skill = cwd.join(".cursor/skills/create-rule/SKILL.md");
+    assert!(
+        skill.is_file(),
+        "committed Cursor project fixture must exist: {}",
+        skill.display()
+    );
+    let home = tempfile::tempdir().expect("home");
+    let resp = rpc_in_args(
+        &cwd,
+        home.path(),
+        &["--vendor", "cursor"],
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 92,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {}
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+    let skills = v["skills"].as_array().expect("skills");
+    let row = skills
+        .iter()
+        .find(|s| s["name"] == "create-rule")
+        .unwrap_or_else(|| {
+            panic!(
+                "launch --vendor cursor must list create-rule when tools/call omits vendor: {text}"
+            )
+        });
+    assert_eq!(
+        row["source"], "cursor",
+        "list JSON source must be the wire token: {text}"
+    );
+}
+
+#[test]
 fn stdio_launch_path_lists_without_tool_paths() {
     let home = tempfile::tempdir().expect("home");
     let cwd = tempfile::tempdir().expect("cwd");
