@@ -6,30 +6,30 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "a450b379ceb7e974f0f9e70283c4da1fda08bd9c",
+  "ledger_sha": "64951655496d795dad9c6530e709a4ba1fe61db8",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 4,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand3-incumbent-noop",
-    "work_source": "expand",
-    "started_at": "2026-08-28T02:51:58Z",
-    "finished_at": "2026-08-28T02:51:58Z",
+    "id": "prove-codex-skills-system",
+    "work_source": "prove",
+    "started_at": "2026-08-28T02:53:15Z",
+    "finished_at": "2026-08-28T02:53:15Z",
     "result": "noop",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "incumbent dirs all present (claude/cursor/grok/bline project+user, vercel-npx); vercel-user banned PR 299",
+    "tests": "cargo build -p craftbag-cli --locked; why/list on ~/.codex/skills and .system",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
-  "next_work_source": "prove",
-  "consecutive_noop": 4,
+  "next_work_source": "improve",
+  "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
-    "checked_at": "2026-08-28T02:51:58Z",
+    "checked_at": "2026-08-28T02:53:15Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
@@ -67,9 +67,11 @@
       "~/.grok/bundled/skills (--path, no implicit roots)",
       "temp leftover extra/skills/SKILL.md name=loose + extra/wanted (--path, no implicit roots)",
       "tests/corpus/leftover/skills-named-package/wanted (--path, no implicit roots)",
-      "tests/corpus/leftover/empty-nested-skills/wanted (--path, no implicit roots)"
+      "tests/corpus/leftover/empty-nested-skills/wanted (--path, no implicit roots)",
+      "~/.codex/skills (--path, no implicit roots; one-level empty, PR 187)",
+      "~/.codex/skills/.system (--path, no implicit roots; 5 Codex system skills load)"
     ],
-    "last_why_summary": "no unused real tree after leftover wanted extra-path prove"
+    "last_why_summary": "~/.codex/skills: 0 loaded 0 skips; ~/.codex/skills/.system: skill-creator plugin-creator skill-installer openai-docs imagegen; one-level walk"
   },
   "budgets": {
     "max_cycles": null,
