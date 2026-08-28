@@ -152,7 +152,6 @@ fn local_gate_commands_run_in_ci() {
         "RUSTFLAGS=\"-D warnings\" cargo nextest run --locked --workspace",
         "RUSTFLAGS=\"-D warnings\" cargo test --locked --workspace --doc",
         "bash factory/scripts/deny-check.sh",
-        "bash factory/scripts/assert-stealth.sh craftbag/craftbag",
         "bash factory/scripts/write-ledger.sh --self-test",
     ];
     let fence = agents_local_gate_fence(&agents);

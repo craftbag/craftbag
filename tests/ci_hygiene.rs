@@ -1,6 +1,5 @@
 //! Hosted workflow hygiene must stay locked: dispatch, concurrency,
-//! timeouts, harden-runner, persist-credentials, and stealth on the
-//! aggregator.
+//! timeouts, harden-runner, persist-credentials, and aggregator CI.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -143,7 +142,6 @@ fn parse_jobs_finds_ci_yml_jobs() {
         "test-macos",
         "workflows",
         "gitleaks",
-        "stealth",
         "ci",
     ] {
         assert!(
@@ -223,20 +221,6 @@ fn workflows_have_dispatch_concurrency_timeouts_and_harden() {
             );
         }
     }
-}
-
-#[test]
-fn stealth_job_is_needed_by_aggregator_ci() {
-    let ci = read_rel(".github/workflows/ci.yml");
-    let jobs = parse_jobs(&ci);
-    let ci_job = jobs
-        .iter()
-        .find(|(name, _)| name == "ci")
-        .unwrap_or_else(|| panic!("ci.yml must have aggregator job id `ci`"));
-    assert!(
-        ci_job.1.contains("stealth"),
-        "aggregator CI needs: must include stealth"
-    );
 }
 
 /// Detect changes can skip the whole rust matrix. If it fails and the
@@ -325,17 +309,22 @@ fn ci_pins_install_action_rust_tools() {
     assert_eq!(fuzz, 1, "fuzz-smoke must install cargo-fuzz once: {fuzz}");
 }
 
-/// Constitution: README is only `# craftbag` / `Not ready.`
-/// A quiet pitch without banned words still passes assert-stealth's
-/// pitch regex. Path-filter must include README.md so the rust matrix
-/// (this test) runs on a README-only PR; otherwise only Stealth runs
-/// and a non-regex pitch can stay green.
+/// Constitution: README names the product. Path-filter must include
+/// README.md so the rust matrix runs on a README-only PR.
 #[test]
-fn readme_stealth_placeholder_is_path_filtered() {
+fn readme_names_the_product_and_is_path_filtered() {
     let readme = read_rel("README.md").replace("\r\n", "\n");
-    assert_eq!(
-        readme, "# craftbag\n\nNot ready.\n",
-        "README must stay the constitution stealth placeholder"
+    assert!(
+        readme.starts_with("# craftbag\n"),
+        "README must start with the crate name"
+    );
+    assert!(
+        !readme.contains("Not ready."),
+        "README must not stay the stealth placeholder"
+    );
+    assert!(
+        readme.contains("## Getting started"),
+        "README must have a Getting started section"
     );
     let ci = read_rel(".github/workflows/ci.yml");
     assert!(

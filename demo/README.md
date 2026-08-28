@@ -8,4 +8,4 @@ mkdir -p /tmp/craftbag-demo-home
 vhs demo/list.tape
 ```
 
-Do not add this GIF to the root README while stealth is on.
+The recorded GIF is shown on the root README.
