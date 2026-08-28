@@ -2,15 +2,15 @@ name: Auto-approve
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
+
+concurrency:
+  group: auto-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   auto-approve:
@@ -20,23 +20,40 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    # Same-repo heads only. Fork PRs get a read-only GITHUB_TOKEN on
+    # pull_request, so createReview(APPROVE) fails. Do not include
+    # dependabot[bot]: dependabot-auto-merge.yml owns those PRs.
+    # Approve still runs for constitution and release titles. Auto-merge
+    # is gated in the later step (CONSTITUTION item 9).
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'github-actions[bot]' &&
-      !github.event.pull_request.draft &&
-      !contains(github.event.pull_request.labels.*.name, 'autorelease: pending') &&
-      !startsWith(github.event.pull_request.title, 'release:') &&
-      !startsWith(github.event.pull_request.title, 'chore(release)') &&
-      !startsWith(github.event.pull_request.title, 'publish') &&
-      github.event.pull_request.title != 'chore: amend constitution' &&
       github.actor == 'SebTardif'
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
           egress-policy: audit
-      - name: Guard paths then approve and auto-merge
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTO_APPROVE_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_APPROVE_PRIVATE_KEY }}
+      - name: Auto-approve PR
+        uses: hmarr/auto-approve-action@f0939ea97e9205ef24d872e76833fa908a770363 # v4
+      - name: Enable auto-merge
+        # Skip drafts (GitHub rejects enablePullRequestAutoMerge).
+        # Skip release, publish, and constitution titles. Path skips
+        # for factory/CONSTITUTION.md and assert-stealth.sh are below.
+        if: >-
+          !github.event.pull_request.draft &&
+          !contains(github.event.pull_request.labels.*.name, 'autorelease: pending') &&
+          github.event.pull_request.title != 'chore: amend constitution' &&
+          !startsWith(github.event.pull_request.title, 'release:') &&
+          !startsWith(github.event.pull_request.title, 'chore(release)') &&
+          !startsWith(github.event.pull_request.title, 'publish')
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -44,8 +61,12 @@ jobs:
           paths=$(gh pr diff --name-only "$PR" --repo "$REPO")
           if echo "$paths" | grep -qx 'factory/CONSTITUTION.md' \
             || echo "$paths" | grep -qx 'factory/scripts/assert-stealth.sh'; then
-            echo "Skip approve/auto-merge: constitution or stealth script in diff"
+            echo "Skip auto-merge: constitution or stealth script in diff"
             exit 0
           fi
-          gh pr review --approve "$PR" --repo "$REPO"
-          gh pr merge --auto --squash "$PR" --repo "$REPO"
+          gh pr merge --auto --squash "$PR" --repo "$REPO" \
+            || echo "Could not enable auto-merge. The PR was approved."
+      - name: Skip auto-merge for draft PRs
+        if: github.event.pull_request.draft
+        run: |
+          echo "Draft PR ${{ github.event.pull_request.number }}: auto-merge deferred until ready for review."
