@@ -9,5 +9,4 @@ check:
 	RUSTFLAGS="-D warnings" cargo nextest run --locked --workspace
 	RUSTFLAGS="-D warnings" cargo test --locked --workspace --doc
 	bash factory/scripts/deny-check.sh
-	bash factory/scripts/assert-stealth.sh craftbag/craftbag
 	bash factory/scripts/write-ledger.sh --self-test

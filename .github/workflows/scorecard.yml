@@ -1,8 +1,9 @@
-# Dispatch only until launch. A live Scorecard run publishes a public
-# score. Add push-to-main and the weekly cron when stealth drops.
+# Weekly cron plus dispatch. Do not add a product compile on push to main.
 name: Scorecard
 
 on:
+  schedule:
+    - cron: "30 1 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -34,7 +35,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: false
+          publish_results: true
           repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload SARIF
         if: hashFiles('results.sarif') != ''

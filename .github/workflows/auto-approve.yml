@@ -47,8 +47,8 @@ jobs:
         uses: hmarr/auto-approve-action@f0939ea97e9205ef24d872e76833fa908a770363 # v4
       - name: Enable auto-merge
         # Skip drafts (GitHub rejects enablePullRequestAutoMerge).
-        # Skip release, publish, and constitution titles. Path skips
-        # for factory/CONSTITUTION.md and assert-stealth.sh are below.
+        # Skip release, publish, and constitution titles. Path skip
+        # for factory/CONSTITUTION.md is below.
         if: >-
           !github.event.pull_request.draft &&
           !contains(github.event.pull_request.labels.*.name, 'autorelease: pending') &&
@@ -63,9 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           paths=$(gh pr diff --name-only "$PR" --repo "$REPO")
-          if echo "$paths" | grep -qx 'factory/CONSTITUTION.md' \
-            || echo "$paths" | grep -qx 'factory/scripts/assert-stealth.sh'; then
-            echo "Skip auto-merge: constitution or stealth script in diff"
+          if echo "$paths" | grep -qx 'factory/CONSTITUTION.md'; then
+            echo "Skip auto-merge: constitution in diff"
             exit 0
           fi
           gh pr merge --auto --squash "$PR" --repo "$REPO" \

@@ -6,7 +6,7 @@
 MSRV 1.85 (`rust-toolchain.toml`). No let-chains.
 
 `rust-toolchain.toml` installs rustfmt and clippy. The local gate also
-needs cargo-nextest, cargo-deny, and `gh` (stealth runs `gh repo view`).
+needs cargo-nextest, cargo-deny, and `gh`.
 Use prebuilt binaries. Do not `cargo install` those two on rustc 1.85
 (they need a newer compiler than this crate's MSRV).
 
@@ -24,7 +24,6 @@ RUSTFLAGS="-D warnings" cargo clippy --locked --workspace --all-targets -- -D wa
 RUSTFLAGS="-D warnings" cargo nextest run --locked --workspace
 RUSTFLAGS="-D warnings" cargo test --locked --workspace --doc
 bash factory/scripts/deny-check.sh
-bash factory/scripts/assert-stealth.sh craftbag/craftbag
 bash factory/scripts/write-ledger.sh --self-test
 ```
 
@@ -40,9 +39,9 @@ Parent session is the outer loop. Read `factory/WORK_SOURCES.md` and run `factor
 
 `.grok/workflows/factory-cycle.rhai` is one cycle, not the factory.
 
-## Stealth
+## Public
 
-Public for hosted Actions. Empty description, no topics, no FUNDING, README stays `# craftbag` / `Not ready.` Do not run `/oss-announce`. See `factory/CONSTITUTION.md`.
+README, GitHub description, and topics name the product. See `factory/CONSTITUTION.md`.
 
 ## Methodology
 

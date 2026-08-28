@@ -4,10 +4,10 @@ version = "0.0.1"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
-description = "Reserved."
+description = "MCP stdio server for craftbag list, load, why, and validate"
 repository = "https://github.com/craftbag/craftbag"
-keywords = []
-categories = []
+keywords = ["skills", "mcp", "agents"]
+categories = ["command-line-utilities", "development-tools"]
 publish = false
 
 [[bin]]
