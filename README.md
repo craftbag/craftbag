@@ -88,13 +88,14 @@ Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio 
 {
   "mcpServers": {
     "craftbag": {
-      "command": "craftbag-mcp"
+      "command": "craftbag-mcp",
+      "args": ["--vendor", "claude"]
     }
   }
 }
 ```
 
-The host cwd is the walk root. Pass `paths`, `vendor`, or `implicit_roots` on each tool call when you need a different tree.
+Launch `--path`, `--vendor`, `--user-dir`, and `--no-implicit-roots` are the walk when a tool call omits that field. The host cwd is still the implicit walk root unless you pass `--no-implicit-roots`.
 
 ## Library
 

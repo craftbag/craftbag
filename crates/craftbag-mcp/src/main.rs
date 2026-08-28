@@ -6,6 +6,7 @@
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
@@ -144,6 +145,22 @@ fn opts_from(
     disabled: Vec<String>,
     ignore: Vec<String>,
 ) -> Result<DiscoveryOptions, String> {
+    let merged = apply_launch_defaults(
+        paths,
+        vendor,
+        user_dir,
+        ascii_names,
+        implicit_roots,
+        disabled,
+        ignore,
+    );
+    let paths = merged.paths;
+    let vendor = merged.vendor;
+    let user_dir = merged.user_dir;
+    let ascii_names = merged.ascii_names;
+    let implicit_roots = merged.implicit_roots;
+    let disabled = merged.disabled;
+    let ignore = merged.ignore;
     // CLI clap rejects `--user-dir` with no value. Present empty or
     // whitespace is the same miss, not discover-cwd as User.
     if let Some(d) = user_dir.as_deref() {
@@ -589,46 +606,157 @@ Tools:
   skills_why       explain loaded, skipped, and activation
   skills_validate  check one SKILL.md or package directory
 
+Launch defaults (used when a tool call omits that field):
+  --path PATH              Extra package or collection root (repeatable)
+  --vendor VENDOR          Opt-in vendor trees: bline, claude, cursor, grok
+  --user-dir DIR           User skills root
+  --ascii-names            Reject names outside a-z0-9-
+  --no-implicit-roots      Skip cwd-to-git and $HOME .agents / vendor walks
+  --disabled NAME          Skill name never loaded (repeatable)
+  --ignore PATH            Path prefix never loaded (repeatable)
+
 Options:
   -h, --help     Print this message
   -V, --version  Print version
 
 The process stays on stdio until stdin closes. Point your host command
-at this binary.
+at this binary. Host config args pin the walk so each tools/call does
+not have to repeat paths or vendor.
 ";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CliAction {
-    Help,
-    Version,
-    Stdio,
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct LaunchDefaults {
+    paths: Vec<String>,
+    vendor: Vec<String>,
+    user_dir: Option<String>,
+    ascii_names: bool,
+    implicit_roots: Option<bool>,
+    disabled: Vec<String>,
+    ignore: Vec<String>,
 }
 
-fn classify_cli_args<I>(args: I) -> CliAction
+static LAUNCH: OnceLock<LaunchDefaults> = OnceLock::new();
+
+fn launch_defaults() -> LaunchDefaults {
+    LAUNCH.get().cloned().unwrap_or_default()
+}
+
+fn apply_launch_defaults(
+    mut paths: Vec<String>,
+    mut vendor: Vec<String>,
+    user_dir: Option<String>,
+    ascii_names: bool,
+    implicit_roots: Option<bool>,
+    mut disabled: Vec<String>,
+    mut ignore: Vec<String>,
+) -> LaunchDefaults {
+    let launch = launch_defaults();
+    if paths.is_empty() {
+        paths = launch.paths;
+    }
+    if vendor.is_empty() {
+        vendor = launch.vendor;
+    }
+    let user_dir = match user_dir {
+        Some(d) => Some(d),
+        None => launch.user_dir,
+    };
+    let ascii_names = ascii_names || launch.ascii_names;
+    let implicit_roots = match implicit_roots {
+        Some(v) => Some(v),
+        None => launch.implicit_roots,
+    };
+    if disabled.is_empty() {
+        disabled = launch.disabled;
+    }
+    if ignore.is_empty() {
+        ignore = launch.ignore;
+    }
+    LaunchDefaults {
+        paths,
+        vendor,
+        user_dir,
+        ascii_names,
+        implicit_roots,
+        disabled,
+        ignore,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ParsedCli {
+    Help,
+    Version,
+    Stdio(LaunchDefaults),
+}
+
+fn take_value(
+    args: &mut std::iter::Peekable<impl Iterator<Item = String>>,
+    flag: &str,
+) -> Result<String, String> {
+    match args.next() {
+        Some(v) if !v.starts_with('-') => Ok(v),
+        Some(v) => Err(format!(
+            "{flag} needs a value, not {}",
+            craftbag::sanitize_error_token(&v)
+        )),
+        None => Err(format!("{flag} needs a value")),
+    }
+}
+
+fn parse_cli_args<I>(args: I) -> Result<ParsedCli, String>
 where
     I: IntoIterator<Item = String>,
 {
-    for arg in args {
+    let mut args = args.into_iter().peekable();
+    let mut launch = LaunchDefaults::default();
+    while let Some(arg) = args.next() {
         match arg.as_str() {
-            "-h" | "--help" => return CliAction::Help,
-            "-V" | "--version" => return CliAction::Version,
-            _ => {}
+            "-h" | "--help" => return Ok(ParsedCli::Help),
+            "-V" | "--version" => return Ok(ParsedCli::Version),
+            "--ascii-names" => launch.ascii_names = true,
+            "--no-implicit-roots" => launch.implicit_roots = Some(false),
+            "--path" => launch.paths.push(take_value(&mut args, "--path")?),
+            "--vendor" => {
+                let raw = take_value(&mut args, "--vendor")?;
+                for part in raw.split(',') {
+                    let part = part.trim();
+                    if !part.is_empty() {
+                        launch.vendor.push(part.to_owned());
+                    }
+                }
+            }
+            "--user-dir" => launch.user_dir = Some(take_value(&mut args, "--user-dir")?),
+            "--disabled" => launch.disabled.push(take_value(&mut args, "--disabled")?),
+            "--ignore" => launch.ignore.push(take_value(&mut args, "--ignore")?),
+            other => {
+                return Err(format!(
+                    "unknown option: {}",
+                    craftbag::sanitize_error_token(other)
+                ));
+            }
         }
     }
-    CliAction::Stdio
+    Ok(ParsedCli::Stdio(launch))
 }
 
 fn main() {
-    match classify_cli_args(std::env::args().skip(1)) {
-        CliAction::Help => {
+    match parse_cli_args(std::env::args().skip(1)) {
+        Ok(ParsedCli::Help) => {
             print!("{HELP}");
             return;
         }
-        CliAction::Version => {
+        Ok(ParsedCli::Version) => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             return;
         }
-        CliAction::Stdio => {}
+        Ok(ParsedCli::Stdio(launch)) => {
+            let _ = LAUNCH.set(launch);
+        }
+        Err(e) => {
+            let _ = writeln!(io::stderr(), "{e}");
+            std::process::exit(2);
+        }
     }
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -656,7 +784,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{CliAction, DiscoverArgs, RpcRequest, classify_cli_args, handle, list_json};
+    use super::{DiscoverArgs, ParsedCli, RpcRequest, handle, list_json, parse_cli_args};
     use serde_json::json;
     use std::fs;
     use std::path::PathBuf;
@@ -701,10 +829,51 @@ mod tests {
 
     #[test]
     fn help_and_version_flags_skip_stdio() {
-        assert_eq!(classify_cli_args(["--help".to_string()]), CliAction::Help);
-        assert_eq!(classify_cli_args(["-h".to_string()]), CliAction::Help);
-        assert_eq!(classify_cli_args(["-V".to_string()]), CliAction::Version);
-        assert_eq!(classify_cli_args(Vec::<String>::new()), CliAction::Stdio);
+        assert_eq!(
+            parse_cli_args(["--help".to_string()]).expect("help"),
+            ParsedCli::Help
+        );
+        assert_eq!(
+            parse_cli_args(["-h".to_string()]).expect("h"),
+            ParsedCli::Help
+        );
+        assert_eq!(
+            parse_cli_args(["-V".to_string()]).expect("version"),
+            ParsedCli::Version
+        );
+        assert!(matches!(
+            parse_cli_args(Vec::<String>::new()).expect("empty"),
+            ParsedCli::Stdio(_)
+        ));
+    }
+
+    #[test]
+    fn parse_launch_path_and_vendor() {
+        let parsed = parse_cli_args([
+            "--no-implicit-roots".to_string(),
+            "--path".to_string(),
+            "/tmp/skills".to_string(),
+            "--vendor".to_string(),
+            "claude,cursor".to_string(),
+        ])
+        .expect("args");
+        match parsed {
+            ParsedCli::Stdio(d) => {
+                assert_eq!(d.paths, vec!["/tmp/skills"]);
+                assert_eq!(d.vendor, vec!["claude", "cursor"]);
+                assert_eq!(d.implicit_roots, Some(false));
+            }
+            other => panic!("expected stdio, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_unknown_option_is_error() {
+        let err = parse_cli_args(["--nope".to_string()]).expect_err("unknown");
+        assert!(
+            err.contains("unknown option") && err.contains("--nope"),
+            "{err}"
+        );
     }
 
     #[test]
