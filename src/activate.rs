@@ -243,6 +243,11 @@ pub fn format_catalog(
     let mut shown = 0usize;
     let mut omitted = 0usize;
     let ranked_len = ranked.len();
+    // Reserve the real omit footer (hint + static prefix + digit
+    // width) before adding skill lines so that line stays intact.
+    // Hard clamp (U+2026, 3 UTF-8 bytes) is last resort.
+    let reserve = catalog_omit_footer(ranked_len, fmt.activate_hint).len();
+    let limit = budgets.catalog_max_chars.saturating_sub(reserve);
 
     for skill in &ranked {
         let line = catalog_skill_line(skill);
@@ -250,8 +255,6 @@ pub fn format_catalog(
             omitted = omitted.saturating_add(1);
             continue;
         }
-        let reserve = 80usize;
-        let limit = budgets.catalog_max_chars.saturating_sub(reserve);
         if header
             .len()
             .saturating_add(body.len())
@@ -288,10 +291,7 @@ pub fn format_catalog(
     out.push_str(&header);
     out.push_str(&body);
     if omitted > 0 {
-        out.push_str(&format!(
-            "\n(…{omitted} more skills not listed; {hint})\n",
-            hint = fmt.activate_hint
-        ));
+        out.push_str(&catalog_omit_footer(omitted, fmt.activate_hint));
     }
     if out.len() > budgets.catalog_max_chars {
         // U+2026 is 3 UTF-8 bytes. Reserve that, not 1, or the
@@ -496,6 +496,12 @@ fn catalog_one_line(s: &str) -> String {
 /// envelope / XML location stays one field.
 fn leftover_path_one_line(path: &Path) -> String {
     catalog_one_line(&crate::sanitize_error_token(&path.display().to_string()))
+}
+
+/// Omitted-skills footer. `format_catalog` reserves this length before
+/// adding skill lines so the line is not hard-clamped mid-hint.
+fn catalog_omit_footer(omitted: usize, hint: &str) -> String {
+    format!("\n(…{omitted} more skills not listed; {hint})\n")
 }
 
 /// One markdown list item. Optional `when_to_use` stays on the same line.
@@ -1160,6 +1166,42 @@ mod tests {
             cat.contains("more skills not listed") || cat.ends_with('…'),
             "tight budget must omit or ellipsize: {cat}"
         );
+    }
+
+    #[test]
+    fn format_catalog_omit_footer_stays_intact_under_catalog_max_chars() {
+        // Many short skills + 1000-byte cap: the omitted footer is longer
+        // than the old 80-byte reserve. The footer must stay whole (hint
+        // intact), not get hard-clamped mid-hint.
+        let skills: Vec<Skill> = (0..40)
+            .map(|i| make_skill(&format!("skill-{i:02}"), &[], 10))
+            .collect();
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 40,
+            catalog_max_chars: 1000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&skills, "", budgets, FormatOptions::default());
+        assert!(
+            cat.len() <= budgets.catalog_max_chars,
+            "catalog must stay within catalog_max_chars: len {} > {}",
+            cat.len(),
+            budgets.catalog_max_chars
+        );
+        if cat.contains("more skills not listed") {
+            let omit = cat
+                .lines()
+                .find(|l| l.contains("more skills not listed"))
+                .expect("omitted-skills line");
+            assert!(
+                omit.contains(DEFAULT_ACTIVATE_HINT),
+                "omitted-skills footer must keep the activate hint intact: {omit:?}"
+            );
+            assert!(
+                omit.ends_with(')'),
+                "omitted-skills footer must not be hard-clamped mid-hint: {omit:?}"
+            );
+        }
     }
 
     #[test]
