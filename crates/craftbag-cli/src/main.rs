@@ -46,13 +46,13 @@ enum Cmd {
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --path ./my-skill
+        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
         /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --user-dir ~/myskills
+        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -84,13 +84,13 @@ enum Cmd {
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
         #[arg(long = "args", default_value = "")]
         args: String,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --path ./my-skill
+        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
         /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --user-dir ~/myskills
+        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -119,13 +119,13 @@ enum Cmd {
         /// Model context window size (default 8000).
         #[arg(long, default_value_t = 8_000)]
         context_tokens: usize,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --path ./my-skill
+        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
         #[arg(long = "path", value_name = "PATH")]
         paths: Vec<String>,
         /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
         #[arg(long, value_delimiter = ',')]
         vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: --user-dir ~/myskills
+        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
         #[arg(long = "user-dir")]
         user_dir: Option<PathBuf>,
         /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -143,7 +143,7 @@ enum Cmd {
     },
     /// Validate one SKILL.md file or package directory. `--json` success is ValidationReport (no error_kind).
     Validate {
-        /// SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). Example: ./my-skill
+        /// SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: ./my-skill
         path: PathBuf,
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]

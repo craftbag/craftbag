@@ -137,7 +137,8 @@ impl SkillSkip {
     }
 
     /// True when discover refused a host `--path` / `paths` or
-    /// `--user-dir` / `user_dir` token (collapse or line separator).
+    /// `--user-dir` / `user_dir` token (collapse, line separator,
+    /// missing, or not a directory).
     ///
     /// That skip is not a package identity. Named `load` / `why`
     /// still peel it so a host sees WHAT and which flag to change.
@@ -145,7 +146,9 @@ impl SkillSkip {
         self.kind == SkipKind::Unreadable
             && self.name.is_none()
             && (self.detail.contains("collapses after whitespace trim")
-                || self.detail.contains("line separator"))
+                || self.detail.contains("line separator")
+                || self.detail.contains("path does not exist:")
+                || self.detail.contains("not a directory"))
     }
 }
 
@@ -406,6 +409,21 @@ mod tests {
             winner_path: None,
         };
         assert!(!other.is_host_token_refuse());
+        let missing = SkillSkip {
+            path: PathBuf::from("/tmp/no-such-extra"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "path does not exist: /tmp/no-such-extra (pass --path / paths as a SKILL.md file or a package directory that contains SKILL.md)".to_owned(),
+            winner_path: None,
+        };
+        assert!(
+            missing.is_host_token_refuse(),
+            "missing host --path must peel like collapse refuse"
+        );
+        assert!(
+            !missing.matches_requested_name("demo"),
+            "missing extra-path is not the skill name demo"
+        );
     }
 
     #[test]

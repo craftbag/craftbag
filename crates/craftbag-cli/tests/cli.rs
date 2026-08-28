@@ -227,6 +227,10 @@ fn assert_help_names_path_token_refuse(block: &str, label: &str) {
         block.contains("collapses") && block.contains("/.."),
         "{label} must name the whitespace-collapse refuse (` /..`): {block}"
     );
+    assert!(
+        block.contains("missing") && block.contains("unreadable"),
+        "{label} must say a missing path is reported as unreadable: {block}"
+    );
 }
 
 #[test]
@@ -1368,6 +1372,64 @@ fn load_why_collapse_refuse_peels_unreadable_and_names_flag() {
     assert!(
         user_err.contains("--user-dir") && user_err.contains("user_dir"),
         "load error must name --user-dir / user_dir: {user_stdout}"
+    );
+}
+
+#[test]
+fn list_missing_path_emits_unreadable_skip() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("no-such-extra");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("list")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&missing)
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "missing extra-path is a skip, not a new exit: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        combined.contains("skip\tunreadable"),
+        "list must emit an unreadable skip TSV: stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        combined.contains("path does not exist:"),
+        "list skip must name the hole: stdout={stdout:?} stderr={stderr:?}"
+    );
+}
+
+#[test]
+fn load_missing_path_peels_unreadable() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("no-such-extra");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(cwd.path())
+        .arg("load")
+        .arg("demo")
+        .arg("--json")
+        .arg("--no-implicit-roots")
+        .arg("--path")
+        .arg(&missing)
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_ne!(out.status.code(), Some(0), "stdout={stdout}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("load json");
+    assert_eq!(
+        v["error_kind"], "unreadable",
+        "load missing --path must peel unreadable, not unknown_skill: {stdout}"
     );
 }
 
