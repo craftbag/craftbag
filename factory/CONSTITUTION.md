@@ -4,7 +4,7 @@ Immutable. Changing this file requires a PR titled `chore: amend constitution`. 
 
 1. **Stealth until the drop-stealth gate.** Empty GitHub description, no topics, no FUNDING, README is `# craftbag` / `Not ready.` Stealth is a job inside `ci.yml` and a `needs:` of aggregator `CI`.
 2. **Not a parser pitch.** README, crate description, issues, and PR titles must not sell a YAML frontmatter parser.
-3. **Apache-2.0 only.** Keep copyright headers on ported Bline files. No CLA. DCO on every commit (`git commit -s`).
+3. **Apache-2.0 OR MIT.** Keep copyright headers on ported Bline files. No CLA. DCO on every commit (`git commit -s`). `LICENSE` is the MIT text. `LICENSE-APACHE` is Apache-2.0.
 4. **Independent org.** Never `blineai/`. Never copy this product into findbug.
 5. **Executable tests.** Impl + tests + related docs in the same commit. A feature without a test that would fail if reverted is incomplete. Fixtures fail CI before product modules.
 6. **Find many, land few.** One session branch. At most one ready feature PR. Theme batches, not one peel per PR.

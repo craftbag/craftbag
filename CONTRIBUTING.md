@@ -35,6 +35,11 @@ PR titles must be a conventional type (`feat`, `fix`, `docs`, `ci`,
 `chore`, `test`, `refactor`, `perf`, `build`, `style`, `revert`).
 The Semantic PR Title check enforces that.
 
+## License
+
+This project is dual-licensed under Apache-2.0 or MIT. You may choose
+either. See `LICENSE` (MIT) and `LICENSE-APACHE`.
+
 ## Conduct
 
 See `CODE_OF_CONDUCT.md`. Security reports go to `SECURITY.md`, not
