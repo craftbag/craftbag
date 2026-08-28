@@ -6,26 +6,26 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "97730d30d6e6b468a93576dd110fef36d24002dd",
+  "ledger_sha": "fc4d82b43457cd8cbd723cb4408ec7953a5195e6",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 1,
   "expand_noop_streak": 0,
   "last_job": {
-    "id": "mpi56-newcontrib-noop",
+    "id": "mpi56-obs-noop",
     "work_source": "improve",
-    "started_at": "2026-08-28T02:34:49Z",
-    "finished_at": "2026-08-28T02:34:49Z",
+    "started_at": "2026-08-28T02:35:44Z",
+    "finished_at": "2026-08-28T02:35:44Z",
     "result": "noop",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "AGENTS/Makefile/ci local-gate lock holds",
+    "tests": "SkillMiss peel still on load/why/validate/MCP",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "next_work_source": "improve",
-  "consecutive_noop": 1,
+  "consecutive_noop": 2,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
@@ -34,8 +34,8 @@
     "app_merge_attribution": false
   },
   "mpi": {
-    "cycle": 56,
-    "next_perspective": 15,
+    "cycle": 57,
+    "next_perspective": 1,
     "clean_cycles": 0
   },
   "pr_plan_cursor": "pr-9",
