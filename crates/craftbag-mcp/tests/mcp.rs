@@ -17,8 +17,91 @@ fn mcp_help_names_tools() {
         .clone();
     let text = String::from_utf8_lossy(&out);
     assert!(
-        text.contains("skills_list") && text.contains("skills_validate") && text.contains("stdio"),
-        "craftbag-mcp --help must name tools and stdio: {text}"
+        text.contains("skills_list")
+            && text.contains("skills_validate")
+            && text.contains("stdio")
+            && text.contains("--path")
+            && text.contains("--vendor"),
+        "craftbag-mcp --help must name tools, stdio, and launch defaults: {text}"
+    );
+}
+
+#[test]
+fn mcp_unknown_option_exits_2() {
+    bin().arg("--nope").assert().failure().code(2);
+}
+
+#[test]
+fn stdio_launch_path_lists_without_tool_paths() {
+    let home = tempfile::tempdir().expect("home");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let skills =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/workspace/.agents/skills");
+    let resp = rpc_in_args(
+        cwd.path(),
+        home.path(),
+        &[
+            "--no-implicit-roots",
+            "--path",
+            skills.to_str().expect("utf8"),
+        ],
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 90,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {"format": "catalog"}
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("review-pr"),
+        "launch --path must be the walk when tools/call omits paths: {text}"
+    );
+}
+
+#[test]
+fn stdio_tool_paths_replace_launch_path() {
+    let home = tempfile::tempdir().expect("home");
+    let cwd = tempfile::tempdir().expect("cwd");
+    let demo =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/workspace/.agents/skills");
+    let other = tempfile::tempdir().expect("other");
+    std::fs::create_dir_all(other.path().join("ship-notes")).expect("mkdir");
+    std::fs::write(
+        other.path().join("ship-notes").join("SKILL.md"),
+        "---\nname: ship-notes\ndescription: other tree\n---\nbody\n",
+    )
+    .expect("write");
+    let resp = rpc_in_args(
+        cwd.path(),
+        home.path(),
+        &[
+            "--no-implicit-roots",
+            "--path",
+            demo.to_str().expect("utf8"),
+        ],
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 91,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "catalog",
+                    "paths": [other.path()]
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("ship-notes") && !text.contains("review-pr"),
+        "non-empty tools/call paths must replace launch --path: {text}"
     );
 }
 
@@ -114,10 +197,20 @@ fn rpc(req: &serde_json::Value) -> serde_json::Value {
 }
 
 fn rpc_in(cwd: &Path, home: &Path, req: &serde_json::Value) -> serde_json::Value {
+    rpc_in_args(cwd, home, &[], req)
+}
+
+fn rpc_in_args(
+    cwd: &Path,
+    home: &Path,
+    args: &[&str],
+    req: &serde_json::Value,
+) -> serde_json::Value {
     let out = bin()
         .current_dir(cwd)
         .env("HOME", home)
         .env("USERPROFILE", home)
+        .args(args)
         .write_stdin(format!("{req}\n"))
         .output()
         .expect("run");
