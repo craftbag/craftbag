@@ -5,38 +5,41 @@
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
-  "human_gate": null,
-  "ledger_sha": "8be69a15e22422a06ad621d2c617e52f0defdd7e",
+  "human_gate": {
+    "kind": "cheap_queue_empty",
+    "message": "No unused real prove tree and no live product gap after MPI 57 and compressed MPI 58. Do not invent leftover souvenirs, vercel-user, catalog copy, or help/rustdoc pins. Clear this gate only for a live red probe, a new Bline consume pin, or an explicit user launch."
+  },
+  "ledger_sha": "caaba6c2e99afc6e7530c6f08ffbd9475aa31dcc",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 5,
   "expand_noop_streak": 1,
   "last_job": {
-    "id": "mpi57-obs-noop",
+    "id": "mpi58-compress-noop",
     "work_source": "improve",
-    "started_at": "2026-08-28T03:05:41Z",
-    "finished_at": "2026-08-28T03:05:41Z",
+    "started_at": "2026-08-28T03:07:40Z",
+    "finished_at": "2026-08-28T03:07:40Z",
     "result": "noop",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "none (Observability REVIEW 0; SkillMiss peel holds)",
+    "tests": "none (compressed cycle 58 REVIEW 0)",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "next_work_source": "improve",
-  "consecutive_noop": 7,
+  "consecutive_noop": 8,
   "ci_status": {
     "main": "success",
     "ready_pr": null,
-    "checked_at": "2026-08-28T03:05:41Z",
+    "checked_at": "2026-08-28T03:07:40Z",
     "failing_jobs": [],
     "app_merge_attribution": false
   },
   "mpi": {
     "cycle": 58,
-    "next_perspective": 2,
-    "clean_cycles": 1
+    "next_perspective": 3,
+    "clean_cycles": 2
   },
   "pr_plan_cursor": "pr-9",
   "prove": {
