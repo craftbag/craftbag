@@ -316,7 +316,23 @@ impl std::fmt::Display for SkillMiss {
 /// path so extra-path `.` / `..` (joined to discover cwd) stay
 /// locatable. Name, path, and detail go through
 /// [`crate::sanitize_error_token`] so the line cannot split.
+///
+/// Peeked skip names can hint a hyphen/underscore or edit-distance-1
+/// typo. Pass loaded names through [`unknown_or_skipped_skill_named`].
 pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
+    unknown_or_skipped_skill_named(name, skips, std::iter::empty())
+}
+
+/// Same as [`unknown_or_skipped_skill`], plus loaded skill names for a
+/// single-token typo hint (`did you mean review-pr?`).
+///
+/// Peeked skip names are included automatically. Two different close
+/// tokens produce no hint. Path-like names keep the path hint only.
+pub fn unknown_or_skipped_skill_named<'a>(
+    name: &str,
+    skips: &[SkillSkip],
+    skill_names: impl IntoIterator<Item = &'a str>,
+) -> SkillMiss {
     let want = name.trim();
     let skip = skips
         .iter()
@@ -342,7 +358,21 @@ pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
                     "unknown skill: {shown} (looks like a path; pass the frontmatter name and --path / paths)"
                 )
             } else {
-                format!("unknown skill: {shown}")
+                let mut names: Vec<&str> = skill_names.into_iter().collect();
+                for skip in skips {
+                    if let Some(n) = skip.name.as_deref() {
+                        if !crate::parse::is_path_component_skill_name(n) {
+                            names.push(n);
+                        }
+                    }
+                }
+                match close_skill_suggestion(name, names.iter().copied()) {
+                    Some(hint) => {
+                        let hint = crate::sanitize_error_token(hint);
+                        format!("unknown skill: {shown} (did you mean {hint}?)")
+                    }
+                    None => format!("unknown skill: {shown}"),
+                }
             };
             SkillMiss {
                 error_kind: UNKNOWN_SKILL_KIND,
@@ -352,6 +382,93 @@ pub fn unknown_or_skipped_skill(name: &str, skips: &[SkillSkip]) -> SkillMiss {
             }
         }
     }
+}
+
+/// Fold used by [`crate::parse::skill_names_equal`]: NFKC, trim, case fold.
+fn fold_skill_token(name: &str) -> String {
+    crate::parse::normalize_skill_name(name.trim()).to_lowercase()
+}
+
+/// One close catalog token, or none when zero or two+ distinct tokens match.
+fn close_skill_suggestion<'a>(want: &str, names: impl Iterator<Item = &'a str>) -> Option<&'a str> {
+    let folded_want = fold_skill_token(want);
+    if folded_want.is_empty() {
+        return None;
+    }
+    let mut found: Option<(&'a str, String)> = None;
+    for name in names {
+        let folded = fold_skill_token(name);
+        if folded.is_empty() || folded == folded_want {
+            continue;
+        }
+        if !is_close_skill_token(&folded_want, &folded) {
+            continue;
+        }
+        match &found {
+            None => found = Some((name, folded)),
+            Some((_, prev)) => {
+                if prev != &folded {
+                    return None;
+                }
+            }
+        }
+    }
+    found.map(|(name, _)| name)
+}
+
+fn is_close_skill_token(want: &str, cand: &str) -> bool {
+    hyphen_underscore_equiv(want, cand) || edit_distance_is_one(want, cand)
+}
+
+fn hyphen_underscore_equiv(a: &str, b: &str) -> bool {
+    if a == b {
+        return false;
+    }
+    let fold = |s: &str| {
+        s.chars()
+            .map(|c| if c == '_' { '-' } else { c })
+            .collect::<String>()
+    };
+    fold(a) == fold(b)
+}
+
+/// Unicode-scalar Levenshtein distance of exactly one.
+fn edit_distance_is_one(a: &str, b: &str) -> bool {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (short, long) = if a.len() <= b.len() {
+        (&a[..], &b[..])
+    } else {
+        (&b[..], &a[..])
+    };
+    let diff = long.len() - short.len();
+    if diff > 1 {
+        return false;
+    }
+    if diff == 0 {
+        let mut mismatches = 0usize;
+        for (x, y) in short.iter().zip(long.iter()) {
+            if x != y {
+                mismatches += 1;
+                if mismatches > 1 {
+                    return false;
+                }
+            }
+        }
+        return mismatches == 1;
+    }
+    let mut i = 0usize;
+    let mut skipped = false;
+    for ch in long {
+        if i < short.len() && *ch == short[i] {
+            i += 1;
+        } else if !skipped {
+            skipped = true;
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 /// `load ./pkg` / `why ./pkg` is a package root, not a frontmatter name.
@@ -480,6 +597,28 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
         }
     };
     let path = path_buf.as_path();
+    if let Err(e) = std::fs::metadata(path) {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            let shown = crate::sanitize_error_token(&path.display().to_string());
+            let detail = format!(
+                "path does not exist: {shown} (pass a SKILL.md file or a package directory that contains SKILL.md)"
+            );
+            let detail = one_line_error(detail);
+            return ValidationReport {
+                path: path_buf.clone(),
+                ok: false,
+                name: None,
+                errors: vec![detail.clone()],
+                skip: Some(SkillSkip {
+                    path: path_buf,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail,
+                    winner_path: None,
+                }),
+            };
+        }
+    }
     let content = match read_skill_md(path) {
         Ok(c) => c,
         Err(e) => {
@@ -2222,8 +2361,9 @@ mod tests {
         CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
         extra_path_is_loose_collection, find_skill_by_name, host_token_collapses_after_whitespace,
         load_classified_extra_path_package, path_has_line_separator, str_has_line_separator,
-        unknown_or_skipped_skill, unknown_or_skipped_skill_message, validate_path,
-        validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
+        unknown_or_skipped_skill, unknown_or_skipped_skill_message, unknown_or_skipped_skill_named,
+        validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
+        with_home_override,
     };
     use crate::skill::SKILL_MD_MAX_BYTES;
     use crate::skip::{SkillSkip, SkipKind};
@@ -2356,6 +2496,97 @@ mod tests {
             ["error".to_owned(), "error_kind".to_owned()],
             "SkillMiss peel is {{ error_kind, error }}; MCP/CLI must not invent kind: {json}"
         );
+    }
+
+    #[test]
+    fn load_miss_suggests_one_close_hyphen_name() {
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("review-pr"), "review-pr", "body");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "review-pr").is_some(),
+            "fixture must load: {:?}",
+            report.skills
+        );
+        let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+
+        let insert =
+            unknown_or_skipped_skill_named("reviewpr", &report.skips, names.iter().copied());
+        assert!(
+            insert.error.contains("did you mean review-pr"),
+            "edit-distance-1 must hint: {}",
+            insert.error
+        );
+        assert!(
+            insert.error.starts_with("unknown skill: reviewpr"),
+            "{}",
+            insert.error
+        );
+        assert_eq!(insert.error.lines().count(), 1, "{}", insert.error);
+
+        let swap =
+            unknown_or_skipped_skill_named("review_pr", &report.skips, names.iter().copied());
+        assert!(
+            swap.error.contains("did you mean review-pr"),
+            "hyphen/underscore swap must hint: {}",
+            swap.error
+        );
+
+        let nope = unknown_or_skipped_skill_named("nope", &report.skips, names.iter().copied());
+        assert_eq!(nope.error, "unknown skill: nope");
+        assert!(!nope.error.contains("did you mean"), "{}", nope.error);
+
+        let hostile = unknown_or_skipped_skill_named(
+            "reviewpr\u{2028}x",
+            &report.skips,
+            names.iter().copied(),
+        );
+        assert_eq!(hostile.error.lines().count(), 1, "{}", hostile.error);
+        assert!(
+            !hostile.error.contains('\u{2028}'),
+            "typed U+2028 must stay one sanitized line: {}",
+            hostile.error
+        );
+        assert!(
+            hostile.error.contains("unknown skill: reviewpr?x"),
+            "{}",
+            hostile.error
+        );
+    }
+
+    #[test]
+    fn load_miss_peeked_skip_name_can_hint() {
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/review-pr/SKILL.md"),
+            name: Some("review-pr".to_owned()),
+            kind: SkipKind::ParseError,
+            detail: "invalid YAML".to_owned(),
+            winner_path: None,
+        };
+        let msg = unknown_or_skipped_skill_message("reviewpr", std::slice::from_ref(&skip));
+        assert!(
+            msg.contains("did you mean review-pr"),
+            "peeked skip names are already on the miss path: {msg}"
+        );
+        assert!(
+            msg.starts_with("unknown skill: reviewpr"),
+            "close skip name is a typo, not a skip identity: {msg}"
+        );
+    }
+
+    #[test]
+    fn load_miss_two_close_tokens_does_not_guess() {
+        let miss = unknown_or_skipped_skill_named("foz", &[], ["foo", "fox"]);
+        assert_eq!(miss.error, "unknown skill: foz");
+        assert!(!miss.error.contains("did you mean"), "{}", miss.error);
     }
 
     #[test]
@@ -6215,6 +6446,38 @@ mod tests {
             file_name == Some("skill.md") || file_name == Some("SKILL.md"),
             "APFS may resolve skill.md as SKILL.md: {:?}",
             report.path
+        );
+    }
+
+    #[test]
+    fn validate_missing_path_names_next_step_not_os_error() {
+        let root = tempfile::tempdir().expect("tmp");
+        let missing = root.path().join("no-such-skill");
+        let report = validate_path(&missing);
+        assert!(!report.ok, "missing path must fail: {report:?}");
+        let miss = report.miss().expect("peel");
+        assert_eq!(miss.error_kind, "unreadable");
+        assert!(
+            miss.error.contains("path does not exist:"),
+            "must name the hole: {}",
+            miss.error
+        );
+        assert!(
+            miss.error.contains("SKILL.md") && miss.error.contains("package directory"),
+            "must name the next step: {}",
+            miss.error
+        );
+        assert!(
+            !miss.error.contains("os error 2") && !miss.error.contains("No such file"),
+            "must not leak the raw OS string: {}",
+            miss.error
+        );
+        assert_eq!(miss.error.lines().count(), 1, "{}", miss.error);
+        let shown = crate::sanitize_error_token(&missing.display().to_string());
+        assert!(
+            miss.error.contains(&shown),
+            "must echo the sanitized path: {}",
+            miss.error
         );
     }
 

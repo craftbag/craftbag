@@ -9,7 +9,8 @@ use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
     format_load_message, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
-    progressive_budgets, unknown_or_skipped_skill, validate_path_with_options, watch_dirs, why,
+    progressive_budgets, unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs,
+    why,
 };
 
 #[derive(Parser)]
@@ -263,7 +264,11 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     Ok(ExitCode::SUCCESS)
                 }
                 None => {
-                    let miss = unknown_or_skipped_skill(&name, &report.skips);
+                    let miss = unknown_or_skipped_skill_named(
+                        &name,
+                        &report.skips,
+                        report.skills.iter().map(|s| s.name.as_str()),
+                    );
                     let _ = writeln!(io::stderr(), "{miss}");
                     if json {
                         println!(

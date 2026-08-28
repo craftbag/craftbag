@@ -12,7 +12,7 @@ use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
     format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format, progressive_budgets,
-    unknown_or_skipped_skill, validate_path_with_options, watch_dirs, why,
+    unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -278,7 +278,12 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
             args.args.as_deref().unwrap_or(""),
             FormatOptions::default(),
         )),
-        None => Err(unknown_or_skipped_skill(&args.name, &report.skips).into()),
+        None => Err(unknown_or_skipped_skill_named(
+            &args.name,
+            &report.skips,
+            report.skills.iter().map(|s| s.name.as_str()),
+        )
+        .into()),
     }
 }
 
@@ -309,6 +314,42 @@ fn parse_why_format(raw: &str) -> Result<WhyFormat, String> {
         return Err(format!("unknown format: {shown} (did you mean {lower}?)"));
     }
     Err(format!("unknown format: {shown} (use json or text)"))
+}
+
+fn unknown_tool_message(name: &str) -> String {
+    let shown = craftbag::sanitize_error_token(name);
+    format!("unknown tool: {shown} (use skills_list, skills_load, skills_why, or skills_validate)")
+}
+
+fn unknown_option_message(raw: &str) -> String {
+    let shown = craftbag::sanitize_error_token(raw);
+    match option_suggestion(raw) {
+        Some(flag) => format!("unknown option: {shown} (did you mean {flag}?)"),
+        None => format!("unknown option: {shown}"),
+    }
+}
+
+fn option_suggestion(raw: &str) -> Option<&'static str> {
+    match raw {
+        "--paths" => Some("--path"),
+        "--user_dir" => Some("--user-dir"),
+        other => known_launch_flag(&other.replace('_', "-")),
+    }
+}
+
+fn known_launch_flag(flag: &str) -> Option<&'static str> {
+    match flag {
+        "--path" => Some("--path"),
+        "--vendor" => Some("--vendor"),
+        "--user-dir" => Some("--user-dir"),
+        "--ascii-names" => Some("--ascii-names"),
+        "--no-implicit-roots" => Some("--no-implicit-roots"),
+        "--disabled" => Some("--disabled"),
+        "--ignore" => Some("--ignore"),
+        "--help" => Some("--help"),
+        "--version" => Some("--version"),
+        _ => None,
+    }
 }
 
 fn why_json(args: WhyArgs) -> Result<String, ToolError> {
@@ -568,11 +609,7 @@ fn handle(req: RpcRequest) -> Option<Value> {
                     Err(e) => tool_fail(e.to_string().into()),
                 },
                 other => {
-                    return Some(err(
-                        id,
-                        -32601,
-                        &format!("unknown tool: {}", craftbag::sanitize_error_token(other)),
-                    ));
+                    return Some(err(id, -32601, &unknown_tool_message(other)));
                 }
             };
             let mut result = json!({
@@ -729,12 +766,7 @@ where
             "--user-dir" => launch.user_dir = Some(take_value(&mut args, "--user-dir")?),
             "--disabled" => launch.disabled.push(take_value(&mut args, "--disabled")?),
             "--ignore" => launch.ignore.push(take_value(&mut args, "--ignore")?),
-            other => {
-                return Err(format!(
-                    "unknown option: {}",
-                    craftbag::sanitize_error_token(other)
-                ));
-            }
+            other => return Err(unknown_option_message(other)),
         }
     }
     Ok(ParsedCli::Stdio(launch))
@@ -874,6 +906,67 @@ mod tests {
             err.contains("unknown option") && err.contains("--nope"),
             "{err}"
         );
+        assert!(
+            !err.contains("did you mean"),
+            "unknown --nope must not invent a flag: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_paths_alias_suggests_path() {
+        let err = parse_cli_args(["--paths".to_string(), "x".to_string()]).expect_err("alias");
+        assert!(
+            err.contains("unknown option: --paths") && err.contains("did you mean --path?"),
+            "{err}"
+        );
+        assert_eq!(err.lines().count(), 1, "{err:?}");
+    }
+
+    #[test]
+    fn parse_user_dir_alias_suggests_hyphen_flag() {
+        let err = parse_cli_args(["--user_dir".to_string(), "x".to_string()]).expect_err("alias");
+        assert!(
+            err.contains("unknown option: --user_dir") && err.contains("did you mean --user-dir?"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn unknown_tool_list_names_skills_list() {
+        let resp = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(1)),
+            method: Some("tools/call".into()),
+            params: json!({"name": "list", "arguments": {}}),
+        })
+        .expect("resp");
+        let msg = resp["error"]["message"].as_str().expect("message");
+        assert!(
+            msg.contains("unknown tool: list") && msg.contains("skills_list"),
+            "{msg}"
+        );
+        assert!(
+            msg.contains("skills_load")
+                && msg.contains("skills_why")
+                && msg.contains("skills_validate"),
+            "{msg}"
+        );
+        assert_eq!(msg.lines().count(), 1, "{msg:?}");
+    }
+
+    #[test]
+    fn unknown_tool_hostile_name_stays_one_line() {
+        let resp = handle(RpcRequest {
+            jsonrpc: Some("2.0".into()),
+            id: Some(json!(2)),
+            method: Some("tools/call".into()),
+            params: json!({"name": "list\u{2028}load", "arguments": {}}),
+        })
+        .expect("resp");
+        let msg = resp["error"]["message"].as_str().expect("message");
+        assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        assert!(!msg.contains('\u{2028}'), "{msg:?}");
+        assert!(msg.contains("unknown tool: list?load"), "{msg}");
     }
 
     #[test]
@@ -2595,6 +2688,51 @@ mod tests {
             assert!(why_v.get("loaded").is_some(), "{why_text}");
             assert!(why_v.get("skips").is_some(), "{why_text}");
             assert!(why_v.get("activation").is_some(), "{why_text}");
+        });
+    }
+
+    #[test]
+    fn skills_load_typo_suggests_hyphen_name() {
+        empty_home(|| {
+            let extra = tempfile::tempdir().expect("extra");
+            fs::create_dir_all(extra.path().join("review-pr")).expect("mkdir");
+            fs::write(
+                extra.path().join("review-pr").join("SKILL.md"),
+                "---\nname: review-pr\ndescription: review a pr\n---\nbody\n",
+            )
+            .expect("write");
+            let resp = call(
+                201,
+                "skills_load",
+                json!({
+                    "name": "reviewpr",
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }),
+            );
+            let text = call_text(&resp);
+            assert_eq!(resp["result"]["isError"], true, "{resp}");
+            assert!(
+                text.contains("did you mean review-pr"),
+                "skills_load must share the CLI load hint: {text}"
+            );
+            assert_eq!(text.lines().count(), 1, "{text:?}");
+
+            let why = call(
+                202,
+                "skills_why",
+                json!({
+                    "name": "review_pr",
+                    "paths": [extra.path().display().to_string()],
+                    "implicit_roots": false
+                }),
+            );
+            let why_text = call_text(&why);
+            assert_eq!(why["result"]["isError"], true, "{why}");
+            assert!(
+                why_text.contains("did you mean review-pr"),
+                "skills_why must share the load hint: {why_text}"
+            );
         });
     }
 

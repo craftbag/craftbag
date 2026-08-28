@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::activate::{ProgressiveBudgets, filter_skills, progressive_budgets, trigger_matches};
-use crate::discover::{SkillMiss, unknown_or_skipped_skill};
+use crate::discover::{SkillMiss, unknown_or_skipped_skill_named};
 use crate::skill::Skill;
 use crate::skip::{DiscoveryReport, SkillSkip};
 use crate::source::SkillSource;
@@ -161,6 +161,9 @@ pub struct WhyReport {
     pub activation: Vec<ActivationDecision>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query: Option<String>,
+    /// Loaded + peeked skip names for a typo hint. Not serialized.
+    #[serde(skip)]
+    suggest_names: Vec<String>,
 }
 
 impl WhyReport {
@@ -180,12 +183,20 @@ impl WhyReport {
             return None;
         }
         if self.skips.is_empty() {
-            return Some(unknown_or_skipped_skill(want, &[]));
+            return Some(unknown_or_skipped_skill_named(
+                want,
+                &[],
+                self.suggest_names.iter().map(String::as_str),
+            ));
         }
         // Host-token refuse skips are not a package identity. Peel them
         // so a named why is unreadable + path, not a silent unknown.
         if self.skips.iter().all(|s| s.is_host_token_refuse()) {
-            return Some(unknown_or_skipped_skill(want, &self.skips));
+            return Some(unknown_or_skipped_skill_named(
+                want,
+                &self.skips,
+                self.suggest_names.iter().map(String::as_str),
+            ));
         }
         None
     }
@@ -269,7 +280,23 @@ pub fn why(
         skips,
         activation,
         query: query.map(ToOwned::to_owned),
+        suggest_names: suggest_names_from_discovery(report),
     }
+}
+
+fn suggest_names_from_discovery(report: &DiscoveryReport) -> Vec<String> {
+    let mut names = Vec::with_capacity(report.skills.len() + report.skips.len());
+    for skill in &report.skills {
+        names.push(skill.name.clone());
+    }
+    for skip in &report.skips {
+        if let Some(name) = skip.name.as_deref() {
+            if !crate::parse::is_path_component_skill_name(name) {
+                names.push(name.to_owned());
+            }
+        }
+    }
+    names
 }
 
 fn name_matches(query: Option<&str>, name: &str) -> bool {
@@ -475,6 +502,51 @@ mod tests {
         assert_eq!(
             by_dir.unknown_skill_message().as_deref(),
             Some("unknown skill: skills")
+        );
+    }
+
+    #[test]
+    fn why_typo_suggests_loaded_hyphen_name() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("review-pr");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: review-pr\ndescription: review a pr\n---\nbody\n",
+        )
+        .expect("write");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let report = crate::discover::with_home_override(
+            Some(tempfile::tempdir().expect("home").path().to_path_buf()),
+            || {
+                crate::discover(
+                    cwd.path(),
+                    &crate::DiscoveryOptions {
+                        paths: vec![extra.path().display().to_string()],
+                        implicit_roots: false,
+                        ..crate::DiscoveryOptions::default()
+                    },
+                )
+                .expect("discover")
+            },
+        );
+        let why = why(&report, Some("review_pr"), None, None);
+        let miss = why.unknown_skill_miss().expect("unknown");
+        assert!(
+            miss.error.contains("did you mean review-pr"),
+            "why must share the load typo hint: {}",
+            miss.error
+        );
+        assert_eq!(miss.error.lines().count(), 1, "{}", miss.error);
+        let json = serde_json::to_string(&why).expect("ser");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+        assert!(
+            v.get("suggest_names").is_none() && v.get("suggestNames").is_none(),
+            "why JSON must not dump suggest names: {json}"
+        );
+        assert!(
+            why.loaded.is_empty(),
+            "typo query is unknown, not a loaded row: {json}"
         );
     }
 
