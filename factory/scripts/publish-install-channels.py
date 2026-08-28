@@ -31,6 +31,11 @@ UNIX_TARGETS = (
     "aarch64-unknown-linux-gnu",
     "x86_64-unknown-linux-gnu",
 )
+REQUIRED_UNIX_TARGETS = (
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+)
 
 WINDOWS_TARGET = "x86_64-pc-windows-msvc"
 HOMEPAGE = "https://github.com/craftbag/craftbag"
@@ -165,7 +170,7 @@ def normalize_version(version: str) -> str:
 
 def render_homebrew_formula(version: str, hashes: dict[str, str]) -> str:
     ver = normalize_version(version)
-    missing = [t for t in UNIX_TARGETS if t not in hashes]
+    missing = [t for t in REQUIRED_UNIX_TARGETS if t not in hashes]
     if missing:
         raise SystemExit(f"Homebrew formula needs hashes for {missing}")
 
@@ -174,6 +179,14 @@ def render_homebrew_formula(version: str, hashes: dict[str, str]) -> str:
         return (
             f'{indent}url "{url}"\n'
             f'{indent}sha256 "{hashes[target]}"\n'
+        )
+
+    linux_arm = ""
+    if "aarch64-unknown-linux-gnu" in hashes:
+        linux_arm = (
+            "    on_arm do\n"
+            + block("aarch64-unknown-linux-gnu", "      ")
+            + "    end\n"
         )
 
     return f"""class Craftbag < Formula
@@ -192,9 +205,7 @@ def render_homebrew_formula(version: str, hashes: dict[str, str]) -> str:
   end
 
   on_linux do
-    on_arm do
-{block("aarch64-unknown-linux-gnu", "      ").rstrip()}
-    end
+{linux_arm.rstrip()}
     on_intel do
 {block("x86_64-unknown-linux-gnu", "      ").rstrip()}
     end
@@ -332,6 +343,15 @@ def self_test() -> int:
             pass
         else:
             log("FAIL", "formula accepted incomplete hashes")
+            return 1
+        macos_only = {
+            "aarch64-apple-darwin": "b" * 64,
+            "x86_64-apple-darwin": "c" * 64,
+            "x86_64-unknown-linux-gnu": hashes[unix],
+        }
+        no_arm = render_homebrew_formula("0.1.0", macos_only)
+        if "aarch64-unknown-linux-gnu" in no_arm:
+            log("FAIL", "formula required optional linux arm")
             return 1
     if TAP_REPO != "craftbag/homebrew-tap" or BUCKET_REPO != "craftbag/scoop-bucket":
         log("FAIL", "repo constants drifted")
