@@ -751,3 +751,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:25:56Z", "job_id": "expand2-fuzz-smoke-noop-r7", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "fuzz cover holds; MPI 50 NC next"}
 {"ts": "2026-08-28T00:26:49Z", "job_id": "mpi50-new-contributor-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Obs next"}
 {"ts": "2026-08-28T00:27:20Z", "job_id": "mpi50-observability-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "cycle 50 done; cycle 51 QA next"}
+{"ts": "2026-08-28T00:30:04Z", "job_id": "mpi51-qa-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 3 incumbent next"}
