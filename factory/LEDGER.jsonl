@@ -868,3 +868,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:34:49Z", "job_id": "mpi56-newcontrib-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Obs next"}
 {"ts": "2026-08-28T02:35:44Z", "job_id": "mpi56-obs-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "cycle 56 done; MPI 57 QA next"}
 {"ts": "2026-08-28T02:40:00Z", "job_id": "mpi57-qa-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "odd cycle skip Test Auditor; expand 1 property already covered"}
+{"ts": "2026-08-28T02:40:10Z", "job_id": "expand1-property-noop-r4", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "props hold; MPI 57 Developer next"}
