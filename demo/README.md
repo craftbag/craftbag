@@ -1,11 +1,14 @@
 # Demo tape
 
-Record the CLI help GIF:
+Record the README GIF. It catalogs two project skills for a review
+prompt, then loads `review-pr`.
 
 ```bash
-cargo build -p craftbag --locked
-mkdir -p /tmp/craftbag-demo-home
-vhs demo/list.tape
+bash demo/setup.sh
+HOME=/tmp/cb-demo-home PATH="$(pwd)/target/debug:$PATH" vhs /tmp/craftbag-demo.tape
 ```
 
-The recorded GIF is shown on the root README.
+The first VHS run after install may fail with `ERR_CONNECTION_REFUSED`.
+Retry the same `vhs` command.
+
+The recorded GIF is `demo/demo.gif` on the root README.

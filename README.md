@@ -61,7 +61,7 @@ From a crate that already has skills under `.agents` or a vendor tree, add `--ve
 
 ## Demo
 
-![craftbag list](demo/list.gif)
+![craftbag catalog and load](demo/demo.gif)
 
 ## MCP
 
