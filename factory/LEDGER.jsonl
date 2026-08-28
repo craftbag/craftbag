@@ -863,3 +863,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:31:35Z", "job_id": "expand5-compete-noop-r4", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; MPI 56 Compat next"}
 {"ts": "2026-08-28T02:32:20Z", "job_id": "mpi56-compat-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "serde/skip locks hold; Adversary next"}
 {"ts": "2026-08-28T02:33:13Z", "job_id": "mpi56-adversary-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no live red; Arch next"}
+{"ts": "2026-08-28T02:34:05Z", "job_id": "mpi56-arch-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "layering holds; expand 0 corpus already covered"}
