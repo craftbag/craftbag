@@ -5,7 +5,10 @@
 Priority (first match wins):
 
 1. `human_gate` set: stop. Print the message. Do not invent work.
-2. `ci`: red or missing main run after squash. Dispatch `gh workflow run CI --ref main` until the merge App exists.
+2. `ci`: red required check on an open PR. Do not dispatch
+   `gh workflow run CI --ref main` after a green squash of an
+   up-to-date PR (same tree as the last PR HEAD). `workflow_dispatch`
+   is only for a tree that never ran the matrix.
 3. `issues`: accepted `ready` issues that are not `needs-triage`.
 4. `contract` / `implement`: next slice from `pr_plan_cursor` (starts at `pr-2`).
 5. `prove`: `craftbag why` on a real tree (corpus, then `~/.grok/skills`).

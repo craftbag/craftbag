@@ -299,18 +299,18 @@ fn rust_cache_step(job_body: &str) -> String {
     out
 }
 
-/// rust-cache on lint/test/fuzz/windows/macos must save only on main.
-/// PR jobs still restore. Factory PR cache writes evict the main restore.
+/// rust-cache must save on same-repo PRs (or workflow_dispatch).
+/// push to main no longer compiles, so save-if main would never write.
 #[test]
-fn rust_cache_save_if_main_only() {
+fn rust_cache_save_if_pr_or_dispatch() {
     let ci = repo_file(".github/workflows/ci.yml");
-    let save_if = "save-if: ${{ github.ref == 'refs/heads/main' }}";
+    let save_if = "save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}";
     for job in ["lint", "test", "fuzz-smoke", "test-windows", "test-macos"] {
         let body = ci_job_body(&ci, job);
         let step = rust_cache_step(&body);
         assert!(
             step.contains(save_if),
-            "{job} rust-cache must set {save_if} so only main writes: {step}"
+            "{job} rust-cache must set {save_if} so the PR matrix writes: {step}"
         );
     }
     let fuzz = rust_cache_step(&ci_job_body(&ci, "fuzz-smoke"));
