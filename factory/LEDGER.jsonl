@@ -846,3 +846,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:17:38Z", "job_id": "mpi55-adversary-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no live red; expand 1 property already covered"}
 {"ts": "2026-08-28T02:17:48Z", "job_id": "expand1-property-noop-r3", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "props hold; MPI 55 Arch next"}
 {"ts": "2026-08-28T02:19:07Z", "job_id": "mpi55-arch-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "layering holds; New Contributor next"}
+{"ts": "2026-08-28T02:19:46Z", "job_id": "mpi55-newcontrib-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Obs next"}
