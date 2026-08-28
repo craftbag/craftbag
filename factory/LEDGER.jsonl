@@ -857,3 +857,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:26:22Z", "job_id": "mpi56-ops-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "CI 33127700233 still green; Security next"}
 {"ts": "2026-08-28T02:27:32Z", "job_id": "mpi56-security-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no new live red; expand 4 no unused tree"}
 {"ts": "2026-08-28T02:27:42Z", "job_id": "expand4-prove-tree-noop-r4", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no unused real tree; MPI 56 PM next"}
+{"ts": "2026-08-28T02:29:17Z", "job_id": "mpi56-pm-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal list closed; Spec next"}
