@@ -6,21 +6,21 @@
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "ab626c867f8c2a3e42061d4ba535c61873f23594",
+  "ledger_sha": "6fb14d6d1aebecb1c7a225f6d2ba9031beb73f34",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 1,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand0-bline-miss-noop-r7",
-    "work_source": "expand",
-    "started_at": "2026-08-28T00:10:00Z",
-    "finished_at": "2026-08-28T00:10:00Z",
-    "result": "noop",
+    "id": "prove-leftover-extra-skills-loose-301",
+    "work_source": "prove",
+    "started_at": "2026-08-28T00:11:43Z",
+    "finished_at": "2026-08-28T00:11:43Z",
+    "result": "ok",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "killed grep stall; #54/PR56 + 301 leftover already compared",
+    "tests": "why leftover extra/skills name=loose loads wanted; skip root_file loose",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
@@ -64,9 +64,10 @@
       "tests/corpus/agentskills/name-mismatch (--path, no implicit roots)",
       "tests/corpus/agentskills/invalid-name (--path, no implicit roots)",
       "tests/corpus/agentskills (--path collection, no implicit roots)",
-      "~/.grok/bundled/skills (--path, no implicit roots)"
+      "~/.grok/bundled/skills (--path, no implicit roots)",
+      "temp leftover extra/skills/SKILL.md name=loose + extra/wanted (--path, no implicit roots)"
     ],
-    "last_why_summary": "why --json ~/.grok/bundled/skills loads 22 including create-workflow and design"
+    "last_why_summary": "why leftover extra/skills name=loose loads wanted; loose is root_file"
   },
   "budgets": {
     "max_cycles": null,
