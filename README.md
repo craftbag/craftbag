@@ -8,7 +8,7 @@ Discover, list, load, and explain Agent Skills (`SKILL.md`) for CLI and MCP host
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14274/badge)](https://www.bestpractices.dev/projects/14274)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/craftbag/craftbag/badge)](https://securityscorecards.dev/viewer/?uri=github.com/craftbag/craftbag)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcraftbag%2Fcraftbag.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcraftbag%2Fcraftbag?ref=badge_shield&issueType=license)
+[![FOSSA Status](https://app.fossa.com/api/projects/custom%2B62586%2Fgithub.com%2Fcraftbag%2Fcraftbag.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B62586%2Fgithub.com%2Fcraftbag%2Fcraftbag?ref=badge_shield&issueType=license)
 
 ## What it does
 
