@@ -82,3 +82,153 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
           fi
+
+  dist-binaries:
+    name: Dist ${{ matrix.target }}
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: "1.85"
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2
+        with:
+          tool: cargo-dist@0.31.0
+      - name: Linux aarch64 linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Dist build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: dist build --artifacts=local --target ${{ matrix.target }}
+      - name: Pack combined archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          PY=python3
+          command -v python3 >/dev/null 2>&1 || PY=python
+          "$PY" factory/scripts/publish-install-channels.py \
+            --pack \
+            --artifacts-dir target \
+            --out-dir /tmp/craftbag-dist
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" /tmp/craftbag-dist/craftbag-* --clobber
+
+  publish-taps:
+    name: Publish Homebrew and Scoop
+    needs: dist-binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          path: project
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTO_APPROVE_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_APPROVE_PRIVATE_KEY }}
+          owner: craftbag
+          repositories: |
+            homebrew-tap
+            scoop-bucket
+          permission-contents: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: craftbag/homebrew-tap
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: homebrew-tap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: craftbag/scoop-bucket
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: scoop-bucket
+      - name: Download combined archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/craftbag-dist
+          gh release download "$TAG" --repo craftbag/craftbag \
+            --pattern 'craftbag-*' --dir /tmp/craftbag-dist
+      - name: Update and push formulae
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 project/factory/scripts/publish-install-channels.py \
+            --version "$TAG" \
+            --hashes-dir /tmp/craftbag-dist \
+            --formula homebrew-tap/Formula/craftbag.rb \
+            --scoop scoop-bucket/bucket/craftbag.json
+          git config --global user.name "craftbag-approve[bot]"
+          git config --global user.email "41898282+craftbag-approve[bot]@users.noreply.github.com"
+          version="${TAG#v}"
+          git config --global http.https://github.com/.extraheader \
+            "AUTHORIZATION: bearer ${GH_TOKEN}"
+          (
+            cd homebrew-tap
+            git add Formula/craftbag.rb
+            if git diff --cached --quiet; then
+              echo "OK: Homebrew formula unchanged"
+            else
+              git commit -m "craftbag ${version}"
+              git push origin HEAD:main
+            fi
+          )
+          (
+            cd scoop-bucket
+            git add bucket/craftbag.json
+            if git diff --cached --quiet; then
+              echo "OK: Scoop manifest unchanged"
+            else
+              git commit -m "craftbag ${version}"
+              git push origin HEAD:main
+            fi
+          )

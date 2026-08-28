@@ -1,0 +1,99 @@
+# Re-sync Homebrew/Scoop metadata from an existing GitHub Release.
+# Does not compile. Use after a missed tap push.
+name: Publish install channels
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.1.0)"
+        required: true
+
+concurrency:
+  group: publish-install-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  republish:
+    name: Republish Homebrew and Scoop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ github.event.inputs.tag }}
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: project
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTO_APPROVE_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_APPROVE_PRIVATE_KEY }}
+          owner: craftbag
+          repositories: |
+            homebrew-tap
+            scoop-bucket
+          permission-contents: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: craftbag/homebrew-tap
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: homebrew-tap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: craftbag/scoop-bucket
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: scoop-bucket
+      - name: Download combined archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/craftbag-dist
+          gh release download "$TAG" --repo craftbag/craftbag \
+            --pattern 'craftbag-*' --dir /tmp/craftbag-dist
+      - name: Update and push formulae
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 project/factory/scripts/publish-install-channels.py \
+            --version "$TAG" \
+            --hashes-dir /tmp/craftbag-dist \
+            --formula homebrew-tap/Formula/craftbag.rb \
+            --scoop scoop-bucket/bucket/craftbag.json
+          git config --global user.name "craftbag-approve[bot]"
+          git config --global user.email "41898282+craftbag-approve[bot]@users.noreply.github.com"
+          git config --global http.https://github.com/.extraheader \
+            "AUTHORIZATION: bearer ${GH_TOKEN}"
+          version="${TAG#v}"
+          (
+            cd homebrew-tap
+            git add Formula/craftbag.rb
+            if git diff --cached --quiet; then
+              echo "OK: Homebrew formula unchanged"
+            else
+              git commit -m "craftbag ${version}"
+              git push origin HEAD:main
+            fi
+          )
+          (
+            cd scoop-bucket
+            git add bucket/craftbag.json
+            if git diff --cached --quiet; then
+              echo "OK: Scoop manifest unchanged"
+            else
+              git commit -m "craftbag ${version}"
+              git push origin HEAD:main
+            fi
+          )

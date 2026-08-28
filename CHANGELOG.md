@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Prebuilt GitHub Release archives, a Homebrew tap, and a Scoop bucket
+  so `brew install craftbag/tap/craftbag` and `scoop install craftbag/craftbag`
+  put `craftbag` and `craftbag-mcp` on PATH without a Rust toolchain
 - `craftbag-mcp --help` and `--version` (stdio server used to ignore argv)
 - README getting started for CLI, vendor trees, MCP hosts, and library
   embedders, plus a runnable demo-workspace command

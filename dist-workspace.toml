@@ -1,0 +1,20 @@
+# cargo-dist builds platform archives on a tag. The release workflow
+# must call `dist build`, never `cargo build` (compile-once lock).
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.31.0"
+ci = "github"
+# Combined archives + Homebrew/Scoop are factory scripts, not
+# cargo-dist installers. allow-dirty keeps release.yml hand-written.
+installers = []
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
+pr-run-mode = "skip"
+allow-dirty = ["ci"]
