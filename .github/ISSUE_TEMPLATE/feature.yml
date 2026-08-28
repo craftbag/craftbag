@@ -1,0 +1,12 @@
+name: Feature
+description: Propose a change
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: ask
+    attributes:
+      label: What should change
+      description: The gap, who it helps, and a concrete acceptance check.
+    validations:
+      required: true

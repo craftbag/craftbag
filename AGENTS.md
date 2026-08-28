@@ -1,5 +1,8 @@
 # Agents
 
+> **Human contributors:** This file is for AI coding assistants.
+> You can safely ignore it. See README.md and CONTRIBUTING.md instead.
+
 MSRV 1.85 (`rust-toolchain.toml`). No let-chains.
 
 `rust-toolchain.toml` installs rustfmt and clippy. The local gate also
