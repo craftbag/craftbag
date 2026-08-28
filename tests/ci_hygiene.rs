@@ -386,3 +386,71 @@ fn deny_toml_allow_list_matches_used_licenses() {
         "rust path-filter must include deny.toml so an allow-list edit runs this lock"
     );
 }
+
+/// `on:` block: from a column-0 `on:` through the next column-0 key.
+fn workflow_on_block(yaml: &str) -> &str {
+    let start = if yaml.starts_with("on:") {
+        0
+    } else {
+        yaml.find("\non:")
+            .map(|i| i + 1)
+            .expect("workflow must declare on:")
+    };
+    let rest = &yaml[start..];
+    let after = rest.strip_prefix("on:").expect("on: prefix");
+    let end = after
+        .lines()
+        .skip(1)
+        .find(|line| {
+            !line.is_empty()
+                && !line.starts_with(' ')
+                && !line.starts_with('\t')
+                && !line.starts_with('#')
+        })
+        .and_then(|line| after.find(line))
+        .unwrap_or(after.len());
+    &after[..end]
+}
+
+/// One compile per tree: PR (and merge_group) is the matrix.
+/// push to main and a tag of that commit must not cargo test again.
+/// A later release job may compile once for signing; it must not
+/// re-run this matrix (ci-build-once Recipe A / E).
+#[test]
+fn ci_compiles_once_per_tree() {
+    let ci = read_rel(".github/workflows/ci.yml");
+    let on = workflow_on_block(&ci);
+    assert!(
+        on.contains("pull_request:"),
+        "ci.yml must run the matrix on pull_request: {on}"
+    );
+    assert!(
+        on.contains("workflow_dispatch:"),
+        "ci.yml must keep workflow_dispatch as the escape hatch: {on}"
+    );
+    assert!(
+        !on.contains("branches:"),
+        "ci.yml must not compile again on push to main: {on}"
+    );
+    assert!(
+        !on.contains("tags:"),
+        "ci.yml must not compile again on a tag of the same commit: {on}"
+    );
+    for path in workflow_files() {
+        let rel = rel_display(&path);
+        let yaml = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+        let on = workflow_on_block(&yaml);
+        let release_trigger = on.contains("tags:") || on.contains("release:");
+        if !release_trigger {
+            continue;
+        }
+        assert!(
+            !yaml.contains("cargo nextest")
+                && !yaml.contains("cargo test")
+                && !yaml.contains("cargo fuzz")
+                && !yaml.contains("cargo clippy")
+                && !yaml.contains("cargo build"),
+            "{rel} must promote a tested tree on tag/release, not compile the matrix"
+        );
+    }
+}

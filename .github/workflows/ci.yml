@@ -3,10 +3,14 @@
 # it. The job logic is the proof. See factory/testdata/stealth-violation.md.
 name: CI
 
+# One compile per tree. pull_request (and merge_group if a queue is
+# added) is the matrix. Do not rebuild on push to main or on a tag of
+# that same commit. workflow_dispatch is the escape hatch. A later
+# release job may compile once for signing; it must not re-run this
+# matrix.
 on:
   pull_request:
-  push:
-    branches: [main]
+  merge_group: {}
   workflow_dispatch:
 
 concurrency:
@@ -36,7 +40,7 @@ jobs:
           persist-credentials: false
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         id: filter
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         with:
           filters: |
             rust:
@@ -81,7 +85,7 @@ jobs:
           tool: cargo-deny@0.20.2
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}
       - run: cargo fmt --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: bash factory/scripts/deny-check.sh
@@ -109,7 +113,7 @@ jobs:
           tool: cargo-nextest@0.9.143
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 
@@ -142,7 +146,7 @@ jobs:
             fuzz
           shared-key: fuzz
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}
       # ASAN needs glibc. cargo-fuzz may default to musl.
       - run: cargo fuzz run parse_skill --target x86_64-unknown-linux-gnu -- -max_total_time=5
         env:
@@ -186,7 +190,7 @@ jobs:
           tool: cargo-nextest@0.9.143
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 
@@ -213,7 +217,7 @@ jobs:
           tool: cargo-nextest@0.9.143
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' }}
       - run: cargo nextest run --locked --workspace
       - run: cargo test --locked --workspace --doc
 
