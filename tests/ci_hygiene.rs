@@ -526,7 +526,7 @@ fn published_lib_crate_omits_factory_demo_brand() {
         "src/lib.rs",
     ] {
         assert!(
-            listed.lines().any(|line| line == required),
+            listed.lines().any(|line| line.replace('\\', "/") == required),
             "published crate must include {required}: {listed}"
         );
     }
