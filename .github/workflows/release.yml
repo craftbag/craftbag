@@ -69,11 +69,11 @@ jobs:
           if start < 0:
               print("FAIL: CHANGELOG missing", needle)
               sys.exit(1)
-          rest = text[start + len(needle) :]
-          nxt = rest.find("\n## [")
-          body = (rest if nxt < 0 else rest[:nxt]).strip()
+          section = text[start:]
+          nxt = section.find("\n## [", 1)
+          body = (section if nxt < 0 else section[:nxt]).strip()
           pathlib.Path("/tmp/release-notes.md").write_text(
-              f"{needle}{body}\n", encoding="utf-8"
+              f"{body}\n", encoding="utf-8"
           )
           PY
           if gh release view "$TAG" >/dev/null 2>&1; then

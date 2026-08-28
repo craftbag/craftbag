@@ -110,15 +110,20 @@ for i in "${!CRATES[@]}"; do
       continue
     fi
     set +e
-    cargo publish -p "$crate" --locked
+    pub_out=$(cargo publish -p "$crate" --locked 2>&1)
     pub_st=$?
     set -e
+    printf '%s\n' "$pub_out"
     if [[ "$pub_st" -eq 0 ]]; then
       echo "OK: published ${crate} ${version}"
       if [[ "$i" -lt "$last_index" ]]; then
         echo "WAIT: 600s before the next new crate name"
         sleep 600
       fi
+      break
+    fi
+    if printf '%s\n' "$pub_out" | grep -qiE 'already exist|already uploaded'; then
+      echo "OK: ${crate} ${version} already on crates.io"
       break
     fi
     retries=$((retries + 1))

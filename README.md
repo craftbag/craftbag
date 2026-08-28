@@ -4,11 +4,14 @@ Discover, list, load, and explain Agent Skills (`SKILL.md`) for CLI and MCP host
 
 [![CI](https://github.com/craftbag/craftbag/actions/workflows/ci.yml/badge.svg)](https://github.com/craftbag/craftbag/actions/workflows/ci.yml)
 [![Security](https://github.com/craftbag/craftbag/actions/workflows/security.yml/badge.svg)](https://github.com/craftbag/craftbag/actions/workflows/security.yml)
+[![crates.io](https://img.shields.io/crates/v/craftbag?logo=rust)](https://crates.io/crates/craftbag)
+[![docs.rs](https://img.shields.io/docsrs/craftbag?logo=docs.rs)](https://docs.rs/craftbag)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](LICENSE)
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14274/badge)](https://www.bestpractices.dev/projects/14274)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/craftbag/craftbag/badge)](https://securityscorecards.dev/viewer/?uri=github.com/craftbag/craftbag)
 [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B62586%2Fgithub.com%2Fcraftbag%2Fcraftbag.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B62586%2Fgithub.com%2Fcraftbag%2Fcraftbag?ref=badge_shield&issueType=license)
+[![Release](https://img.shields.io/github/v/release/craftbag/craftbag?logo=github&sort=semver)](https://github.com/craftbag/craftbag/releases/latest)
 
 ## What it does
 
@@ -23,17 +26,22 @@ The same operations exist over MCP stdio (`skills_list`, `skills_load`, `skills_
 
 ## Install
 
-The library and bins are not on crates.io yet. Use git:
+```bash
+cargo install --locked craftbag
+cargo install --locked craftbag-mcp
+```
+
+Library dependency:
+
+```toml
+craftbag = "0.1"
+```
+
+From git (unreleased tip):
 
 ```bash
 cargo install --locked --git https://github.com/craftbag/craftbag --bin craftbag
 cargo install --locked --git https://github.com/craftbag/craftbag --bin craftbag-mcp
-```
-
-Library path or git dependency:
-
-```toml
-craftbag = { git = "https://github.com/craftbag/craftbag" }
 ```
 
 MSRV is 1.85.
