@@ -865,20 +865,12 @@ fn load_extra_path(
         }
     }
     let skills_subdir = expanded.join("skills");
-    // Stay-under and readable before treating extra/skills/ as the
-    // collection root. An escaped or unreadable skills/ is not a usable
-    // collection; fall back to extra/ so sibling packages still load.
-    // An empty extra/skills/ is the leftover two-dir analog: Bline
-    // discover_skills still loads extra/wanted. Scan extra/skills
-    // when that tree has child packages or leftover extra/skills/SKILL.md
-    // that is a Collection. leftover extra/skills/SKILL.md that stays
-    // Package (name: loose) is not exclusive-scan entries: extra/wanted
-    // must still load (same as FIFO leftover extra/skills/SKILL.md).
-    // extra/skills/SKILL.md named skills is a sibling package: classify
-    // once and reuse the parse. Reuse leftover extra/SKILL.md: extra/skills
-    // never sees extra/SKILL.md, and an extra/ sibling walk must not open
-    // a leftover file again. A leftover SKILL.md directory stays in
-    // the extra/ walk (it is a package dir, not a root file).
+    // Stay-under and readable before walking extra/skills/. An escaped
+    // or unreadable skills/ is not a usable collection; fall back to
+    // extra/. leftover extra/skills/SKILL.md that stays Package (name:
+    // loose) is not collection entries. extra/skills/SKILL.md named
+    // skills is a sibling package: classify once and reuse the parse.
+    // A leftover SKILL.md directory stays in the extra/ walk.
     let skills_md = ["SKILL.md", "skill.md"]
         .into_iter()
         .map(|name| skills_subdir.join(name))
@@ -923,6 +915,8 @@ fn load_extra_path(
             None
         }
     });
+    let skip_skills_in_extra_walk =
+        handle_skills || extra_skills_named || leftover_skills_md.is_some();
     if handle_skills {
         if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
             skip_classified_extra_skills_leftover(
@@ -948,32 +942,31 @@ fn load_extra_path(
                 skips,
             );
         }
-    } else {
-        let mut walk_skip = Vec::new();
-        if let Some(p) = skip_leftover {
-            walk_skip.push(p);
-        }
-        if extra_skills_named {
-            walk_skip.push(skills_subdir.as_path());
-        }
-        if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
-            skip_classified_extra_skills_leftover(
-                skill_file,
-                &skills_subdir,
-                ignore,
-                classified,
-                skips,
-            );
-            walk_skip.push(skills_subdir.as_path());
-        }
-        load_skills_from_dir(
-            &expanded,
-            &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
-            &walk_skip,
-            skills,
+    } else if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
+        skip_classified_extra_skills_leftover(
+            skill_file,
+            &skills_subdir,
+            ignore,
+            classified,
             skips,
         );
     }
+    // Skip extra/skills here when the nested walk or leftover classify
+    // already handled that tree; do not re-enter it as a sibling.
+    let mut walk_skip = Vec::new();
+    if let Some(p) = skip_leftover {
+        walk_skip.push(p);
+    }
+    if skip_skills_in_extra_walk {
+        walk_skip.push(skills_subdir.as_path());
+    }
+    load_skills_from_dir(
+        &expanded,
+        &dir_load(&SkillSource::ExtraPath, ignore, opts, &[]),
+        &walk_skip,
+        skills,
+        skips,
+    );
 }
 
 fn dir_has_child_skill_packages(dir: &Path) -> bool {
@@ -3439,6 +3432,188 @@ mod tests {
         assert!(
             !watch_paths_contain(&dirs, &extra.join("skills")),
             "empty extra/skills is not a discover walk: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn extra_path_collection_root_loads_siblings_next_to_empty_skills() {
+        // Bline leftover two-dir: host passes the collection root, not
+        // each leftover package. extra/skills empty must not hide
+        // extra/wanted and extra/other.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-wanted");
+        write_skill(&extra.path().join("other"), "other", "from-other");
+        fs::create_dir_all(extra.path().join("skills")).expect("mkdir skills");
+        fs::write(
+            extra.path().join("skills").join("junk.txt"),
+            "not a package",
+        )
+        .expect("write junk");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let mut names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["other", "wanted"],
+            "empty extra/skills plus junk must not hide sibling packages: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skips.is_empty(),
+            "empty extra/skills junk is not a skip: {:?}",
+            report.skips
+        );
+    }
+
+    #[test]
+    fn extra_path_collection_root_leftover_skill_md_still_loads_siblings() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover root file\n---\nloose\n",
+        )
+        .expect("write leftover");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-wanted");
+        write_skill(&extra.path().join("other"), "other", "from-other");
+        fs::create_dir_all(extra.path().join("skills")).expect("mkdir skills");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let mut names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["other", "wanted"],
+            "leftover extra/SKILL.md plus empty extra/skills must not hide siblings: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose")),
+            "leftover extra/SKILL.md must stay root_file: {:?}",
+            report.skips
+        );
+        assert!(
+            find_skill_by_name(&report.skills, "loose").is_none(),
+            "leftover extra/SKILL.md must not load: {:?}",
+            report.skills
+        );
+    }
+
+    #[test]
+    fn extra_path_collection_root_loads_siblings_next_to_skills_packages() {
+        // extra/skills with child packages used to exclusive-scan that
+        // tree and hide leftover siblings next to it. Bline leftover
+        // two-dir hosts pass the collection root.
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-wanted");
+        write_skill(&extra.path().join("other"), "other", "from-other");
+        write_skill(
+            &extra.path().join("skills").join("nested"),
+            "nested",
+            "from-nested",
+        );
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let mut names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["nested", "other", "wanted"],
+            "extra/skills packages must not hide leftover siblings: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report.skips.is_empty(),
+            "sibling plus extra/skills packages is not a skip: {:?}",
+            report.skips
+        );
+        let home = tempfile::tempdir().expect("home");
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![extra.path().display().to_string()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watch_paths_contain(&dirs, extra.path()),
+            "must watch extra-path root: {dirs:?}"
+        );
+        assert!(
+            watch_paths_contain(&dirs, &extra.path().join("skills")),
+            "must watch extra/skills when discover walks it: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn extra_path_collection_root_leftover_plus_skills_packages_loads_siblings() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let extra = tempfile::tempdir().expect("extra");
+        fs::write(
+            extra.path().join("SKILL.md"),
+            "---\nname: loose\ndescription: leftover root file\n---\nloose\n",
+        )
+        .expect("write leftover");
+        write_skill(&extra.path().join("wanted"), "wanted", "from-wanted");
+        write_skill(
+            &extra.path().join("skills").join("nested"),
+            "nested",
+            "from-nested",
+        );
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![extra.path().display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let mut names: Vec<_> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            ["nested", "wanted"],
+            "leftover extra/SKILL.md plus extra/skills packages must not hide siblings: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.kind == SkipKind::RootFile && s.name.as_deref() == Some("loose")),
+            "leftover extra/SKILL.md must stay root_file: {:?}",
+            report.skips
         );
     }
 

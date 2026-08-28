@@ -294,8 +294,15 @@ pub fn format_catalog(
         ));
     }
     if out.len() > budgets.catalog_max_chars {
-        truncate_at_char_boundary(&mut out, budgets.catalog_max_chars.saturating_sub(1));
-        out.push('…');
+        // U+2026 is 3 UTF-8 bytes. Reserve that, not 1, or the
+        // hard clamp lands 2 bytes over catalog_max_chars.
+        truncate_at_char_boundary(
+            &mut out,
+            budgets
+                .catalog_max_chars
+                .saturating_sub('\u{2026}'.len_utf8()),
+        );
+        out.push('\u{2026}');
     }
     out
 }
@@ -1124,6 +1131,58 @@ mod tests {
             xml.contains("<name>slash-only</name>"),
             "XML stays the host inventory (flags), not the filtered catalog: {xml}"
         );
+    }
+
+    #[test]
+    fn format_catalog_hard_clamp_stays_within_catalog_max_chars() {
+        // The omitted-skills footer can push past catalog_max_chars.
+        // The hard clamp must reserve U+2026 (3 UTF-8 bytes), not 1.
+        let skills: Vec<Skill> = (0..40)
+            .map(|i| make_skill(&format!("skill-{i:02}"), &[], 10))
+            .collect();
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 40,
+            catalog_max_chars: 1000,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&skills, "", budgets, FormatOptions::default());
+        assert!(
+            !cat.is_empty(),
+            "tight 1000-byte catalog must still list some skills"
+        );
+        assert!(
+            cat.len() <= budgets.catalog_max_chars,
+            "hard clamp must stay within catalog_max_chars: len {} > {}",
+            cat.len(),
+            budgets.catalog_max_chars
+        );
+        assert!(
+            cat.contains("more skills not listed") || cat.ends_with('…'),
+            "tight budget must omit or ellipsize: {cat}"
+        );
+    }
+
+    #[test]
+    fn format_catalog_short_line_ellipsis_stays_within_catalog_max_chars() {
+        let mut long = make_skill("long-skill", &[], 10);
+        long.description = "x".repeat(400);
+        let budgets = ProgressiveBudgets {
+            catalog_max_entries: 8,
+            catalog_max_chars: 280,
+            body_token_budget: 100,
+        };
+        let cat = format_catalog(&[long], "", budgets, FormatOptions::default());
+        assert!(
+            !cat.is_empty(),
+            "short-budget single skill must still emit a catalog"
+        );
+        assert!(
+            cat.len() <= budgets.catalog_max_chars,
+            "short-line ellipsis must stay within catalog_max_chars: len {} > {}",
+            cat.len(),
+            budgets.catalog_max_chars
+        );
+        assert!(cat.contains('…'), "short-budget line must ellipsize: {cat}");
     }
 
     #[test]
