@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "phase": "prove",
+  "phase": "improve",
   "stealth_mode": true,
   "session_branch": null,
   "ready_pr": null,
   "lease": null,
   "human_gate": null,
-  "ledger_sha": "3eadb598b3873c05aeae2c3118c87ec7a3cb101a",
+  "ledger_sha": "e513cdff765456ff46e8243806977b840cb179fb",
   "ledger_worktree": "/Users/sebastientardif/craftbag-ledger",
   "last_adversary_head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
   "expand_cursor": 4,
-  "expand_noop_streak": 3,
+  "expand_noop_streak": 0,
   "last_job": {
-    "id": "expand3-incumbent-noop-r7",
-    "work_source": "expand",
-    "started_at": "2026-08-28T00:31:16Z",
-    "finished_at": "2026-08-28T00:31:16Z",
-    "result": "noop",
+    "id": "prove-skills-named-package-r5",
+    "work_source": "prove",
+    "started_at": "2026-08-28T00:31:35Z",
+    "finished_at": "2026-08-28T00:31:35Z",
+    "result": "ok",
     "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
     "pr": null,
     "files": [],
-    "tests": "all vendor walks have incumbents; no vercel-user; no invented bline-user",
+    "tests": "why leftover/skills-named-package loads wanted+skills",
     "review": "0"
   },
   "last_sha": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a",
-  "next_work_source": "prove",
+  "next_work_source": "improve",
   "consecutive_noop": 0,
   "ci_status": {
     "main": "success",
@@ -67,7 +67,7 @@
       "~/.grok/bundled/skills (--path, no implicit roots)",
       "temp leftover extra/skills/SKILL.md name=loose + extra/wanted (--path, no implicit roots)"
     ],
-    "last_why_summary": "why leftover extra/skills name=loose loads wanted; loose is root_file"
+    "last_why_summary": "why leftover/skills-named-package still loads wanted+skills"
   },
   "budgets": {
     "max_cycles": null,
