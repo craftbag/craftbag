@@ -735,3 +735,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:01:27Z", "job_id": "mpi50-developer-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "301 layering holds; End User next"}
 {"ts": "2026-08-28T00:03:34Z", "job_id": "mpi50-end-user-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 5 steal-list next"}
 {"ts": "2026-08-28T00:04:36Z", "job_id": "expand5-steal-list-noop-r6", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "steal-list still live; MPI 50 Maintainer next"}
+{"ts": "2026-08-28T00:05:14Z", "job_id": "mpi50-maintainer-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Ops next"}
