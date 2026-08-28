@@ -1,0 +1,57 @@
+# Dispatch only until FOSSA_API_KEY exists and stealth drops.
+# Do not add push-to-main. That would start a second job on every squash.
+name: FOSSA
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: fossa-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  license-scan:
+    name: License Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check FOSSA API key
+        id: check-key
+        run: |
+          if [ -z "$FOSSA_API_KEY" ]; then
+            echo "FOSSA_API_KEY not configured, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+      - name: Install FOSSA CLI
+        if: steps.check-key.outputs.skip != 'true'
+        env:
+          FOSSA_VERSION: "3.17.10"
+        run: |
+          curl -fsSL -o "fossa_${FOSSA_VERSION}_linux_amd64.tar.gz" \
+            "https://github.com/fossas/fossa-cli/releases/download/v${FOSSA_VERSION}/fossa_${FOSSA_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "fossa_${FOSSA_VERSION}_linux_amd64.tar.gz.sha256" \
+            "https://github.com/fossas/fossa-cli/releases/download/v${FOSSA_VERSION}/fossa_${FOSSA_VERSION}_linux_amd64.tar.gz.sha256"
+          sha256sum -c "fossa_${FOSSA_VERSION}_linux_amd64.tar.gz.sha256"
+          tar xzf "fossa_${FOSSA_VERSION}_linux_amd64.tar.gz" fossa
+          sudo install fossa /usr/local/bin/fossa
+      - name: Run FOSSA analysis
+        if: steps.check-key.outputs.skip != 'true'
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+        run: fossa analyze
+      - name: Run FOSSA license check
+        if: steps.check-key.outputs.skip != 'true'
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+        run: fossa test

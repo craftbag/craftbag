@@ -31,6 +31,10 @@ bot commits and merge commits.
 Use the pull request template. One ready pull request at a time.
 Commits on `main` squash through the required `CI` check.
 
+PR titles must be a conventional type (`feat`, `fix`, `docs`, `ci`,
+`chore`, `test`, `refactor`, `perf`, `build`, `style`, `revert`).
+The Semantic PR Title check enforces that.
+
 ## Conduct
 
 See `CODE_OF_CONDUCT.md`. Security reports go to `SECURITY.md`, not
