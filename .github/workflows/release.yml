@@ -38,7 +38,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          # Tag push: the tag commit. Dispatch: this workflow file
+          # (main tip) while TAG still names the GitHub Release.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: "1.85"
@@ -115,7 +117,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          # Tag push: the tag commit. Dispatch: this workflow file
+          # (main tip) while TAG still names the GitHub Release.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: "1.85"
@@ -164,7 +168,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          # Tag push: the tag commit. Dispatch: this workflow file
+          # (main tip) while TAG still names the GitHub Release.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
           path: project
       - name: Generate App token
         id: app-token

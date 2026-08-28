@@ -54,6 +54,12 @@ fn release_tag_workflow_uses_dist_build_not_cargo_build() {
         !release.contains("cargo build") && !release.contains("cargo test"),
         "release.yml must not contain cargo build/test (compile-once lock)"
     );
+    assert!(
+        release.contains("workflow_dispatch")
+            && release.contains("github.sha")
+            && release.contains("github.event_name == 'workflow_dispatch'"),
+        "dispatch must check out the workflow tip so a post-tag fix can attach archives to an old tag"
+    );
 }
 
 #[test]
