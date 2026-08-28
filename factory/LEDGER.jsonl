@@ -853,3 +853,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T02:23:55Z", "job_id": "mpi56-developer-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no let-chains; End User next"}
 {"ts": "2026-08-28T02:25:05Z", "job_id": "mpi56-end-user-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "peels hold; expand 3 incumbent already covered"}
 {"ts": "2026-08-28T02:25:15Z", "job_id": "expand3-incumbent-noop-r4", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "incumbent covered; MPI 56 Maintainer next"}
+{"ts": "2026-08-28T02:25:45Z", "job_id": "mpi56-maintainer-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "gate lock holds; Ops next"}
