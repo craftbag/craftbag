@@ -48,16 +48,31 @@ MSRV is 1.85.
 
 ## Getting started
 
+After `cargo install --locked craftbag`, run it from a project that already has skills under `.agents/skills`:
+
+```bash
+craftbag list --catalog
+craftbag load review-pr
+craftbag why review-pr --context review
+craftbag validate ./path/to/my-skill
+```
+
+This clone has a small tree you can run without picking up your real home skills (same catalog as the demo GIF):
+
 ```bash
 git clone https://github.com/craftbag/craftbag
 cd craftbag
 cargo build -p craftbag --locked
-./target/debug/craftbag list
-./target/debug/craftbag list --catalog
-./target/debug/craftbag why NAME
+./target/debug/craftbag list --no-implicit-roots --path demo/workspace/.agents/skills --catalog
+./target/debug/craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills
+./target/debug/craftbag validate demo/workspace/.agents/skills/review-pr
 ```
 
-From a crate that already has skills under `.agents` or a vendor tree, add `--vendor claude` (or `cursor`, `grok`, `bline`) to include those roots.
+Claude, Cursor, Grok, or Bline trees are opt-in:
+
+```bash
+craftbag list --vendor claude --catalog
+```
 
 ## Demo
 
@@ -65,7 +80,35 @@ From a crate that already has skills under `.agents` or a vendor tree, add `--ve
 
 ## MCP
 
-`craftbag-mcp` speaks JSON-RPC on stdio. Point your host at the binary and use `skills_list`, `skills_load`, `skills_why`, and `skills_validate`.
+`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. `craftbag-mcp --help` names them.
+
+Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio command:
+
+```json
+{
+  "mcpServers": {
+    "craftbag": {
+      "command": "craftbag-mcp"
+    }
+  }
+}
+```
+
+The host cwd is the walk root. Pass `paths`, `vendor`, or `implicit_roots` on each tool call when you need a different tree.
+
+## Library
+
+```rust
+use craftbag::{discover, DiscoveryOptions};
+
+let cwd = std::env::current_dir()?;
+let report = discover(&cwd, &DiscoveryOptions::default())?;
+for skill in &report.skills {
+    println!("{} {}", skill.name, skill.description);
+}
+```
+
+`implicit_roots` is on by default (cwd-to-git `.agents` and `$HOME/.agents`). Set it to `false` and put collection roots in `paths` for leftover-only hosts.
 
 ## Contributing
 

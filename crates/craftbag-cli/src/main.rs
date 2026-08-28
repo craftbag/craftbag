@@ -13,7 +13,11 @@ use craftbag::{
 };
 
 #[derive(Parser)]
-#[command(name = "craftbag", version, about = None)]
+#[command(
+    name = "craftbag",
+    version,
+    about = "Discover and load Agent Skills (SKILL.md) for CLI and MCP hosts"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

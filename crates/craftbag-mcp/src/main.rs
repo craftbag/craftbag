@@ -578,7 +578,58 @@ fn handle(req: RpcRequest) -> Option<Value> {
     }
 }
 
+const HELP: &str = "\
+craftbag-mcp
+
+MCP stdio server for Agent Skills. JSON-RPC on stdin/stdout.
+
+Tools:
+  skills_list      catalog discovered skills
+  skills_load      print one skill body plus package envelope
+  skills_why       explain loaded, skipped, and activation
+  skills_validate  check one SKILL.md or package directory
+
+Options:
+  -h, --help     Print this message
+  -V, --version  Print version
+
+The process stays on stdio until stdin closes. Point your host command
+at this binary.
+";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CliAction {
+    Help,
+    Version,
+    Stdio,
+}
+
+fn classify_cli_args<I>(args: I) -> CliAction
+where
+    I: IntoIterator<Item = String>,
+{
+    for arg in args {
+        match arg.as_str() {
+            "-h" | "--help" => return CliAction::Help,
+            "-V" | "--version" => return CliAction::Version,
+            _ => {}
+        }
+    }
+    CliAction::Stdio
+}
+
 fn main() {
+    match classify_cli_args(std::env::args().skip(1)) {
+        CliAction::Help => {
+            print!("{HELP}");
+            return;
+        }
+        CliAction::Version => {
+            println!("{}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        CliAction::Stdio => {}
+    }
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     for line in stdin.lock().lines() {
@@ -605,7 +656,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiscoverArgs, RpcRequest, handle, list_json};
+    use super::{CliAction, DiscoverArgs, RpcRequest, classify_cli_args, handle, list_json};
     use serde_json::json;
     use std::fs;
     use std::path::PathBuf;
@@ -646,6 +697,14 @@ mod tests {
     fn empty_home<T>(f: impl FnOnce() -> T) -> T {
         let home = tempfile::tempdir().expect("home");
         craftbag::with_home_override(Some(home.path().to_path_buf()), f)
+    }
+
+    #[test]
+    fn help_and_version_flags_skip_stdio() {
+        assert_eq!(classify_cli_args(["--help".to_string()]), CliAction::Help);
+        assert_eq!(classify_cli_args(["-h".to_string()]), CliAction::Help);
+        assert_eq!(classify_cli_args(["-V".to_string()]), CliAction::Version);
+        assert_eq!(classify_cli_args(Vec::<String>::new()), CliAction::Stdio);
     }
 
     #[test]

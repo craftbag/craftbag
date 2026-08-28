@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `craftbag-mcp --help` and `--version` (stdio server used to ignore argv)
+- README getting started for CLI, vendor trees, MCP hosts, and library
+  embedders, plus a runnable demo-workspace command
+
 ## [0.1.0] - 2026-08-28
 
 First public release.
