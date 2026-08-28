@@ -26,6 +26,23 @@ The same operations exist over MCP stdio (`skills_list`, `skills_load`, `skills_
 
 ## Install
 
+macOS and Linux (Homebrew):
+
+```bash
+brew install craftbag/tap/craftbag
+```
+
+Windows (Scoop):
+
+```powershell
+scoop bucket add craftbag https://github.com/craftbag/scoop-bucket
+scoop install craftbag/craftbag
+```
+
+Both commands install `craftbag` and `craftbag-mcp`. The MCP host then runs `craftbag-mcp` (on macOS GUI apps, use the full path if `PATH` is empty: `/opt/homebrew/bin/craftbag-mcp`).
+
+From a Rust toolchain (crates.io):
+
 ```bash
 cargo install --locked craftbag
 cargo install --locked craftbag-mcp
@@ -80,7 +97,7 @@ craftbag list --vendor claude --catalog
 
 ## MCP
 
-`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. `craftbag-mcp --help` names them.
+`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. After `brew install` or `scoop install`, `craftbag-mcp --help` names them.
 
 Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio command:
 
