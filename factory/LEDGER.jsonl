@@ -758,3 +758,4 @@ ts:2026-08-27T16:36:41Z
 {"ts": "2026-08-28T00:33:21Z", "job_id": "mpi51-end-user-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "help already names root_file; Maintainer next"}
 {"ts": "2026-08-28T00:34:01Z", "job_id": "mpi51-maintainer-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "3 MPI no-ops; expand 4 new-tree next"}
 {"ts": "2026-08-28T00:35:06Z", "job_id": "expand4-new-tree-noop-r2", "work_source": "expand", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "no unused real tree; MPI 51 Ops next"}
+{"ts": "2026-08-28T00:35:50Z", "job_id": "mpi51-ops-noop", "work_source": "improve", "result": "noop", "head": "9e5ddfe308880dbb5b0708f35240f7f7516ceb5a", "pr": null, "review": 0, "notes": "Win/mac/fuzz still green; Security next"}
