@@ -55,6 +55,7 @@ jobs:
               - '.gitignore'
               - 'deny.toml'
               - '.github/workflows/**'
+              - '.github/zizmor.yml'
               - 'factory/scripts/deny-check.sh'
               - 'Makefile'
               - 'AGENTS.md'
