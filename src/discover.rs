@@ -760,6 +760,10 @@ fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
                 // Same refuse as extra-path: do not load or echo a user_dir
                 // whose component would split list/why TSV or watch_dirs.
                 skip_line_separator_root(&user_dir, HostPathField::UserDir, &mut skips);
+            } else if !user_dir.is_dir() {
+                // Host asked for this user_dir. Implicit missing `.agents`
+                // stays silent; a missing or non-dir host path is a skip.
+                skip_unresolvable_host_path(&user_dir, HostPathField::UserDir, &mut skips);
             } else {
                 // leftover user_dir/SKILL.md is a root_file skip. extra-path
                 // leftover + extra/skills is a collection; user_dir is never a
@@ -967,6 +971,7 @@ fn load_extra_path(
         return;
     }
     if !expanded.is_dir() {
+        skip_unresolvable_host_path(&expanded, HostPathField::ExtraPath, skips);
         return;
     }
     let package_md = ["SKILL.md", "skill.md"]
@@ -1781,6 +1786,40 @@ impl HostPathField {
             Self::Validate => "validate / skills_validate path component contains a line separator",
         }
     }
+
+    fn missing_path_detail(self, shown: &str) -> String {
+        match self {
+            Self::ExtraPath => format!(
+                "path does not exist: {shown} (pass --path / paths as a SKILL.md file or a package directory that contains SKILL.md)"
+            ),
+            Self::UserDir => format!(
+                "path does not exist: {shown} (pass --user-dir / user_dir as a directory of skill packages)"
+            ),
+            Self::Validate => format!(
+                "path does not exist: {shown} (pass a SKILL.md file or a package directory that contains SKILL.md)"
+            ),
+        }
+    }
+
+    fn not_a_directory_detail(self, shown: &str) -> String {
+        match self {
+            Self::ExtraPath => format!(
+                "--path / paths is not a directory: {shown} (pass a SKILL.md file or a package directory that contains SKILL.md)"
+            ),
+            Self::UserDir => {
+                format!("--user-dir / user_dir is not a directory: {shown}")
+            }
+            Self::Validate => format!("path is not a directory: {shown}"),
+        }
+    }
+
+    fn unreadable_path_detail(self, shown: &str) -> String {
+        match self {
+            Self::ExtraPath => format!("--path / paths is unreadable: {shown}"),
+            Self::UserDir => format!("--user-dir / user_dir is unreadable: {shown}"),
+            Self::Validate => format!("path is unreadable: {shown}"),
+        }
+    }
 }
 
 fn skip_line_separator_root(root: &Path, field: HostPathField, skips: &mut Vec<SkillSkip>) {
@@ -1802,6 +1841,29 @@ fn skip_whitespace_collapse_token(raw: &str, field: HostPathField, skips: &mut V
         name: None,
         kind: SkipKind::Unreadable,
         detail: field.collapse_detail().to_owned(),
+        winner_path: None,
+    });
+}
+
+/// Host-asked extra-path or user_dir that is not a loadable SKILL.md
+/// file and is not a directory. Implicit missing `.agents` stays
+/// silent in [`load_skills_from_dir`]; only this door reports it.
+fn skip_unresolvable_host_path(path: &Path, field: HostPathField, skips: &mut Vec<SkillSkip>) {
+    let shown = crate::sanitize_error_token(&path.display().to_string());
+    // Stat first (never open). FIFO / socket / device would hang on
+    // open; `metadata` is enough to tell missing vs not-a-directory.
+    let detail = match std::fs::metadata(path) {
+        Ok(meta) if meta.is_dir() => return,
+        Ok(_) => field.not_a_directory_detail(&shown),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => field.missing_path_detail(&shown),
+        Err(_) => field.unreadable_path_detail(&shown),
+    };
+    let detail = one_line_error(detail);
+    skips.push(SkillSkip {
+        path: PathBuf::from(shown),
+        name: None,
+        kind: SkipKind::Unreadable,
+        detail,
         winner_path: None,
     });
 }
@@ -8925,6 +8987,183 @@ mod tests {
             why_miss.error.contains("--path"),
             "named why error must name --path: {}",
             why_miss.error
+        );
+    }
+
+    fn assert_missing_host_path_skip(skip: &SkillSkip, shown: &str, flag_a: &str, flag_b: &str) {
+        assert_eq!(skip.kind, SkipKind::Unreadable, "{skip:?}");
+        assert!(skip.name.is_none(), "host miss is nameless: {skip:?}");
+        assert!(
+            skip.detail.contains("path does not exist:"),
+            "must name the hole: {}",
+            skip.detail
+        );
+        assert!(
+            skip.detail.contains(shown),
+            "must echo the sanitized path: {}",
+            skip.detail
+        );
+        assert!(
+            skip.detail.contains(flag_a) && skip.detail.contains(flag_b),
+            "must name the flag/field: {}",
+            skip.detail
+        );
+        assert!(
+            !skip.detail.contains("os error 2") && !skip.detail.contains("No such file"),
+            "must not leak the raw OS string: {}",
+            skip.detail
+        );
+        assert_eq!(skip.detail.lines().count(), 1, "{}", skip.detail);
+    }
+
+    #[test]
+    fn extra_path_missing_dir_is_unreadable_not_silent() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let root = tempfile::tempdir().expect("root");
+        let missing = root.path().join("no-such-extra");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![missing.display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "missing extra-path must load zero skills: {:?}",
+            report.skills
+        );
+        assert_eq!(
+            report.skips.len(),
+            1,
+            "missing extra-path must be one skip: {:?}",
+            report.skips
+        );
+        let shown = crate::sanitize_error_token(&missing.display().to_string());
+        assert_missing_host_path_skip(&report.skips[0], &shown, "--path", "paths");
+    }
+
+    #[test]
+    fn user_dir_missing_is_unreadable_not_silent() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let root = tempfile::tempdir().expect("root");
+        let missing = root.path().join("no-such-user");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                user_skills_dir: Some(missing.clone()),
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "missing user_dir must load zero skills: {:?}",
+            report.skills
+        );
+        assert_eq!(
+            report.skips.len(),
+            1,
+            "missing user_dir must be one skip: {:?}",
+            report.skips
+        );
+        let shown = crate::sanitize_error_token(&missing.display().to_string());
+        assert_missing_host_path_skip(&report.skips[0], &shown, "--user-dir", "user_dir");
+    }
+
+    #[test]
+    fn extra_path_regular_file_not_skill_md_is_unreadable() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let root = tempfile::tempdir().expect("root");
+        let file = root.path().join("notes.txt");
+        fs::write(&file, "not a skill").expect("write");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![file.display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        assert!(
+            report.skills.is_empty(),
+            "non-SKILL.md extra-path file must load zero skills: {:?}",
+            report.skills
+        );
+        let skip = report
+            .skips
+            .iter()
+            .find(|s| s.kind == SkipKind::Unreadable)
+            .expect("unreadable skip");
+        assert!(skip.name.is_none(), "file miss is nameless: {skip:?}");
+        assert!(
+            skip.detail.contains("not a directory") || skip.detail.contains("unreadable"),
+            "must say the extra-path is not a directory: {}",
+            skip.detail
+        );
+        let shown = crate::sanitize_error_token(&file.display().to_string());
+        assert!(
+            skip.detail.contains(&shown),
+            "must echo the sanitized path: {}",
+            skip.detail
+        );
+        assert_eq!(skip.detail.lines().count(), 1, "{}", skip.detail);
+    }
+
+    #[test]
+    fn extra_path_missing_dir_named_load_why_peels_unreadable() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let root = tempfile::tempdir().expect("root");
+        let missing = root.path().join("no-such-extra");
+        let extra = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![missing.display().to_string()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let extra_miss = unknown_or_skipped_skill("demo", &extra.skips);
+        assert_eq!(
+            extra_miss.error_kind, "unreadable",
+            "named load must peel the missing extra-path, not unknown_skill: {extra_miss:?}"
+        );
+        assert!(
+            extra_miss.path.is_some(),
+            "named load must peel path so the host sees WHERE: {extra_miss:?}"
+        );
+        assert!(
+            extra_miss.error.contains("--path") && extra_miss.error.contains("paths"),
+            "named load error must name --path / paths: {}",
+            extra_miss.error
+        );
+
+        let user_missing = root.path().join("no-such-user");
+        let user = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                user_skills_dir: Some(user_missing),
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        );
+        let user_miss = unknown_or_skipped_skill("demo", &user.skips);
+        assert_eq!(
+            user_miss.error_kind, "unreadable",
+            "named load must peel the missing user_dir, not unknown_skill: {user_miss:?}"
+        );
+        assert!(
+            user_miss.error.contains("--user-dir") && user_miss.error.contains("user_dir"),
+            "named load error must name --user-dir / user_dir: {}",
+            user_miss.error
+        );
+
+        let why_named = crate::why(&extra, Some("demo"), None, None);
+        let why_miss = why_named.unknown_skill_miss().expect("named why miss");
+        assert_eq!(
+            why_miss.error_kind, "unreadable",
+            "named why must peel the missing extra-path, not unknown_skill: {why_miss:?}"
         );
     }
 

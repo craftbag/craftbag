@@ -437,7 +437,7 @@ fn discover_properties() -> Value {
     let vendor_tokens = SkillSource::VENDOR_TOKENS;
     let vendor_listed = vendor_tokens.join(", ");
     json!({
-        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`). Example: [\"./my-skill\"]."},
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
             "items": {"type": "string", "enum": vendor_tokens},
@@ -445,7 +445,7 @@ fn discover_properties() -> Value {
                 "Opt-in vendor trees: {vendor_listed}. A leading dot is the on-disk tree (same as CLI --vendor). Example: [\"claude\"]."
             )
         },
-        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). Example: \"~/myskills\"."},
+        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
@@ -522,7 +522,7 @@ fn tools() -> Value {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). Example: \"./my-skill\"."
+                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: \"./my-skill\"."
                     },
                     "strict": {
                         "type": "boolean",
@@ -1220,6 +1220,10 @@ mod tests {
         assert!(
             desc.contains("collapses") && desc.contains("/.."),
             "{label} must name the whitespace-collapse refuse (` /..`): {desc}"
+        );
+        assert!(
+            desc.contains("missing") && desc.contains("unreadable"),
+            "{label} must say a missing path is reported as unreadable: {desc}"
         );
     }
 
@@ -4605,6 +4609,49 @@ mod tests {
             assert!(
                 !text.contains("\"skills\""),
                 "must not return default catalog for null implicit_roots: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn skills_list_missing_paths_is_unreadable() {
+        empty_home(|| {
+            let root = tempfile::tempdir().expect("root");
+            let missing = root.path().join("no-such-extra");
+            let listed = call(
+                326,
+                "skills_list",
+                json!({
+                    "paths": [missing.display().to_string()],
+                    "implicit_roots": false
+                }),
+            );
+            assert_eq!(
+                listed["result"]["isError"],
+                false,
+                "missing paths is a skip, not a tool error: {}",
+                call_text(&listed)
+            );
+            let text = call_text(&listed);
+            let v: serde_json::Value = serde_json::from_str(text).expect("list json");
+            assert!(
+                v["skills"].as_array().is_some_and(|s| s.is_empty()),
+                "missing extra-path must load zero skills: {text}"
+            );
+            let skips = v["skips"].as_array().expect("skips");
+            assert_eq!(
+                skips.len(),
+                1,
+                "missing extra-path must be one skip: {text}"
+            );
+            assert_eq!(
+                skips[0]["kind"], "unreadable",
+                "missing extra-path must be unreadable: {text}"
+            );
+            let detail = skips[0]["detail"].as_str().unwrap_or("");
+            assert!(
+                detail.contains("path does not exist:"),
+                "must name the hole: {detail}"
             );
         });
     }
