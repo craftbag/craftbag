@@ -209,8 +209,8 @@ jobs:
           git config --global user.name "craftbag-approve[bot]"
           git config --global user.email "41898282+craftbag-approve[bot]@users.noreply.github.com"
           version="${TAG#v}"
-          git config --global http.https://github.com/.extraheader \
-            "AUTHORIZATION: bearer ${GH_TOKEN}"
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
           (
             cd homebrew-tap
             git add Formula/craftbag.rb
