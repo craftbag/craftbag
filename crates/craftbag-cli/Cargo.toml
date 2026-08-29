@@ -1,6 +1,6 @@
 [package]
 name = "craftbag-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-craftbag = { version = "0.1.0", path = "../.." }
+craftbag = { version = "0.1.1", path = "../.." }
 serde_json = "1"
 
 [dev-dependencies]

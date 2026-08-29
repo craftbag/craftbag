@@ -64,8 +64,9 @@ Use a Bline worktree that is not findbug and not the durable
 bline-skills = { path = "/path/to/craftbag", package = "craftbag" }
 ```
 
-Published crate: `craftbag = "0.1"`. Path-dep remains valid for
-unreleased pins.
+Published crate: `craftbag = "0.1"` (0.1.1 walks leftover siblings
+next to `skills/` and reserves the catalog ellipsis). Path-dep
+remains valid for unreleased pins.
 
 ## Intended shim
 
