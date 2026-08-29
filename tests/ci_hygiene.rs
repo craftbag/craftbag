@@ -502,6 +502,11 @@ fn publish_crates_spaces_only_new_names() {
         body.contains("should_space_new_crate") && body.contains("crate_name_on_crates_io"),
         "publish-crates.sh must decide spacing from crate-name existence"
     );
+    // windows-latest PATH `bash` is the WSL stub (UTF-16 "no distributions"),
+    // not Git Bash. Release runs this script on Linux.
+    if cfg!(windows) {
+        return;
+    }
     let output = Command::new("bash")
         .arg(&script)
         .arg("--self-test")
