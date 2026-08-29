@@ -30,21 +30,37 @@ manifest_for() {
   esac
 }
 
-already_on_crates_io() {
-  local name="$1" version="$2"
-  local url="https://crates.io/api/v1/crates/${name}/${version}"
-  local code
-  code=$(curl -sS -o /tmp/craftbag-crates-io.json -w "%{http_code}" \
-    -A "$UA" "$url")
+crates_io_get() {
+  local path="$1"
+  local tmp code
+  tmp=$(mktemp)
+  code=$(curl -sS -o "$tmp" -w "%{http_code}" -A "$UA" \
+    "https://crates.io/api/v1/crates/${path}")
+  rm -f "$tmp"
   case "$code" in
     200) return 0 ;;
     404) return 1 ;;
     429) return 2 ;;
     *)
-      echo "FAIL: crates.io GET ${name}/${version} HTTP ${code}"
+      echo "FAIL: crates.io GET ${path} HTTP ${code}"
       return 3
       ;;
   esac
+}
+
+already_on_crates_io() {
+  crates_io_get "${1}/${2}"
+}
+
+crate_name_on_crates_io() {
+  crates_io_get "${1}"
+}
+
+# 0 = sleep 600s after a successful first upload of this name.
+# Version bumps of a name that already exists do not space.
+should_space_new_crate() {
+  local name_existed="$1" has_next="$2"
+  [[ "$has_next" == "1" && "$name_existed" == "0" ]]
 }
 
 if [[ "${1:-}" == "--self-test" ]]; then
@@ -61,12 +77,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
   cli_v=$(crate_version crates/craftbag-cli/Cargo.toml)
   mcp_v=$(crate_version crates/craftbag-mcp/Cargo.toml)
   [[ "$lib_v" == "$cli_v" && "$lib_v" == "$mcp_v" ]] || fail=1
+  should_space_new_crate 0 1 || fail=1
+  should_space_new_crate 1 1 && fail=1
+  should_space_new_crate 0 0 && fail=1
+  should_space_new_crate 1 0 && fail=1
   if [[ "$fail" -ne 0 ]]; then
-    echo "FAIL: crate order or versions"
+    echo "FAIL: crate order, versions, or name-spacing"
     echo "DONE: ok=false error=self-test"
     exit 1
   fi
   echo "OK: order craftbag then cli then mcp; versions match ${lib_v}"
+  echo "OK: space only a new crate name before the next crate"
   echo "DONE: ok=true"
   exit 0
 fi
@@ -84,6 +105,34 @@ for i in "${!CRATES[@]}"; do
   manifest=$(manifest_for "$crate")
   version=$(crate_version "$manifest")
   echo "DO: ${crate} ${version}"
+  name_existed=0
+  name_retries=0
+  while true; do
+    set +e
+    crate_name_on_crates_io "$crate"
+    nst=$?
+    set -e
+    if [[ "$nst" -eq 0 ]]; then
+      name_existed=1
+      break
+    fi
+    if [[ "$nst" -eq 1 ]]; then
+      name_existed=0
+      break
+    fi
+    if [[ "$nst" -eq 3 ]]; then
+      echo "DONE: ok=false error=crates-io-get"
+      exit 1
+    fi
+    name_retries=$((name_retries + 1))
+    if [[ "$name_retries" -gt 6 ]]; then
+      echo "FAIL: crates.io 429 on name pre-check for ${crate}"
+      echo "DONE: ok=false error=rate-limit"
+      exit 1
+    fi
+    echo "WAIT: crates.io 429 name pre-check, retry ${name_retries}"
+    sleep 60
+  done
   retries=0
   while true; do
     set +e
@@ -116,9 +165,15 @@ for i in "${!CRATES[@]}"; do
     printf '%s\n' "$pub_out"
     if [[ "$pub_st" -eq 0 ]]; then
       echo "OK: published ${crate} ${version}"
+      has_next=0
       if [[ "$i" -lt "$last_index" ]]; then
+        has_next=1
+      fi
+      if should_space_new_crate "$name_existed" "$has_next"; then
         echo "WAIT: 600s before the next new crate name"
         sleep 600
+      elif [[ "$has_next" -eq 1 ]]; then
+        echo "OK: skip 600s wait; crate name already on crates.io"
       fi
       break
     fi
