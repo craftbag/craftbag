@@ -19,7 +19,9 @@
 //! and TSV still list those rows.
 //! [`format_load_message`] is the text envelope (`License`,
 //! `Compatibility`, `Metadata`, `Allowed tools`, and host extras
-//! when set).
+//! when set). [`format_load_view`] can print an outline or one
+//! heading section of that same SKILL.md body instead of the
+//! whole body. It does not dump `scripts/` or `references/`.
 //!
 //! [`validate_path_with_options`] accepts a SKILL.md file or package directory
 //! (joins `SKILL.md` / `skill.md`). Success is [`ValidationReport`]
@@ -38,16 +40,17 @@ mod activate;
 mod discover;
 mod error;
 mod parse;
+mod sections;
 mod skill;
 mod skip;
 mod source;
 mod why;
 
 pub use activate::{
-    DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
-    format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
-    parse_list_format, progressive_budgets, rank_skills_for_catalog, skill_relevance_score,
-    trigger_matches, unknown_list_format,
+    DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, LoadView, ProgressiveBudgets, filter_skills,
+    format_available_skills_xml, format_catalog, format_load_message, format_load_view,
+    format_package_envelope, parse_list_format, progressive_budgets, rank_skills_for_catalog,
+    skill_relevance_score, trigger_matches, unknown_list_format,
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
@@ -59,6 +62,10 @@ pub use error::{Error, ParseError, sanitize_error_token};
 pub use parse::{
     normalize_skill_name, parse_skill, skill_name_is_ascii_policy, skill_name_matches_directory,
     skill_names_equal, validate_skill_name,
+};
+pub use sections::{
+    CHARS_PER_TOKEN, SkillOutline, SkillSection, SkillSectionMeta, WHOLE_BODY_CHEAPER_TOKENS,
+    estimate_tokens, outline_of, skill_section, split_sections, unknown_section_message,
 };
 pub use skill::{
     SKILL_BODY_LINE_SOFT_WARN, SKILL_COMPATIBILITY_MAX_CHARS, SKILL_DESCRIPTION_MAX_CHARS,

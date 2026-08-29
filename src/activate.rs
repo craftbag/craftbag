@@ -663,6 +663,19 @@ fn push_envelope_line(out: &mut String, label: &str, value: &str) {
     out.push('\n');
 }
 
+/// Which SKILL.md body to print after the load envelope.
+///
+/// Does not dump `scripts/` / `references/` / `assets/` file bodies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadView<'a> {
+    /// Full markdown body (default `load` / `skills_load`).
+    Body,
+    /// Heading keys and token costs.
+    Outline,
+    /// One heading section. Key comes from [`crate::outline_of`].
+    Section(&'a str),
+}
+
 /// User-turn payload that asks the model to follow one skill fully.
 ///
 /// Envelope lines (when set): Description, When to use, Triggers, License,
@@ -670,6 +683,23 @@ fn push_envelope_line(out: &mut String, label: &str, value: &str) {
 /// and Activate hint. Official agentskills `license` / `compatibility` /
 /// `metadata` / `allowed-tools` use the same text as list/why JSON.
 pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_>) -> String {
+    match format_load_view(skill, arguments, fmt, LoadView::Body) {
+        Ok(text) => text,
+        Err(_) => {
+            debug_assert!(false, "LoadView::Body cannot fail");
+            String::new()
+        }
+    }
+}
+
+/// Same envelope as [`format_load_message`], with an outline or one section
+/// in place of the whole body.
+pub fn format_load_view(
+    skill: &Skill,
+    arguments: &str,
+    fmt: FormatOptions<'_>,
+    view: LoadView<'_>,
+) -> Result<String, String> {
     let args = arguments.trim();
     let mut out = String::new();
     out.push_str(&format!("[Activated skill: {}]\n\n", skill.name));
@@ -708,17 +738,55 @@ pub fn format_load_message(skill: &Skill, arguments: &str, fmt: FormatOptions<'_
     out.push_str(&format_package_envelope(skill));
     out.push('\n');
     out.push_str("---\n");
-    out.push_str(skill.content.trim());
-    out.push('\n');
+    match view {
+        LoadView::Body => {
+            out.push_str(skill.content.trim());
+            out.push('\n');
+        }
+        LoadView::Outline => {
+            out.push_str(&format_outline_text(&skill.content));
+        }
+        LoadView::Section(key) => {
+            if key.trim().is_empty() {
+                return Err("section key is empty".to_owned());
+            }
+            let section = crate::sections::skill_section(&skill.content, key)?;
+            out.push_str(section.body.trim_end());
+            out.push('\n');
+        }
+    }
+    Ok(out)
+}
+
+fn format_outline_text(content: &str) -> String {
+    let outline = crate::sections::outline_of(content);
+    let mut out = String::new();
+    let n = outline.sections.len();
+    out.push_str(&format!(
+        "SKILL.md outline: {n} sections, ~{} tokens.\n",
+        outline.whole_tokens
+    ));
+    if outline.whole_body_is_cheaper {
+        out.push_str("Whole body is cheaper than outline-then-section (under 1000 tokens).\n");
+    } else {
+        out.push_str("Fetch one section instead of the whole body.\n");
+    }
+    for row in &outline.sections {
+        let key = catalog_one_line(&row.key);
+        let title = catalog_one_line(&row.title);
+        out.push_str(&format!("  {key}  ~{}  {title}\n", row.tokens));
+    }
+    out.push_str("Fetch one section with load --section KEY (MCP skills_load section).\n");
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, ProgressiveBudgets, filter_skills,
-        format_available_skills_xml, format_catalog, format_load_message, format_package_envelope,
-        parse_list_format, progressive_budgets, trigger_matches, unknown_list_format,
+        DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, LoadView, ProgressiveBudgets,
+        filter_skills, format_available_skills_xml, format_catalog, format_load_message,
+        format_load_view, format_package_envelope, parse_list_format, progressive_budgets,
+        trigger_matches, unknown_list_format,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -1838,5 +1906,68 @@ mod tests {
             load.contains("body\nstill here"),
             "skill body after --- must keep newlines: {load}"
         );
+    }
+
+    #[test]
+    fn format_load_outline_lists_keys_not_bodies() {
+        let skill = Skill::new(
+            "split-ok",
+            "sectioned",
+            "Lead-in.\n\n# Setup\nInstall.\n\n## Details\nNested.\n",
+        );
+        let load = format_load_view(&skill, "", FormatOptions::default(), LoadView::Outline)
+            .expect("outline");
+        assert!(load.contains("[Activated skill: split-ok]"));
+        assert!(load.contains("  preamble  ~"));
+        assert!(load.contains("  setup  ~"));
+        assert!(load.contains("  details  ~"));
+        assert!(load.contains("load --section KEY"));
+        assert!(
+            !load.contains("Install."),
+            "outline must not dump section bodies: {load}"
+        );
+        assert!(
+            load.contains("Whole body is cheaper"),
+            "small body must say cheaper: {load}"
+        );
+    }
+
+    #[test]
+    fn format_load_section_excludes_child_and_unknown_lists_keys() {
+        let skill = Skill::new(
+            "split-ok",
+            "sectioned",
+            "Lead-in.\n\n# Setup\nInstall.\n\n## Details\nNested.\n",
+        );
+        let setup = format_load_view(
+            &skill,
+            "",
+            FormatOptions::default(),
+            LoadView::Section("setup"),
+        )
+        .expect("setup");
+        assert!(setup.contains("# Setup"));
+        assert!(setup.contains("Install."));
+        assert!(
+            !setup.contains("Nested."),
+            "parent section must not include child: {setup}"
+        );
+        let err = format_load_view(
+            &skill,
+            "",
+            FormatOptions::default(),
+            LoadView::Section("missing"),
+        )
+        .expect_err("miss");
+        assert!(err.contains("unknown section: missing"));
+        assert!(err.contains("preamble, setup, details"));
+        let empty = format_load_view(
+            &skill,
+            "",
+            FormatOptions::default(),
+            LoadView::Section("  "),
+        )
+        .expect_err("empty");
+        assert!(empty.contains("section key is empty"));
     }
 }

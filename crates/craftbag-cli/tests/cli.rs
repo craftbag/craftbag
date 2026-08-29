@@ -6325,6 +6325,121 @@ fn load_help_names_json_error_kind() {
 }
 
 #[test]
+fn load_help_names_outline_and_section() {
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--outline"))
+        .stdout(predicates::str::contains("--section"))
+        .stdout(predicates::str::contains("heading"))
+        .stdout(predicates::str::contains("Does not dump scripts/"));
+}
+
+#[test]
+fn load_outline_lists_keys_not_bodies() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("split-ok");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: split-ok\ndescription: sectioned\n---\nLead-in.\n\n# Setup\nInstall.\n\n## Details\nNested.\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.args([
+        "load",
+        "split-ok",
+        "--no-implicit-roots",
+        "--path",
+        extra.path().to_str().expect("utf8"),
+        "--outline",
+    ])
+    .assert()
+    .success()
+    .stdout(predicates::str::contains("[Activated skill: split-ok]"))
+    .stdout(predicates::str::contains("preamble"))
+    .stdout(predicates::str::contains("setup"))
+    .stdout(predicates::str::contains("details"))
+    .stdout(predicates::str::contains("load --section KEY"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "load",
+            "split-ok",
+            "--no-implicit-roots",
+            "--path",
+            extra.path().to_str().expect("utf8"),
+            "--outline",
+        ])
+        .output()
+        .expect("run");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("Install."),
+        "outline must not dump section bodies: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Nested."),
+        "outline must not dump child bodies: {stdout}"
+    );
+}
+
+#[test]
+fn load_section_excludes_child_and_unknown_lists_keys() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("split-ok");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: split-ok\ndescription: sectioned\n---\nLead-in.\n\n# Setup\nInstall.\n\n## Details\nNested.\n",
+    )
+    .expect("write");
+    let path = extra.path().to_str().expect("utf8");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "load",
+            "split-ok",
+            "--no-implicit-roots",
+            "--path",
+            path,
+            "--section",
+            "setup",
+        ])
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("# Setup"), "{stdout}");
+    assert!(stdout.contains("Install."), "{stdout}");
+    assert!(
+        !stdout.contains("Nested."),
+        "parent section must not include child: {stdout}"
+    );
+    let (_home, mut cmd) = bin();
+    cmd.args([
+        "load",
+        "split-ok",
+        "--no-implicit-roots",
+        "--path",
+        path,
+        "--section",
+        "missing",
+    ])
+    .assert()
+    .failure()
+    .code(2)
+    .stderr(predicates::str::contains("unknown section: missing"))
+    .stderr(predicates::str::contains("preamble, setup, details"));
+}
+
+#[test]
 fn list_json_includes_invocation_flags() {
     let extra = tempfile::tempdir().expect("extra");
     let hidden = extra.path().join("hidden-slash");
