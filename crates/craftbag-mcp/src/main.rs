@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, SkillMiss, SkillSource, SkillSummary, discover,
-    find_skill_by_name, format_available_skills_xml, format_catalog, format_load_message,
+    DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillMiss, SkillSource, SkillSummary,
+    discover, find_skill_by_name, format_available_skills_xml, format_catalog, format_load_view,
     format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format, progressive_budgets,
     unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs, why,
 };
@@ -70,6 +70,12 @@ struct LoadArgs {
     name: String,
     #[serde(default, deserialize_with = "present_non_null")]
     args: Option<String>,
+    /// Print heading keys and token costs instead of the body. Omitted is false.
+    #[serde(default, deserialize_with = "present_non_null")]
+    outline: Option<bool>,
+    /// Print one heading section. Key comes from outline.
+    #[serde(default, deserialize_with = "present_non_null")]
+    section: Option<String>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
@@ -273,11 +279,25 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
     )
     .map_err(|e| e.to_string())?;
     match find_skill_by_name(&report.skills, &args.name) {
-        Some(skill) => Ok(format_load_message(
-            skill,
-            args.args.as_deref().unwrap_or(""),
-            FormatOptions::default(),
-        )),
+        Some(skill) => {
+            if args.outline == Some(true) && args.section.is_some() {
+                return Err("outline and section cannot both be set".to_owned().into());
+            }
+            let view = if args.outline == Some(true) {
+                LoadView::Outline
+            } else if let Some(key) = args.section.as_deref() {
+                LoadView::Section(key)
+            } else {
+                LoadView::Body
+            };
+            format_load_view(
+                skill,
+                args.args.as_deref().unwrap_or(""),
+                FormatOptions::default(),
+                view,
+            )
+            .map_err(|e| e.into())
+        }
         None => Err(unknown_or_skipped_skill_named(
             &args.name,
             &report.skips,
@@ -480,6 +500,14 @@ fn tools() -> Value {
         "type": "string",
         "description": "Optional arguments copied into the envelope as User arguments. Matches SKILL.md argument-hint when set."
     });
+    load_props["outline"] = json!({
+        "type": "boolean",
+        "description": "Print SKILL.md heading keys and token costs instead of the body. Omitted is false. Present null is a type error. Cannot be set with section."
+    });
+    load_props["section"] = json!({
+        "type": "string",
+        "description": "Print one SKILL.md heading section (key from outline). Present null is a type error. Cannot be set with outline. Does not dump scripts/ or references/ file bodies."
+    });
     let mut why_props = discover_properties();
     why_props["name"] = json!({
         "type": "string",
@@ -501,7 +529,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). outline lists heading keys; section fetches one heading. Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
             "inputSchema": {
                 "type": "object",
                 "required": ["name"],
@@ -2249,6 +2277,117 @@ mod tests {
             serde_json::json!({"author": "A & B", "version": "1.0"}),
             "MCP why must carry metadata like list JSON/XML: {why_text}"
         );
+    }
+
+    #[test]
+    fn skills_load_outline_and_section() {
+        let extra = tempfile::tempdir().expect("extra");
+        let pkg = extra.path().join("split-ok");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: split-ok\ndescription: sectioned\n---\nLead-in.\n\n# Setup\nInstall.\n\n## Details\nNested.\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        empty_home(|| {
+            let outline = call(
+                80,
+                "skills_load",
+                json!({"name": "split-ok", "paths": [path.clone()], "outline": true}),
+            );
+            assert_eq!(
+                outline["result"]["isError"],
+                false,
+                "{}",
+                call_text(&outline)
+            );
+            let text = call_text(&outline);
+            assert!(text.contains("preamble"), "{text}");
+            assert!(text.contains("setup"), "{text}");
+            assert!(text.contains("details"), "{text}");
+            assert!(
+                !text.contains("Install."),
+                "outline must not dump bodies: {text}"
+            );
+            let setup = call(
+                81,
+                "skills_load",
+                json!({"name": "split-ok", "paths": [path.clone()], "section": "setup"}),
+            );
+            assert_eq!(setup["result"]["isError"], false, "{}", call_text(&setup));
+            let setup_text = call_text(&setup);
+            assert!(setup_text.contains("Install."), "{setup_text}");
+            assert!(
+                !setup_text.contains("Nested."),
+                "parent must exclude child: {setup_text}"
+            );
+            let miss = call(
+                82,
+                "skills_load",
+                json!({"name": "split-ok", "paths": [path.clone()], "section": "missing"}),
+            );
+            assert_eq!(miss["result"]["isError"], true, "{}", call_text(&miss));
+            let miss_text = call_text(&miss);
+            assert!(
+                miss_text.contains("unknown section: missing"),
+                "{miss_text}"
+            );
+            let both = call(
+                83,
+                "skills_load",
+                json!({
+                    "name": "split-ok",
+                    "paths": [path.clone()],
+                    "outline": true,
+                    "section": "setup"
+                }),
+            );
+            assert_eq!(both["result"]["isError"], true, "{}", call_text(&both));
+            assert!(
+                call_text(&both).contains("outline and section cannot both be set"),
+                "{}",
+                call_text(&both)
+            );
+        });
+    }
+
+    #[test]
+    fn skills_load_present_null_outline_and_section_are_type_errors() {
+        empty_home(|| {
+            let outline = call(
+                84,
+                "skills_load",
+                json!({"name": "minimal-valid", "outline": null}),
+            );
+            assert_eq!(
+                outline["result"]["isError"],
+                true,
+                "present null outline is a type error: {}",
+                call_text(&outline)
+            );
+            let text = call_text(&outline);
+            assert!(
+                text.contains("invalid type") || text.contains("expected"),
+                "{text}"
+            );
+            let section = call(
+                85,
+                "skills_load",
+                json!({"name": "minimal-valid", "section": null}),
+            );
+            assert_eq!(
+                section["result"]["isError"],
+                true,
+                "present null section is a type error: {}",
+                call_text(&section)
+            );
+            let stext = call_text(&section);
+            assert!(
+                stext.contains("invalid type") || stext.contains("expected"),
+                "{stext}"
+            );
+        });
     }
 
     #[test]
@@ -4221,6 +4360,23 @@ mod tests {
                 "skills_load must name envelope field {field} like CLI load --help: {load_desc}"
             );
         }
+        assert!(
+            load_desc.contains("outline") && load_desc.contains("section"),
+            "skills_load must name outline and section like CLI load --help: {load_desc}"
+        );
+        let props = &load["inputSchema"]["properties"];
+        assert_eq!(props["outline"]["type"], "boolean", "{props}");
+        assert_eq!(props["section"]["type"], "string", "{props}");
+        let outline_desc = props["outline"]["description"].as_str().unwrap_or("");
+        assert!(
+            outline_desc.contains("heading") && outline_desc.contains("Present null"),
+            "outline schema must name heading keys and present-null: {outline_desc}"
+        );
+        let section_desc = props["section"]["description"].as_str().unwrap_or("");
+        assert!(
+            section_desc.contains("heading") && section_desc.contains("Does not dump"),
+            "section schema must stay envelope-only: {section_desc}"
+        );
     }
 
     #[test]

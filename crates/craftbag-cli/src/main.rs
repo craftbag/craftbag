@@ -6,9 +6,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use craftbag::{
-    DiscoveryOptions, FormatOptions, ListFormat, SkillSource, SkillSummary, discover,
+    DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
-    format_load_message, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
+    format_load_view, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
     progressive_budgets, unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs,
     why,
 };
@@ -74,13 +74,19 @@ enum Cmd {
         #[arg(long, default_value_t = 8_000)]
         context_tokens: usize,
     },
-    /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set).
+    /// Print one skill body plus package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). --outline prints heading keys; --section KEY prints one heading. Does not dump scripts/ or references/ file bodies.
     Load {
         /// Frontmatter skill name (not a package path). Discover with list --path DIR.
         name: String,
         /// Print `{ error_kind, error }` on a miss (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
+        /// Print SKILL.md heading keys and token costs instead of the body.
+        #[arg(long, conflicts_with = "section")]
+        outline: bool,
+        /// Print one SKILL.md heading section (key from --outline).
+        #[arg(long, value_name = "KEY", conflicts_with = "outline")]
+        section: Option<String>,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
         #[arg(long = "args", default_value = "")]
         args: String,
@@ -237,6 +243,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         Cmd::Load {
             name,
             json,
+            outline,
+            section,
             args,
             paths,
             vendor,
@@ -257,11 +265,33 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             )?;
             match find_skill_by_name(&report.skills, &name) {
                 Some(skill) => {
-                    print!(
-                        "{}",
-                        format_load_message(skill, &args, FormatOptions::default())
-                    );
-                    Ok(ExitCode::SUCCESS)
+                    let view = if outline {
+                        LoadView::Outline
+                    } else if let Some(key) = section.as_deref() {
+                        LoadView::Section(key)
+                    } else {
+                        LoadView::Body
+                    };
+                    match format_load_view(skill, &args, FormatOptions::default(), view) {
+                        Ok(text) => {
+                            print!("{text}");
+                            Ok(ExitCode::SUCCESS)
+                        }
+                        Err(msg) => {
+                            let _ = writeln!(io::stderr(), "{msg}");
+                            if json {
+                                let v = serde_json::json!({
+                                    "error_kind": "unknown_section",
+                                    "error": msg,
+                                });
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?
+                                );
+                            }
+                            Ok(ExitCode::from(2))
+                        }
+                    }
                 }
                 None => {
                     let miss = unknown_or_skipped_skill_named(

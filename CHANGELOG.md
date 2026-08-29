@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `craftbag load --outline` and `load --section KEY` print heading
+  keys or one SKILL.md section instead of the whole body. MCP
+  `skills_load` has the same `outline` and `section` fields. Does
+  not dump `scripts/` or `references/` file bodies.
+
 ### Fixed
 
 - Release publish no longer waits 10 minutes between version bumps of
