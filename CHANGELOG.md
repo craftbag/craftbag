@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Release publish no longer waits 10 minutes between version bumps of
+  crates that already exist on crates.io
+
 ## [0.1.1] - 2026-08-28
 
 Hosts that pass a collection directory now load leftover sibling

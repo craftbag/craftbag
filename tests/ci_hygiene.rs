@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -489,6 +490,38 @@ fn publishable_crates_share_version_and_are_not_hidden() {
     assert!(
         release.contains("CARGO_REGISTRY_TOKEN"),
         "release.yml must use CARGO_REGISTRY_TOKEN"
+    );
+}
+
+/// Version bumps of an existing crate name must not wait 10 minutes.
+#[test]
+fn publish_crates_spaces_only_new_names() {
+    let script = repo_root().join("factory/scripts/publish-crates.sh");
+    let body = read_rel("factory/scripts/publish-crates.sh");
+    assert!(
+        body.contains("should_space_new_crate") && body.contains("crate_name_on_crates_io"),
+        "publish-crates.sh must decide spacing from crate-name existence"
+    );
+    // windows-latest PATH `bash` is the WSL stub (UTF-16 "no distributions"),
+    // not Git Bash. Release runs this script on Linux.
+    if cfg!(windows) {
+        return;
+    }
+    let output = Command::new("bash")
+        .arg(&script)
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("bash factory/scripts/publish-crates.sh --self-test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "publish-crates self-test failed:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stdout.contains("space only a new crate name"),
+        "self-test must lock name-spacing: {stdout}"
     );
 }
 
