@@ -44,7 +44,7 @@ Both commands install `craftbag` and `craftbag-mcp`. The MCP host then runs `cra
 From a Rust toolchain (crates.io):
 
 ```bash
-cargo install --locked craftbag
+cargo install --locked craftbag-cli
 cargo install --locked craftbag-mcp
 ```
 
@@ -57,15 +57,15 @@ craftbag = "0.1"
 From git (unreleased tip):
 
 ```bash
-cargo install --locked --git https://github.com/craftbag/craftbag --bin craftbag
-cargo install --locked --git https://github.com/craftbag/craftbag --bin craftbag-mcp
+cargo install --locked --git https://github.com/craftbag/craftbag craftbag-cli
+cargo install --locked --git https://github.com/craftbag/craftbag craftbag-mcp
 ```
 
 MSRV is 1.85.
 
 ## Getting started
 
-After `cargo install --locked craftbag`, run it from a project that already has skills under `.agents/skills`:
+After `cargo install --locked craftbag-cli`, run it from a project that already has skills under `.agents/skills`:
 
 ```bash
 craftbag list --catalog
@@ -79,7 +79,7 @@ This clone has a small tree you can run without picking up your real home skills
 ```bash
 git clone https://github.com/craftbag/craftbag
 cd craftbag
-cargo build -p craftbag --locked
+cargo build -p craftbag-cli --locked
 ./target/debug/craftbag list --no-implicit-roots --path demo/workspace/.agents/skills --catalog
 ./target/debug/craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills
 ./target/debug/craftbag validate demo/workspace/.agents/skills/review-pr

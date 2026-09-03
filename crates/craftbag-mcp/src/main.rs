@@ -263,7 +263,23 @@ impl From<SkillMiss> for ToolError {
     }
 }
 
+fn load_view_miss(error_kind: &'static str, error: String) -> ToolError {
+    SkillMiss {
+        error_kind,
+        error,
+        path: None,
+        winner_path: None,
+    }
+    .into()
+}
+
 fn load_text(args: LoadArgs) -> Result<String, ToolError> {
+    if args.outline == Some(true) && args.section.is_some() {
+        return Err(load_view_miss(
+            "invalid_arguments",
+            "outline and section cannot both be set".to_owned(),
+        ));
+    }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let report = discover(
         &cwd,
@@ -280,9 +296,6 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
     .map_err(|e| e.to_string())?;
     match find_skill_by_name(&report.skills, &args.name) {
         Some(skill) => {
-            if args.outline == Some(true) && args.section.is_some() {
-                return Err("outline and section cannot both be set".to_owned().into());
-            }
             let view = if args.outline == Some(true) {
                 LoadView::Outline
             } else if let Some(key) = args.section.as_deref() {
@@ -296,7 +309,7 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
                 FormatOptions::default(),
                 view,
             )
-            .map_err(|e| e.into())
+            .map_err(|e| load_view_miss("unknown_section", e))
         }
         None => Err(unknown_or_skipped_skill_named(
             &args.name,
@@ -819,15 +832,36 @@ fn main() {
         }
     }
     let stdin = io::stdin();
+    let mut stdin = stdin.lock();
     let mut stdout = io::stdout();
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else {
-            break;
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match stdin.read_until(b'\n', &mut buf) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                let _ = writeln!(io::stderr(), "stdin read error: {e}");
+                std::process::exit(1);
+            }
+        }
+        let line = match std::str::from_utf8(&buf) {
+            Ok(s) => s.trim_end_matches(['\n', '\r']),
+            Err(e) => {
+                let _ = writeln!(
+                    stdout,
+                    "{}",
+                    err(Value::Null, -32700, &format!("invalid utf-8: {e}"))
+                );
+                let _ = stdout.flush();
+                continue;
+            }
         };
         if line.trim().is_empty() {
             continue;
         }
-        let req: RpcRequest = match serde_json::from_str(&line) {
+        let req: RpcRequest = match serde_json::from_str(line) {
             Ok(r) => r,
             Err(e) => {
                 let _ = writeln!(stdout, "{}", err(Value::Null, -32700, &e.to_string()));
@@ -2333,6 +2367,10 @@ mod tests {
                 miss_text.contains("unknown section: missing"),
                 "{miss_text}"
             );
+            assert_eq!(
+                miss["result"]["error_kind"], "unknown_section",
+                "section miss must peel error_kind: {miss}"
+            );
             let both = call(
                 83,
                 "skills_load",
@@ -2348,6 +2386,28 @@ mod tests {
                 call_text(&both).contains("outline and section cannot both be set"),
                 "{}",
                 call_text(&both)
+            );
+            assert_eq!(
+                both["result"]["error_kind"], "invalid_arguments",
+                "outline+section must peel before discover: {both}"
+            );
+            let both_unknown = call(
+                183,
+                "skills_load",
+                json!({
+                    "name": "no-such-skill",
+                    "paths": [path.clone()],
+                    "outline": true,
+                    "section": "setup"
+                }),
+            );
+            assert_eq!(
+                both_unknown["result"]["error_kind"], "invalid_arguments",
+                "outline+section on a missing name is still the argument conflict: {both_unknown}"
+            );
+            assert_ne!(
+                both_unknown["result"]["error_kind"], "unknown_skill",
+                "{both_unknown}"
             );
         });
     }

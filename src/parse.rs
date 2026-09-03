@@ -60,6 +60,9 @@ pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
+        if trimmed.starts_with("- ") {
+            continue;
+        }
         let Some((key, _)) = trimmed.split_once(':') else {
             continue;
         };
@@ -240,11 +243,11 @@ fn scan_frontmatter_name(yaml: &str) -> Option<String> {
             continue;
         }
         let raw_value = strip_yaml_inline_comment(value);
-        let value = raw_value.trim_matches('"').trim_matches('\'');
+        let value = unquote_yaml_scalar(raw_value);
         if value.is_empty() {
             return None;
         }
-        return Some(value.to_owned());
+        return Some(value);
     }
     None
 }
@@ -325,10 +328,8 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             let is_indented = line_is_yaml_indented(line);
             if is_indented {
                 if let Some((k, v)) = trimmed.split_once(':') {
-                    let k = k.trim().trim_matches(|c| c == '"' || c == '\'').trim();
-                    let v = strip_yaml_inline_comment(v)
-                        .trim_matches('"')
-                        .trim_matches('\'');
+                    let k = unquote_yaml_scalar(k.trim());
+                    let v = unquote_yaml_scalar(strip_yaml_inline_comment(v));
                     if !k.is_empty() {
                         metadata.insert(k.to_owned(), v.to_owned());
                     }
@@ -340,9 +341,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
         if trimmed.starts_with("- ") && in_triggers {
             let item = trimmed.strip_prefix("- ").unwrap_or(trimmed);
-            let item = strip_yaml_inline_comment(item)
-                .trim_matches('"')
-                .trim_matches('\'');
+            let item = unquote_yaml_scalar(strip_yaml_inline_comment(item));
             if !item.is_empty() {
                 triggers.push(item.to_owned());
             }
@@ -358,7 +357,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         if let Some((key, value)) = trimmed.split_once(':') {
             let key = key.trim();
             let raw_value = strip_yaml_inline_comment(value);
-            let value = raw_value.trim_matches('"').trim_matches('\'');
+            let value = unquote_yaml_scalar(raw_value);
 
             if let Some(style) = yaml_block_scalar_style(raw_value) {
                 let block = take_yaml_block_scalar(&mut lines, style);
@@ -399,7 +398,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     if value.is_empty() {
                         return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
                     }
-                    name = Some(value.to_owned());
+                    name = Some(value);
                 }
                 "description" => {
                     if value.is_empty() {
@@ -407,42 +406,42 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             "description value is empty".to_owned(),
                         ));
                     }
-                    description = Some(value.to_owned());
+                    description = Some(value);
                 }
                 "triggers" => {
                     if value.is_empty() {
                         in_triggers = true;
                     } else {
-                        push_inline_triggers(&mut triggers, value);
+                        push_inline_triggers(&mut triggers, &value);
                     }
                 }
                 "license" if !value.is_empty() => {
-                    license = Some(value.to_owned());
+                    license = Some(value);
                 }
                 "compatibility" if !value.is_empty() => {
-                    compatibility = Some(value.to_owned());
+                    compatibility = Some(value);
                 }
                 "allowed-tools" | "allowed_tools" if !value.is_empty() => {
-                    allowed_tools = Some(value.to_owned());
+                    allowed_tools = Some(value);
                 }
                 "metadata" if !line_is_yaml_indented(line) => {
                     if value.is_empty() {
                         in_metadata = true;
                     } else {
-                        push_inline_metadata(&mut metadata, value)?;
+                        push_inline_metadata(&mut metadata, &value)?;
                     }
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
-                    argument_hint = Some(value.to_owned());
+                    argument_hint = Some(value);
                 }
                 "when-to-use" | "when_to_use" if !value.is_empty() => {
-                    when_to_use = Some(value.to_owned());
+                    when_to_use = Some(value);
                 }
                 _ => {
                     if let Some(canon) = canonical_bool_yaml_key(key) {
                         assign_parsed_bool(
                             canon,
-                            require_bool_yaml(canon, value)?,
+                            require_bool_yaml(canon, &value)?,
                             &mut user_invocable,
                             &mut disable_model_invocation,
                         );
@@ -565,8 +564,8 @@ fn push_inline_metadata(
                 "metadata pair must be `key: value`, got: {shown}"
             )));
         };
-        let k = k.trim().trim_matches(|c| c == '"' || c == '\'').trim();
-        let v = v.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+        let k = unquote_yaml_scalar(k.trim());
+        let v = unquote_yaml_scalar(v.trim());
         if !k.is_empty() {
             metadata.insert(k.to_owned(), v.to_owned());
         }
@@ -581,7 +580,7 @@ fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
         .and_then(|s| s.strip_suffix(']'))
         .unwrap_or(trimmed);
     for part in inner.split(',') {
-        let item = part.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+        let item = unquote_yaml_scalar(part.trim());
         if !item.is_empty() {
             triggers.push(item.to_owned());
         }
@@ -636,6 +635,10 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
                 i += 2;
                 continue;
             }
+            if q == b'\'' && rest[i] == b'\'' && i + 1 < rest.len() && rest[i + 1] == b'\'' {
+                i += 2;
+                continue;
+            }
             if rest[i] == q {
                 return &s[..=i + 1];
             }
@@ -650,6 +653,44 @@ fn strip_yaml_inline_comment(raw: &str) -> &str {
         }
     }
     s
+}
+
+/// Strip one matching quote pair and decode YAML escapes. Unquoted
+/// scalars keep leading or trailing `"` / `'`.
+fn unquote_yaml_scalar(raw: &str) -> String {
+    let s = raw.trim();
+    let bytes = s.as_bytes();
+    if bytes.len() >= 2 && bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\'' {
+        return s[1..s.len() - 1].replace("''", "'");
+    }
+    if bytes.len() >= 2 && bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"' {
+        return unescape_double_quoted(&s[1..s.len() - 1]);
+    }
+    s.to_owned()
+}
+
+fn unescape_double_quoted(inner: &str) -> String {
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1059,6 +1100,47 @@ body
             "keys={:?}",
             unknown_frontmatter_keys(known)
         );
+    }
+
+    #[test]
+    fn unquoted_trailing_quotes_stay_on_the_scalar() {
+        let skill = parse_skill(
+            "---\nname: quotes\ndescription: Use when the user says \"deploy\"\nlicense: MIT'\n---\nbody\n",
+        )
+        .expect("parse");
+        assert_eq!(skill.description, "Use when the user says \"deploy\"");
+        assert_eq!(skill.license.as_deref(), Some("MIT'"));
+    }
+
+    #[test]
+    fn quoted_yaml_escapes_decode() {
+        let skill = parse_skill(
+            "---\nname: esc\ndescription: \"Run \\\"cargo test\\\" first\"\nwhen-to-use: 'It''s time to ship'\n---\nb\n",
+        )
+        .expect("parse");
+        assert_eq!(skill.description, "Run \"cargo test\" first");
+        assert_eq!(skill.when_to_use.as_deref(), Some("It's time to ship"));
+    }
+
+    #[test]
+    fn unknown_frontmatter_keys_skips_zero_indent_sequence_items() {
+        let input = "\
+---
+name: lists
+description: zero indent list
+triggers:
+- alpha
+- \"ratio: 3\"
+---
+body
+";
+        assert!(
+            unknown_frontmatter_keys(input).is_empty(),
+            "keys={:?}",
+            unknown_frontmatter_keys(input)
+        );
+        let skill = parse_skill(input).expect("parse");
+        assert_eq!(skill.triggers, ["alpha".to_owned(), "ratio: 3".to_owned()]);
     }
 
     #[test]

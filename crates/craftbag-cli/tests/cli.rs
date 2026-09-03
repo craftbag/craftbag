@@ -7258,3 +7258,53 @@ fn list_does_not_print_banner() {
     assert!(!stdout.to_lowercase().contains("welcome"));
     assert!(!stdout.contains("🚀"));
 }
+
+#[test]
+fn list_json_broken_pipe_is_not_a_panic() {
+    use std::io::Read;
+
+    let extra = tempfile::tempdir().expect("extra");
+    for i in 0..250 {
+        let dir = extra.path().join(format!("s{i:03}"));
+        fs::create_dir_all(&dir).expect("mkdir");
+        fs::write(
+            dir.join("SKILL.md"),
+            format!(
+                "---\nname: s{i:03}\ndescription: {}\n---\nbody\n",
+                "padding ".repeat(40)
+            ),
+        )
+        .expect("write");
+    }
+    let home = tempfile::tempdir().expect("home");
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_craftbag"))
+        .args([
+            "list",
+            "--no-implicit-roots",
+            "--path",
+            extra.path().to_str().expect("utf8"),
+            "--json",
+        ])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    let mut stdout = child.stdout.take().expect("stdout");
+    let mut stderr = child.stderr.take().expect("stderr");
+    let mut one = [0u8; 1];
+    let _ = stdout.read(&mut one);
+    drop(stdout);
+    let status = child.wait().expect("wait");
+    let mut err = String::new();
+    let _ = stderr.read_to_string(&mut err);
+    assert!(
+        status.success(),
+        "closed pipe must exit 0, not panic: {status:?} stderr={err}"
+    );
+    assert!(
+        !err.contains("panicked") && !err.contains("Broken pipe"),
+        "stderr={err}"
+    );
+}

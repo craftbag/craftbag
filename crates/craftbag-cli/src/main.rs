@@ -4,6 +4,21 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// `print!` / `println!` panic on a closed pipe (`list | head`). Treat
+/// `BrokenPipe` as a clean stop.
+fn write_stdout(text: &str) -> Result<(), String> {
+    let mut out = io::stdout();
+    match out.write_all(text.as_bytes()).and_then(|_| out.flush()) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn writeln_stdout(text: &str) -> Result<(), String> {
+    write_stdout(&format!("{text}\n"))
+}
+
 use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillSource, SkillSummary, discover,
@@ -199,7 +214,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     &disabled,
                     &ignore,
                 )?;
-                print!("{}", format_watch_dirs(&watch_dirs(&cwd, &opts)));
+                write_stdout(&format_watch_dirs(&watch_dirs(&cwd, &opts)))?;
                 return Ok(ExitCode::SUCCESS);
             }
             let report = discover_cwd(
@@ -212,28 +227,22 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 &ignore,
             )?;
             if matches!(mode, ListOutput::Catalog) {
-                print!(
-                    "{}",
-                    format_catalog(
-                        &report.skills,
-                        context.as_deref().unwrap_or(""),
-                        progressive_budgets(context_tokens),
-                        FormatOptions::default(),
-                    )
-                );
+                write_stdout(&format_catalog(
+                    &report.skills,
+                    context.as_deref().unwrap_or(""),
+                    progressive_budgets(context_tokens),
+                    FormatOptions::default(),
+                ))?;
             } else if matches!(mode, ListOutput::Xml) {
-                print!("{}", format_available_skills_xml(&report.skills));
+                write_stdout(&format_available_skills_xml(&report.skills))?;
             } else if matches!(mode, ListOutput::Json) {
                 let v = serde_json::json!({
                     "skills": report.skills.iter().map(SkillSummary::from).collect::<Vec<_>>(),
                     "skips": report.skips,
                 });
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?
-                );
+                writeln_stdout(&serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?)?;
             } else {
-                print!("{}", format_list_tsv(&report.skills));
+                write_stdout(&format_list_tsv(&report.skills))?;
             }
             if !matches!(mode, ListOutput::Json) {
                 let _ = write!(io::stderr(), "{}", format_skip_tsv(&report.skips));
@@ -274,7 +283,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     };
                     match format_load_view(skill, &args, FormatOptions::default(), view) {
                         Ok(text) => {
-                            print!("{text}");
+                            write_stdout(&text)?;
                             Ok(ExitCode::SUCCESS)
                         }
                         Err(msg) => {
@@ -284,10 +293,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                                     "error_kind": "unknown_section",
                                     "error": msg,
                                 });
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?
-                                );
+                                writeln_stdout(
+                                    &serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
+                                )?;
                             }
                             Ok(ExitCode::from(2))
                         }
@@ -301,10 +309,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     );
                     let _ = writeln!(io::stderr(), "{miss}");
                     if json {
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
-                        );
+                        writeln_stdout(
+                            &serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?,
+                        )?;
                     }
                     Ok(ExitCode::from(2))
                 }
@@ -337,20 +344,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             if let Some(miss) = why.unknown_skill_miss() {
                 let _ = writeln!(io::stderr(), "{miss}");
                 if json {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
-                    );
+                    writeln_stdout(
+                        &serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?,
+                    )?;
                 }
                 return Ok(ExitCode::from(1));
             }
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?
-                );
+                writeln_stdout(&serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)?;
             } else {
-                print!("{}", format_why_text(&why));
+                write_stdout(&format_why_text(&why))?;
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -358,20 +361,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             let report = validate_path_with_options(&path, strict);
             if report.ok {
                 if json {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
-                    );
+                    writeln_stdout(
+                        &serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?,
+                    )?;
                 } else {
-                    println!("ok\t{}", report.name.as_deref().unwrap_or("-"));
+                    writeln_stdout(&format!("ok\t{}", report.name.as_deref().unwrap_or("-")))?;
                 }
                 Ok(ExitCode::SUCCESS)
             } else if let (true, Some(miss)) = (json, report.miss()) {
                 let _ = writeln!(io::stderr(), "{miss}");
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?
-                );
+                writeln_stdout(&serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?)?;
                 Ok(ExitCode::from(1))
             } else {
                 for e in &report.errors {
