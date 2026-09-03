@@ -7,33 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-03
+
+Hosts can load one SKILL.md heading or an outline of headings instead
+of the whole body. Parse and MCP miss peels match real SKILL.md trees
+and closed pipes no longer panic the CLI.
+
 ### Added
 
-- `craftbag load --outline` and `load --section KEY` print heading
-  keys or one SKILL.md section instead of the whole body. MCP
-  `skills_load` has the same `outline` and `section` fields. Does
-  not dump `scripts/` or `references/` file bodies.
+- **Outline and section load.** `craftbag load --outline` lists heading
+  keys and token hints. `load --section KEY` prints one heading body.
+  MCP `skills_load` has the same `outline` and `section` fields. Does
+  not dump `scripts/` or `references/` file bodies
+  ([#333](https://github.com/craftbag/craftbag/pull/333)).
 
 ### Fixed
 
-- `load --outline` / `--section` no longer treat `#` comments inside
-  fenced code as headings, so Setup is not truncated at a ` ```bash `
-  block.
-- Unquoted description text that ends in a quote keeps that character.
-  Single-quoted `''` and double-quoted `\"` decode as YAML.
-- `validate --strict` no longer rejects a zero-indent trigger item that
-  contains a colon (`- "ratio: 3"`).
-- MCP `skills_load` peels `error_kind` on an unknown section, and
-  rejects `outline` plus `section` before walking the tree.
-- `craftbag list | head` exits 0 instead of panicking on a closed pipe.
-- `craftbag-mcp` replies `-32700` on a non-UTF-8 stdin line and keeps
-  the session instead of exiting with no reply.
-- Extra-path sibling packages list in file-name order, so the catalog
-  does not follow raw `readdir` order.
-- README `cargo install` / `cargo build` lines name `craftbag-cli`
-  (the `craftbag` crate has no binary).
-- Release publish no longer waits 10 minutes between version bumps of
-  crates that already exist on crates.io
+- **Fenced code is not a heading.** `#` lines inside fenced blocks no
+  longer split outline or section bodies
+  ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **YAML quotes and escapes.** Unquoted text that ends in a quote keeps
+  that character. Single-quoted `''` and double-quoted `\"` decode as
+  YAML ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **Strict validate and colons in triggers.** A zero-indent trigger item
+  that contains a colon is no longer rejected as an unknown key
+  ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **MCP section misses peel cleanly.** Unknown section sets
+  `error_kind`, and `outline` plus `section` together is rejected before
+  walking the tree
+  ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **Broken pipe and bad stdin.** `craftbag list | head` exits 0.
+  `craftbag-mcp` replies `-32700` on a non-UTF-8 stdin line and keeps
+  the session ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **Stable sibling order.** Extra-path packages list in file-name order
+  ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **Install docs name the CLI crate.** README `cargo install` /
+  `cargo build` lines use `craftbag-cli`
+  ([#347](https://github.com/craftbag/craftbag/pull/347)).
+- **Faster crates.io version bumps.** Publish no longer waits 10 minutes
+  between version bumps of crate names that already exist
+  ([#332](https://github.com/craftbag/craftbag/pull/332),
+  [#347](https://github.com/craftbag/craftbag/pull/347)).
+
+### Upgrade
+
+Library hosts (`craftbag = "0.1"`):
+
+```bash
+cargo update -p craftbag
+```
+
+CLI and MCP:
+
+```bash
+brew upgrade craftbag/tap/craftbag
+# or
+cargo install --locked craftbag-cli
+cargo install --locked craftbag-mcp
+```
+
+Compare: https://github.com/craftbag/craftbag/compare/v0.1.1...v0.1.2
 
 ## [0.1.1] - 2026-08-28
 

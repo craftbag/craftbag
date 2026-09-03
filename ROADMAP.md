@@ -6,7 +6,7 @@ Plans, not promises. Open an issue before a large change.
 
 - Keep the discover, load, why, and validate surfaces stable for
   path-dep hosts.
-- v0.1.0 is on crates.io (`craftbag`, `craftbag-cli`, `craftbag-mcp`).
+- Ship 0.1.2 (outline/section load and parse peels) to crates.io and install channels.
 
 ## Medium term
 
