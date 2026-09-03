@@ -7,6 +7,9 @@
 .idea/
 .vscode/
 *.swp
+__pycache__/
+*.pyc
+.pr-preflight-passed
 # Isolated HOME fixtures. rustup/cargo write here if HOME is the fixture.
 tests/corpus/**/.cargo/
 tests/corpus/**/.rustup/

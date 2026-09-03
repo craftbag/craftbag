@@ -335,6 +335,43 @@ fn rpc_in_args(
 }
 
 #[test]
+fn stdio_invalid_utf8_replies_parse_error_and_keeps_session() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let home = tempfile::tempdir().expect("home");
+    let init = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    });
+    let mut stdin = vec![0xff, b'\n'];
+    stdin.extend_from_slice(format!("{init}\n").as_bytes());
+    let out = bin()
+        .current_dir(tmp.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .write_stdin(stdin)
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut lines = stdout.lines();
+    let first: serde_json::Value =
+        serde_json::from_str(lines.next().expect("parse-error line")).expect("json");
+    assert_eq!(first["error"]["code"], -32700, "{first}");
+    let second: serde_json::Value =
+        serde_json::from_str(lines.next().expect("initialize line")).expect("json");
+    assert_eq!(
+        second["result"]["serverInfo"]["name"], "craftbag",
+        "{second}"
+    );
+}
+
+#[test]
 fn stdio_initialize() {
     let resp = rpc(&serde_json::json!({
         "jsonrpc": "2.0",

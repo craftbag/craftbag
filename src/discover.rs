@@ -2065,7 +2065,9 @@ fn load_skills_from_dir(
         }
     };
 
-    for entry in entries.filter_map(Result::ok) {
+    let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+    entries.sort_by_key(|a| a.file_name());
+    for entry in entries {
         let path = entry.path();
         if skip.iter().any(|s| path == *s) {
             continue;
@@ -3347,6 +3349,25 @@ mod tests {
             report.skips[0].path, loser,
             "collision skip path must be the extra-path loser"
         );
+    }
+
+    #[test]
+    fn extra_path_sibling_packages_list_in_name_order() {
+        let extra = tempfile::tempdir().expect("extra");
+        for name in ["zed", "mid", "aaa"] {
+            write_skill(&extra.path().join(name), name, name);
+        }
+        let cwd = tempfile::tempdir().expect("cwd");
+        let report = empty_home_discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                implicit_roots: false,
+                paths: vec![extra.path().display().to_string()],
+                ..DiscoveryOptions::default()
+            },
+        );
+        let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["aaa", "mid", "zed"], "skills={names:?}");
     }
 
     #[test]

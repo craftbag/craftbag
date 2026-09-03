@@ -80,6 +80,40 @@ fn rust_path_filter_covers_install_channel_sources() {
 }
 
 #[test]
+fn readme_install_and_build_name_bin_packages() {
+    let readme = repo_file("README.md");
+    assert!(
+        readme.contains("cargo install --locked craftbag-cli"),
+        "crates.io install must name the CLI package (the craftbag crate has no bin)"
+    );
+    assert!(
+        !readme.contains("cargo install --locked craftbag\n")
+            && !readme.contains("cargo install --locked craftbag`"),
+        "do not cargo install the library crate: craftbag has no binaries"
+    );
+    assert!(
+        readme.contains(
+            "cargo install --locked --git https://github.com/craftbag/craftbag craftbag-cli"
+        ) && readme.contains(
+            "cargo install --locked --git https://github.com/craftbag/craftbag craftbag-mcp"
+        ),
+        "git install must name workspace members that have bins"
+    );
+    assert!(
+        !readme.contains("--git https://github.com/craftbag/craftbag --bin craftbag"),
+        "git --bin craftbag selects the root library package, which has no bin"
+    );
+    assert!(
+        readme.contains("cargo build -p craftbag-cli --locked"),
+        "clone walkthrough must build the CLI package"
+    );
+    assert!(
+        !readme.contains("cargo build -p craftbag --locked"),
+        "cargo build -p craftbag produces libcraftbag.rlib, not ./target/debug/craftbag"
+    );
+}
+
+#[test]
 fn cargo_toml_defines_dist_profile() {
     let cargo = repo_file("Cargo.toml");
     assert!(

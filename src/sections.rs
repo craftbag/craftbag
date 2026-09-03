@@ -53,12 +53,20 @@ pub fn estimate_tokens(text: &str) -> usize {
 }
 
 /// Split `content` into flat sections. Parent text stops at the next
-/// heading of any level.
+/// heading of any level. ATX lines inside a fenced ` ``` ` / `~~~ `
+/// block are not headings.
 pub fn split_sections(content: &str) -> Vec<SkillSection> {
     let mut headings: Vec<(usize, u8, String)> = Vec::new();
     let mut offset = 0;
+    let mut fence: Option<(u8, usize)> = None;
     for line in content.split_inclusive('\n') {
-        if let Some((level, title)) = atx_heading(line) {
+        if let Some((ch, n)) = fence {
+            if closes_fence(line, ch, n) {
+                fence = None;
+            }
+        } else if let Some(open) = opening_fence(line) {
+            fence = Some(open);
+        } else if let Some((level, title)) = atx_heading(line) {
             headings.push((offset, level, title));
         }
         offset += line.len();
@@ -146,6 +154,56 @@ pub fn unknown_section_message(key: &str, sections: &[SkillSection]) -> String {
         .map(|s| sanitize_error_token(&s.key))
         .collect();
     format!("unknown section: {shown} (available: {})", keys.join(", "))
+}
+
+/// CommonMark opening fence: 0-3 spaces, then 3+ backticks or tildes.
+fn opening_fence(line: &str) -> Option<(u8, usize)> {
+    let rest = trim_line_end(line);
+    let rest = skip_atx_indent(rest)?;
+    let bytes = rest.as_bytes();
+    let first = *bytes.first()?;
+    if first != b'`' && first != b'~' {
+        return None;
+    }
+    let n = bytes.iter().take_while(|&&b| b == first).count();
+    if n < 3 {
+        return None;
+    }
+    Some((first, n))
+}
+
+/// Close only on the same fence character, at least as long, then blanks.
+fn closes_fence(line: &str, ch: u8, n: usize) -> bool {
+    let rest = trim_line_end(line);
+    let Some(rest) = skip_atx_indent(rest) else {
+        return false;
+    };
+    let bytes = rest.as_bytes();
+    if bytes.first().copied() != Some(ch) {
+        return false;
+    }
+    let m = bytes.iter().take_while(|&&b| b == ch).count();
+    if m < n {
+        return false;
+    }
+    rest[m..].trim().is_empty()
+}
+
+fn trim_line_end(line: &str) -> &str {
+    line.trim_end_matches(['\n', '\r'])
+}
+
+/// Up to 3 leading spaces, like ATX. Four spaces is indented code, not a fence.
+fn skip_atx_indent(line: &str) -> Option<&str> {
+    let bytes = line.as_bytes();
+    let mut spaces = 0;
+    while spaces < 3 && spaces < bytes.len() && bytes[spaces] == b' ' {
+        spaces += 1;
+    }
+    if spaces == 3 && spaces < bytes.len() && bytes[spaces] == b' ' {
+        return None;
+    }
+    Some(&line[spaces..])
 }
 
 fn atx_heading(line: &str) -> Option<(u8, String)> {
@@ -329,5 +387,62 @@ On-call owns the page.
         assert!(hash_run[0].body.contains("#Not a heading"));
         assert_eq!(hash_run[1].title, "Real");
         assert_eq!(hash_run[1].key, "real");
+    }
+
+    #[test]
+    fn fenced_hash_comments_are_not_headings() {
+        let body = "\
+# Setup
+
+Run the installer.
+
+```bash
+# Install deps
+npm install
+# Build
+npm run build
+```
+
+More setup prose that belongs to Setup.
+
+# Usage
+
+Use it.
+";
+        let sections = split_sections(body);
+        let keys: Vec<&str> = sections.iter().map(|s| s.key.as_str()).collect();
+        assert_eq!(keys, ["setup", "usage"], "keys={keys:?}");
+        assert!(
+            sections[0].body.contains("More setup prose"),
+            "parent must keep post-fence prose: {}",
+            sections[0].body
+        );
+        assert!(
+            sections[0].body.contains("# Install deps"),
+            "fence body stays in Setup: {}",
+            sections[0].body
+        );
+        let setup = skill_section(body, "setup").expect("setup");
+        assert!(setup.body.contains("More setup prose"), "{}", setup.body);
+        assert!(skill_section(body, "install-deps").is_err());
+        assert!(skill_section(body, "build").is_err());
+    }
+
+    #[test]
+    fn tilde_fence_and_backtick_close_do_not_cross() {
+        let body = "\
+# One
+
+~~~
+# Not a heading
+```
+# Still inside tildes
+~~~
+
+# Two
+";
+        let sections = split_sections(body);
+        let keys: Vec<&str> = sections.iter().map(|s| s.key.as_str()).collect();
+        assert_eq!(keys, ["one", "two"], "keys={keys:?}");
     }
 }

@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `load --outline` / `--section` no longer treat `#` comments inside
+  fenced code as headings, so Setup is not truncated at a ` ```bash `
+  block.
+- Unquoted description text that ends in a quote keeps that character.
+  Single-quoted `''` and double-quoted `\"` decode as YAML.
+- `validate --strict` no longer rejects a zero-indent trigger item that
+  contains a colon (`- "ratio: 3"`).
+- MCP `skills_load` peels `error_kind` on an unknown section, and
+  rejects `outline` plus `section` before walking the tree.
+- `craftbag list | head` exits 0 instead of panicking on a closed pipe.
+- `craftbag-mcp` replies `-32700` on a non-UTF-8 stdin line and keeps
+  the session instead of exiting with no reply.
+- Extra-path sibling packages list in file-name order, so the catalog
+  does not follow raw `readdir` order.
+- README `cargo install` / `cargo build` lines name `craftbag-cli`
+  (the `craftbag` crate has no binary).
 - Release publish no longer waits 10 minutes between version bumps of
   crates that already exist on crates.io
 
