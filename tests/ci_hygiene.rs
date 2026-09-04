@@ -332,6 +332,17 @@ fn readme_names_the_product_and_is_path_filtered() {
         "Getting started must name the demo tree so clone-and-list is not empty"
     );
     assert!(
+        readme
+            .lines()
+            .filter(|line| line.contains("load review-pr"))
+            .all(|line| line.contains("--path")),
+        "every load review-pr line must include --path (bare load is unknown on this clone)"
+    );
+    assert!(
+        readme.contains("--outline") && readme.contains("--section"),
+        "Getting started must name load --outline and --section"
+    );
+    assert!(
         readme.contains("## Library"),
         "README must show a library embedder path"
     );

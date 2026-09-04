@@ -680,7 +680,7 @@ MCP stdio server for Agent Skills. JSON-RPC on stdin/stdout.
 
 Tools:
   skills_list      catalog discovered skills
-  skills_load      print one skill body plus package envelope
+  skills_load      print one skill body plus package envelope; outline lists heading keys, section fetches one heading
   skills_why       explain loaded, skipped, and activation
   skills_validate  check one SKILL.md or package directory
 

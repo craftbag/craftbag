@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Getting started runs on a clone.** The first README commands point
+  `--path` at `demo/workspace/.agents/skills`. `list` from this repo
+  root is empty (no project `.agents`). `load review-pr` without that
+  path was `unknown skill`. The same walk-through now includes
+  `load --outline` and `load --section`. `craftbag-mcp --help` names
+  those fields too.
+
 ## [0.1.2] - 2026-09-03
 
 Hosts can load one SKILL.md heading or an outline of headings instead
