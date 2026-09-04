@@ -21,8 +21,10 @@ fn mcp_help_names_tools() {
             && text.contains("skills_validate")
             && text.contains("stdio")
             && text.contains("--path")
-            && text.contains("--vendor"),
-        "craftbag-mcp --help must name tools, stdio, and launch defaults: {text}"
+            && text.contains("--vendor")
+            && text.contains("outline")
+            && text.contains("section"),
+        "craftbag-mcp --help must name tools, stdio, launch defaults, and load outline/section: {text}"
     );
 }
 

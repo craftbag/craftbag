@@ -18,7 +18,7 @@ Discover, list, load, and explain Agent Skills (`SKILL.md`) for CLI and MCP host
 craftbag walks project and home skill trees (`.agents`, plus optional vendor trees for Claude, Cursor, Grok, and Bline). It then:
 
 - catalogs skills (`list`)
-- prints one skill body (`load`)
+- prints one skill body (`load`), or heading keys / one heading (`load --outline`, `load --section KEY`)
 - explains why a skill would activate (`why`)
 - checks a package (`validate`)
 
@@ -65,24 +65,28 @@ MSRV is 1.85.
 
 ## Getting started
 
-After `cargo install --locked craftbag-cli`, run it from a project that already has skills under `.agents/skills`:
-
-```bash
-craftbag list --catalog
-craftbag load review-pr
-craftbag why review-pr --context review
-craftbag validate ./path/to/my-skill
-```
-
-This clone has a small tree you can run without picking up your real home skills (same catalog as the demo GIF):
+Default `list` walks cwd-to-git `.agents` / vendor trees and `$HOME/.agents` / vendor trees. This clone has no project `.agents`, so `craftbag list` here prints nothing and exits 0. Point `--path` at the demo tree (same catalog as the demo GIF):
 
 ```bash
 git clone https://github.com/craftbag/craftbag
 cd craftbag
-cargo build -p craftbag-cli --locked
-./target/debug/craftbag list --no-implicit-roots --path demo/workspace/.agents/skills --catalog
-./target/debug/craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills
-./target/debug/craftbag validate demo/workspace/.agents/skills/review-pr
+craftbag list --no-implicit-roots --path demo/workspace/.agents/skills --catalog
+craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills
+craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills --outline
+craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills --section review-a-pull-request
+craftbag why review-pr --no-implicit-roots --path demo/workspace/.agents/skills --context review
+craftbag validate demo/workspace/.agents/skills/review-pr
+```
+
+If `craftbag` is not on `PATH` yet, `cargo build -p craftbag-cli --locked` and use `./target/debug/craftbag` in those commands.
+
+In a project that already has skills under `.agents/skills`:
+
+```bash
+craftbag list --catalog
+craftbag load NAME
+craftbag why NAME --context review
+craftbag validate ./path/to/my-skill
 ```
 
 Claude, Cursor, Grok, or Bline trees are opt-in:
@@ -112,7 +116,7 @@ Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio 
 }
 ```
 
-Launch `--path`, `--vendor`, `--user-dir`, and `--no-implicit-roots` are the walk when a tool call omits that field. The host cwd is still the implicit walk root unless you pass `--no-implicit-roots`.
+Launch `--path`, `--vendor`, `--user-dir`, and `--no-implicit-roots` are the walk when a tool call omits that field. The host cwd is still the implicit walk root unless you pass `--no-implicit-roots`. `skills_load` accepts `outline` and `section` (same as `load --outline` / `--section KEY`).
 
 ## Library
 
@@ -126,7 +130,7 @@ for skill in &report.skills {
 }
 ```
 
-`implicit_roots` is on by default (cwd-to-git `.agents` and `$HOME/.agents`). Set it to `false` and put collection roots in `paths` for leftover-only hosts.
+`implicit_roots` is on by default (cwd-to-git `.agents` and `$HOME/.agents`). Set it to `false` and put collection roots in `paths` for leftover-only hosts. `format_load_view` can print an outline or one heading instead of the whole body.
 
 ## Contributing
 
