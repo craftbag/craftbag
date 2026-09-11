@@ -3034,21 +3034,34 @@ mod tests {
     }
 
     /// CLI `why --json` / `load --json` maps SkillMiss serde errors.
-    /// MCP must not `expect` on the same peel (a miss must not crash the
+    /// MCP must not panic on the same peel (a miss must not crash the
     /// stdio server).
     #[test]
-    fn merge_skill_miss_does_not_expect_serde() {
-        let src = include_str!("main.rs");
-        let start = src
-            .find("fn merge_skill_miss")
-            .expect("merge_skill_miss must exist");
-        let rest = &src[start..];
-        let end = rest.find("\nfn ").unwrap_or(rest.len());
-        let body = &rest[..end];
-        assert!(
-            !body.contains(".expect("),
-            "merge_skill_miss must map SkillMiss serde like CLI, not panic: {body}"
-        );
+    fn merge_skill_miss_maps_known_keys_without_panic() {
+        use std::path::PathBuf;
+
+        use craftbag::{SkillSkip, SkipKind, unknown_or_skipped_skill};
+
+        let unknown = unknown_or_skipped_skill("no-such", &[]);
+        let mut result = json!({"isError": true});
+        super::merge_skill_miss(&mut result, &unknown);
+        assert_eq!(result["error_kind"], "unknown_skill", "{result}");
+        assert_eq!(result["error"], unknown.error, "{result}");
+        assert!(result.get("path").is_none(), "{result}");
+
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/b/foo/SKILL.md"),
+            name: Some("foo".to_owned()),
+            kind: SkipKind::NameCollision,
+            detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
+            winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+            ..SkillSkip::default()
+        };
+        let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
+        let mut result = json!({"isError": true});
+        super::merge_skill_miss(&mut result, &miss);
+        assert_eq!(result["error_kind"], "name_collision", "{result}");
+        assert_eq!(result["winner_path"], "/tmp/a/foo/SKILL.md", "{result}");
     }
 
     #[test]

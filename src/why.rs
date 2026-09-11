@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::activate::{ProgressiveBudgets, filter_skills, progressive_budgets, trigger_matches};
-use crate::discover::{SkillMiss, unknown_or_skipped_skill_named};
+use crate::miss::{SkillMiss, unknown_or_skipped_skill_named};
 use crate::skill::Skill;
 use crate::skip::{DiscoveryReport, SkillSkip};
 use crate::source::SkillSource;
