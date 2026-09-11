@@ -7,52 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-11
+
+`load --json` and `why` misses match the rest of the CLI, leftover
+user-dir files no longer look like a skill named `skills`, and library
+`discover` returns the report directly.
+
+### Breaking
+
+- **`discover` returns `DiscoveryReport`.** On 0.1.2 it returned
+  `Result<DiscoveryReport, Error>`. The walk does not fail that way,
+  so drop `?` (or the `Ok` match) and use the report ([#368](https://github.com/craftbag/craftbag/pull/368)).
+
+  ```rust
+  let report = craftbag::discover(&cwd, &opts);
+  ```
+
 ### Fixed
 
-- **Leftover `user_dir/skills/SKILL.md` is a root file.** A leftover
-  file with no sibling packages is `root_file`, not
-  `name_directory_mismatch`. `load` / `why` of `skills` stay
-  `unknown_skill`. Extra-path leftover already did this.
-- **Unknown frontmatter lists load.** A block sequence under a host key
-  (`tags:`) is ignored. Only `triggers` collects items. A sequence under
-  a known scalar (`license:`) is still invalid YAML ([#353](https://github.com/craftbag/craftbag/issues/353)).
-- **Fence lines are `---` alone.** `---x` does not open frontmatter.
-  Closing `---x` no longer prepends `x` to the body
-  ([#362](https://github.com/craftbag/craftbag/issues/362)).
-- **MCP `ascii_names: false` overrides launch `--ascii-names`.**
-  Omitted still uses the launch default
-  ([#354](https://github.com/craftbag/craftbag/issues/354)).
-- **`load --json` emits JSON on success.** The object has `name`,
-  `path`, `source`, and `text` ([#355](https://github.com/craftbag/craftbag/issues/355)).
-- **`why NAME` miss exits 2**, same as `load`. Tool errors stay 1
-  ([#356](https://github.com/craftbag/craftbag/issues/356)).
-- **Refused `--path` is not a skipped skill by that name.** The miss
-  says `unknown skill: NAME; refused --path / paths: ...` and still
-  peels `error_kind=unreadable` ([#360](https://github.com/craftbag/craftbag/issues/360)).
-- **Empty `list` / `why` print a stderr note** built from `watch_dirs`.
-  Stdout stays empty. Exit stays 0
-  ([#361](https://github.com/craftbag/craftbag/issues/361)).
-- **README Library example compiles.** `discover` returns
-  `DiscoveryReport` directly ([#357](https://github.com/craftbag/craftbag/issues/357)
-  [#358](https://github.com/craftbag/craftbag/issues/358)).
+- **`craftbag load --json` printed the envelope, not JSON.** Success
+  is now an object with `name`, `path`, `source`, and `text` ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **`why NAME` missed with exit 1.** A missing skill now exits 2,
+  same as `load`. Flag and tool errors stay 1 ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **Empty `list` / `why` printed nothing.** Stderr now says which
+  roots were watched. Stdout stays empty. Exit stays 0 ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **A refused `--path` looked like a skipped skill of that name.**
+  The miss is `unknown skill: NAME; refused --path / paths: ...`
+  and still peels `error_kind=unreadable` ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **`---x` opened or closed frontmatter.** Only a line that is
+  exactly `---` is a fence. A close of `---x` no longer prepends
+  `x` to the body ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **A YAML list under a host key (`tags:`) failed parse.** Those
+  lists are ignored. Only `triggers` collects items. A list under
+  a known scalar (`license:`) is still invalid YAML ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **MCP `ascii_names: false` kept launch `--ascii-names`.** A
+  present false now overrides. Omitted still uses the launch
+  default ([#368](https://github.com/craftbag/craftbag/pull/368)).
+- **Leftover `user_dir/skills/SKILL.md` looked like a package
+  named `skills`.** With no sibling packages it is `root_file`.
+  `load` / `why` of `skills` stay `unknown_skill`. Extra-path
+  leftover already did this ([#370](https://github.com/craftbag/craftbag/pull/370)).
 
 ### Changed
 
-- **Getting started runs on a clone.** The first README commands point
-  `--path` at `demo/workspace/.agents/skills`. `list` from this repo
-  root is empty (no project `.agents`). `load review-pr` without that
-  path was `unknown skill`. The same walk-through now includes
-  `load --outline` and `load --section`. `craftbag-mcp --help` names
-  those fields too.
-- **Miss formatting lives above the walk.** `SkillMiss` and
-  `unknown_or_skipped_skill*` are `src/miss.rs`. Discover is
-  `src/discover/` (`host_token`, `path`, `extra_path`, `load`,
-  `walk`). Public crate names do not change
-  ([#366](https://github.com/craftbag/craftbag/issues/366)).
-- **Doc-prose tests now assert behavior.** Crate-root rustdoc still
-  locks the cwd-to-git `.agents` phrase. SkillSummary siblings,
-  SkillMiss peels, and ValidationReport success stay behavior tests
-  ([#363](https://github.com/craftbag/craftbag/issues/363)).
+- **Getting started works on a clone of this repo.** The first
+  README commands pass `--path demo/workspace/.agents/skills`.
+  `list` from the crate root is empty (no project `.agents`). The
+  walk-through includes `load --outline` and `load --section`.
+  `craftbag-mcp --help` names those fields ([#350](https://github.com/craftbag/craftbag/pull/350)).
+
+### Upgrade
+
+Library hosts that want this cut must move the pin. `craftbag = "0.1"`
+stays on 0.1.2:
+
+```toml
+craftbag = "0.2"
+```
+
+```bash
+cargo update -p craftbag
+```
+
+CLI and MCP:
+
+```bash
+brew upgrade craftbag/tap/craftbag
+# or
+cargo install --locked craftbag-cli
+cargo install --locked craftbag-mcp
+```
+
+Compare: https://github.com/craftbag/craftbag/compare/v0.1.2...v0.2.0
 
 ## [0.1.2] - 2026-09-03
 

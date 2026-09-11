@@ -6,13 +6,13 @@ Plans, not promises. Open an issue before a large change.
 
 - Keep the discover, load, why, and validate surfaces stable for
   path-dep hosts.
-- v0.1.2 is on crates.io (`craftbag`, `craftbag-cli`, `craftbag-mcp`)
-  with Homebrew and Scoop install channels (outline/section load and
-  parse peels).
+- v0.2.0 is on crates.io (`craftbag`, `craftbag-cli`, `craftbag-mcp`)
+  with Homebrew and Scoop install channels (`discover` returns
+  `DiscoveryReport`; leftover user-dir `SKILL.md` is a root file).
 
 ## Medium term
 
-- Hosts consume the library as a crates.io `0.1` pin without copying
+- Hosts consume the library as a crates.io `0.2` pin without copying
   the walk (path-dep and git pins remain supported).
 - Tighten release automation so a tested tree is promoted without a
   second full product compile on the tag (already closer after
