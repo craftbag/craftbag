@@ -17,7 +17,8 @@ use super::CURSOR_VENDOR_DENYLIST;
 use super::DiscoveryOptions;
 use super::extra_path::{
     ExtraPathMd, classify_extra_path_md, extra_should_watch_skills_subdir,
-    extra_skills_subdir_is_collection, load_classified_extra_path_package, load_extra_path,
+    extra_skills_md_is_named_package, extra_skills_subdir_is_collection,
+    load_classified_extra_path_package, load_extra_path, skip_classified_extra_skills_leftover,
     skip_loose_extra_path_root_skill_md, user_dir_should_watch_skills_subdir,
 };
 use super::host_token::{
@@ -586,15 +587,36 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
                                 );
                             }
                             other => {
-                                load_classified_extra_path_package(
-                                    &skill_file,
-                                    other,
-                                    &SkillSource::User,
-                                    &ignore,
-                                    opts,
-                                    &mut skills,
-                                    &mut skips,
-                                );
+                                // Package leftover (name: loose, no sibling)
+                                // is extra-path skip_loose / RootFile.
+                                // Only Parsed / ParseFailed is the skill
+                                // named `skills`.
+                                if extra_skills_md_is_named_package(&other) {
+                                    load_classified_extra_path_package(
+                                        &skill_file,
+                                        other,
+                                        &SkillSource::User,
+                                        &ignore,
+                                        opts,
+                                        &mut skills,
+                                        &mut skips,
+                                    );
+                                } else {
+                                    skip_classified_extra_skills_leftover(
+                                        &skill_file,
+                                        &skills_subdir,
+                                        &ignore,
+                                        other,
+                                        &mut skips,
+                                    );
+                                    load_skills_from_dir(
+                                        &skills_subdir,
+                                        &dir_load(&SkillSource::User, &ignore, opts, &[]),
+                                        &[skill_file.as_path()],
+                                        &mut skills,
+                                        &mut skips,
+                                    );
+                                }
                             }
                         }
                     } else {

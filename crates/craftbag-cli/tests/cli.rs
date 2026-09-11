@@ -6437,6 +6437,44 @@ fn load_section_excludes_child_and_unknown_lists_keys() {
     .code(2)
     .stderr(predicates::str::contains("unknown section: missing"))
     .stderr(predicates::str::contains("preamble, setup, details"));
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "load",
+            "split-ok",
+            "--json",
+            "--no-implicit-roots",
+            "--path",
+            path,
+            "--section",
+            "missing",
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unknown section: missing"),
+        "load --json --section miss must keep the human one-line: {stderr}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("load json");
+    assert_eq!(v["error_kind"], "unknown_section", "stdout={stdout}");
+    assert!(
+        v["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("unknown section: missing")),
+        "stdout={stdout}"
+    );
+    assert!(
+        v.get("path").is_none() && v.get("winner_path").is_none() && v.get("winnerPath").is_none(),
+        "load --json --section miss omits path/winner_path: {stdout}"
+    );
 }
 
 #[test]
@@ -7345,6 +7383,11 @@ fn load_json_success_is_json_object() {
     assert!(
         text.contains("[Activated skill: demo]"),
         "success JSON must carry the envelope: {stdout}"
+    );
+    let path = v["path"].as_str().expect("path");
+    assert!(
+        Path::new(path).ends_with(Path::new("demo").join("SKILL.md")),
+        "success path must be the joined SKILL.md, not the collection root: {path}"
     );
 }
 
