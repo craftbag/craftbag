@@ -1,5 +1,5 @@
 //! Committed corpus fixtures. Parse here; discovery uses the same files
-//! from `src/discover.rs` unit tests (home override is crate-private).
+//! from `src/discover/` unit tests (home override is crate-private).
 
 use std::fs;
 use std::path::PathBuf;

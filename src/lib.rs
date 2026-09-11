@@ -39,6 +39,7 @@
 mod activate;
 mod discover;
 mod error;
+mod miss;
 mod parse;
 mod sections;
 mod skill;
@@ -53,12 +54,15 @@ pub use activate::{
     skill_relevance_score, trigger_matches, unknown_list_format,
 };
 pub use discover::{
-    CURSOR_VENDOR_DENYLIST, DiscoveryOptions, SkillMiss, UNKNOWN_SKILL_KIND, ValidationReport,
-    discover, find_skill_by_name, format_watch_dirs, unknown_or_skipped_skill,
-    unknown_or_skipped_skill_message, unknown_or_skipped_skill_named, validate_path,
-    validate_path_with_options, walk_cwd_to_git_root, watch_dirs, with_home_override,
+    CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
+    format_watch_dirs, validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
+    with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
+pub use miss::{
+    SkillMiss, UNKNOWN_SKILL_KIND, unknown_or_skipped_skill, unknown_or_skipped_skill_message,
+    unknown_or_skipped_skill_named,
+};
 pub use parse::{
     normalize_skill_name, parse_skill, skill_name_is_ascii_policy, skill_name_matches_directory,
     skill_names_equal, validate_skill_name,
@@ -91,40 +95,18 @@ mod tests {
         assert!(!super::version().is_empty());
     }
 
-    /// A host adding CLI `--no-implicit-roots` / MCP `implicit_roots`
-    /// should see the default on the crate root, not only in discover.rs.
     /// The walk is cwd-to-git `.agents` / `$HOME/.agents`, not the whole
-    /// cwd-to-git tree and not `user_skills_dir`.
+    /// cwd-to-git tree. That inverted sentence drifted once (PRs 170-172).
     #[test]
-    fn crate_root_docs_name_implicit_roots_default() {
+    fn crate_root_docs_attach_agents_to_cwd_to_git() {
         let docs: String = include_str!("lib.rs")
             .lines()
             .filter(|line| line.starts_with("//!"))
             .collect::<Vec<_>>()
             .join("\n");
-        // Substring `implicit_roots: true` is also in
-        // "does not set `implicit_roots: true`".
-        assert!(
-            docs.contains("[`DiscoveryOptions::default`] sets `implicit_roots: true`"),
-            "crate-root rustdoc must say Default sets implicit_roots: true (not an inverted sentence): {docs}"
-        );
         assert!(
             docs.contains("cwd-to-git `.agents`"),
             "crate-root rustdoc must attach .agents to cwd-to-git, not walk the whole tree: {docs}"
-        );
-        assert!(
-            docs.contains("`$HOME/.agents`"),
-            "crate-root rustdoc must name implicit HOME .agents, not user_skills_dir: {docs}"
-        );
-        // Substring `--no-implicit-roots` / `implicit_roots: false` /
-        // `user_skills_dir` is also in "does not load `user_skills_dir`".
-        assert!(
-            docs.contains("CLI `--no-implicit-roots` and MCP `implicit_roots: false`"),
-            "crate-root rustdoc must map CLI --no-implicit-roots and MCP implicit_roots: false (not an inverted sentence): {docs}"
-        );
-        assert!(
-            docs.contains("`user_skills_dir` still load"),
-            "crate-root rustdoc must say user_skills_dir still loads when implicit_roots is off (not an inverted sentence): {docs}"
         );
         assert!(
             super::DiscoveryOptions::default().implicit_roots,
@@ -132,103 +114,65 @@ mod tests {
         );
     }
 
-    /// A host adding a [`super::SkillSummary`] field should see the
-    /// sibling lock on the crate root, not only in why.rs. List JSON,
-    /// why JSON, and list XML share that type. Catalog stays cheap.
-    /// Load is the text envelope.
     #[test]
-    fn crate_root_docs_name_skill_summary_siblings() {
-        let docs: String = include_str!("lib.rs")
-            .lines()
-            .filter(|line| line.starts_with("//!"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(
-            docs.contains("List JSON, why JSON, and list XML share [`SkillSummary`]"),
-            "crate-root rustdoc must say list/why JSON + list XML share SkillSummary: {docs}"
-        );
-        assert!(
-            docs.contains("skill_summary_json_keys_have_list_xml_siblings"),
-            "crate-root rustdoc must name the sibling-lock test: {docs}"
-        );
-        assert!(
-            docs.contains("Catalog stays cheap"),
-            "crate-root rustdoc must say catalog stays cheap (not SkillSummary JSON): {docs}"
-        );
-        assert!(
-            docs.contains("text envelope"),
-            "crate-root rustdoc must say load is the text envelope: {docs}"
-        );
-    }
-
-    /// A leftover-only host should see [`super::SkillMiss`] on the crate
-    /// root, not only in discover.rs. Branch on `error_kind` and `path`.
-    /// Do not scrape Display. `unknown_skill` omits `path`.
-    /// `name_collision` also peels `winner_path`.
-    #[test]
-    fn crate_root_docs_name_skill_miss() {
-        let docs: String = include_str!("lib.rs")
-            .lines()
-            .filter(|line| line.starts_with("//!"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(
-            docs.contains("[`SkillMiss`]"),
-            "crate-root rustdoc must name SkillMiss so a leftover-only host does not scrape Display: {docs}"
-        );
-        assert!(
-            docs.contains("error_kind"),
-            "crate-root rustdoc must name SkillMiss.error_kind: {docs}"
-        );
-        assert!(
-            docs.contains("leftover-only"),
-            "crate-root rustdoc must address leftover-only hosts: {docs}"
-        );
-        assert!(
-            docs.contains("scraping Display"),
-            "crate-root rustdoc must say branch without scraping Display: {docs}"
-        );
-        assert!(
-            docs.contains("unknown_skill") && docs.contains("omits `path`"),
-            "crate-root rustdoc must say unknown_skill omits path (do not invent one): {docs}"
-        );
-        assert!(
-            docs.contains("winner_path") && docs.contains("name_collision"),
-            "crate-root rustdoc must name SkillMiss.winner_path on name_collision: {docs}"
-        );
+    fn unknown_skill_miss_omits_path() {
         let unknown = super::unknown_or_skipped_skill("no-such-skill", &[]);
         assert_eq!(unknown.error_kind, super::UNKNOWN_SKILL_KIND);
+        assert!(unknown.path.is_none(), "unknown_skill miss must omit path");
+        let json = serde_json::to_value(&unknown).expect("miss serde");
         assert!(
-            unknown.path.is_none(),
-            "documented unknown_skill miss must omit path"
+            json.get("path").is_none(),
+            "unknown_skill JSON omits path: {json}"
+        );
+        assert!(
+            json.get("winner_path").is_none(),
+            "unknown_skill JSON omits winner_path: {json}"
         );
     }
 
-    /// A leftover-only host should see [`super::ValidationReport`] on the
-    /// crate root, not only in discover.rs. CLI `validate --json` and MCP
-    /// `skills_validate` share that success shape (no `error_kind`).
     #[test]
-    fn crate_root_docs_name_validation_report() {
-        let docs: String = include_str!("lib.rs")
-            .lines()
-            .filter(|line| line.starts_with("//!"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(
-            docs.contains("[`ValidationReport`]"),
-            "crate-root rustdoc must name ValidationReport like MCP skills_validate: {docs}"
+    fn name_collision_miss_peels_winner_path() {
+        use std::path::PathBuf;
+
+        use super::{SkillSkip, SkipKind, unknown_or_skipped_skill};
+
+        let skip = SkillSkip {
+            path: PathBuf::from("/tmp/b/foo/SKILL.md"),
+            name: Some("foo".to_owned()),
+            kind: SkipKind::NameCollision,
+            detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
+            winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+            ..SkillSkip::default()
+        };
+        let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
+        assert_eq!(miss.error_kind, "name_collision");
+        assert_eq!(miss.path.as_deref(), Some(skip.path.as_path()));
+        assert_eq!(
+            miss.winner_path.as_deref(),
+            Some(std::path::Path::new("/tmp/a/foo/SKILL.md"))
         );
+        let json = serde_json::to_value(&miss).expect("miss serde");
+        assert_eq!(json["error_kind"], "name_collision");
+        assert_eq!(json["winner_path"], "/tmp/a/foo/SKILL.md");
+    }
+
+    #[test]
+    fn validation_report_success_has_no_error_kind() {
+        let dir = tempfile::tempdir().expect("pkg");
+        let pkg = dir.path().join("demo");
+        std::fs::create_dir_all(&pkg).expect("dir");
+        std::fs::write(
+            pkg.join("SKILL.md"),
+            "---\nname: demo\ndescription: ok\n---\nbody\n",
+        )
+        .expect("skill");
+        let report = super::validate_path(&pkg);
+        assert!(report.ok, "package directory must validate: {report:?}");
+        assert!(report.miss().is_none(), "ok report has no miss");
+        let json = serde_json::to_value(&report).expect("report serde");
         assert!(
-            docs.contains("package directory") && docs.contains("SKILL.md"),
-            "crate-root rustdoc must name package dir like CLI validate --help: {docs}"
-        );
-        assert!(
-            docs.contains("no `error_kind`") || docs.contains("no error_kind"),
-            "crate-root rustdoc must say success has no error_kind: {docs}"
-        );
-        assert!(
-            docs.contains("validate --json") && docs.contains("skills_validate"),
-            "crate-root rustdoc must map CLI validate --json and MCP skills_validate: {docs}"
+            json.get("error_kind").is_none(),
+            "success ValidationReport must not grow error_kind: {json}"
         );
     }
 }

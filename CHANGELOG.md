@@ -40,6 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path was `unknown skill`. The same walk-through now includes
   `load --outline` and `load --section`. `craftbag-mcp --help` names
   those fields too.
+- **Miss formatting lives above the walk.** `SkillMiss` and
+  `unknown_or_skipped_skill*` are `src/miss.rs`. Discover is
+  `src/discover/` (`host_token`, `path`, `extra_path`, `load`,
+  `walk`). Public crate names do not change
+  ([#366](https://github.com/craftbag/craftbag/issues/366)).
+- **Doc-prose tests now assert behavior.** Crate-root rustdoc still
+  locks the cwd-to-git `.agents` phrase. SkillSummary siblings,
+  SkillMiss peels, and ValidationReport success stay behavior tests
+  ([#363](https://github.com/craftbag/craftbag/issues/363)).
 
 ## [0.1.2] - 2026-09-03
 
