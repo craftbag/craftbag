@@ -8286,6 +8286,91 @@ fn leftover_user_dir_skills_loose_skill_md_is_root_file_not_name_mismatch() {
     );
 }
 
+#[test]
+fn leftover_user_dir_skills_loose_skill_md_without_sibling_is_root_file_not_name_mismatch() {
+    // ExtraPathMd leftover Package: name does not match skills/, and
+    // there is no sibling package so classify stays Package, not
+    // Collection. extra-path leftover extra/skills/SKILL.md is
+    // RootFile only. user_dir must match: leftover is root_file, not
+    // a package named skills skipped as name_directory_mismatch.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let user = tempfile::tempdir().expect("user");
+    let leftover = user.path().join("skills").join("SKILL.md");
+    fs::create_dir_all(leftover.parent().expect("parent")).expect("mkdir");
+    fs::write(
+        &leftover,
+        "---\nname: loose\ndescription: leftover user skills root\n---\nloose\n",
+    )
+    .expect("write leftover");
+    let opts = DiscoveryOptions {
+        user_skills_dir: Some(user.path().to_path_buf()),
+        ..DiscoveryOptions::default()
+    };
+    let _ = take_read_skill_md_paths();
+    let report = empty_home_discover(cwd.path(), &opts);
+    assert!(
+        report.skills.is_empty(),
+        "leftover user_dir/skills/SKILL.md must not load as a package: skills={:?} skips={:?}",
+        report.skills,
+        report.skips
+    );
+    assert!(
+        report
+            .skips
+            .iter()
+            .any(|s| s.kind == SkipKind::RootFile && s.path == leftover),
+        "leftover user_dir/skills/SKILL.md must stay root_file: {:?}",
+        report.skips
+    );
+    assert!(
+        report
+            .skips
+            .iter()
+            .all(|s| s.kind != SkipKind::NameDirectoryMismatch),
+        "leftover user_dir/skills/SKILL.md must not also be name_directory_mismatch: {:?}",
+        report.skips
+    );
+    let leftover_opens = take_read_skill_md_paths()
+        .iter()
+        .filter(|p| *p == &leftover)
+        .count();
+    assert_eq!(
+        leftover_opens, 1,
+        "classify leftover user_dir/skills/SKILL.md must not be opened again: leftover={leftover:?}"
+    );
+    let miss = unknown_or_skipped_skill("skills", &report.skips);
+    assert_eq!(
+        miss.error_kind, "unknown_skill",
+        "load of skills must stay unknown_skill, not a skipped package: {miss:?}"
+    );
+    assert!(
+        miss.path.is_none(),
+        "unknown_skill has no SKILL.md to name: {miss:?}"
+    );
+    let why = crate::why(&report, Some("skills"), None, None);
+    assert!(
+        why.skips.is_empty(),
+        "why skills must not peel leftover as a skipped package: {:?}",
+        why.skips
+    );
+    assert_eq!(
+        why.unknown_skill_message().as_deref(),
+        Some("unknown skill: skills")
+    );
+    let home = tempfile::tempdir().expect("home");
+    let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+        watch_dirs(cwd.path(), &opts)
+    });
+    assert!(
+        watch_paths_contain(&dirs, user.path()),
+        "must watch user_dir when leftover user_dir/skills/SKILL.md exists: {dirs:?}"
+    );
+    assert!(
+        !watch_paths_contain(&dirs, &user.path().join("skills")),
+        "leftover user_dir/skills/SKILL.md is not a discover walk: {dirs:?}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn leftover_user_dir_skills_fifo_skill_md_does_not_hide_sibling() {

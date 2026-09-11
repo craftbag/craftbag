@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Leftover `user_dir/skills/SKILL.md` is a root file.** A leftover
+  file with no sibling packages is `root_file`, not
+  `name_directory_mismatch`. `load` / `why` of `skills` stay
+  `unknown_skill`. Extra-path leftover already did this.
 - **Unknown frontmatter lists load.** A block sequence under a host key
   (`tags:`) is ignored. Only `triggers` collects items. A sequence under
   a known scalar (`license:`) is still invalid YAML ([#353](https://github.com/craftbag/craftbag/issues/353)).
