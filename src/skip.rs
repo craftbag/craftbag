@@ -76,6 +76,29 @@ pub struct SkillSkip {
     /// `winner_path` so a `SkillMiss` row is not silently winner-less.
     #[serde(default, alias = "winner_path")]
     pub winner_path: Option<PathBuf>,
+    /// Set when discover refused a host `--path` / `user_dir` / validate token.
+    /// Not on the wire. Default `None` for constructed test rows.
+    #[serde(skip)]
+    pub host_token: Option<HostTokenField>,
+}
+
+/// Which host field produced a refused token. Recorded at construction
+/// so miss peel does not grep error prose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostTokenField {
+    ExtraPath,
+    UserDir,
+    Validate,
+}
+
+impl HostTokenField {
+    pub(crate) fn flag_name(self) -> &'static str {
+        match self {
+            Self::ExtraPath => "--path / paths",
+            Self::UserDir => "--user-dir / user_dir",
+            Self::Validate => "validate / skills_validate",
+        }
+    }
 }
 
 impl Serialize for SkillSkip {
@@ -143,12 +166,31 @@ impl SkillSkip {
     /// That skip is not a package identity. Named `load` / `why`
     /// still peel it so a host sees WHAT and which flag to change.
     pub(crate) fn is_host_token_refuse(&self) -> bool {
-        self.kind == SkipKind::Unreadable
-            && self.name.is_none()
-            && (self.detail.contains("collapses after whitespace trim")
-                || self.detail.contains("line separator")
-                || self.detail.contains("path does not exist:")
-                || self.detail.contains("not a directory"))
+        self.host_token.is_some()
+    }
+
+    pub(crate) fn host_token_refuse(path: PathBuf, detail: String, field: HostTokenField) -> Self {
+        Self {
+            path,
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail,
+            winner_path: None,
+            host_token: Some(field),
+        }
+    }
+}
+
+impl Default for SkillSkip {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: String::new(),
+            winner_path: None,
+            host_token: None,
+        }
     }
 }
 
@@ -221,7 +263,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use super::{DiscoveryReport, SkillSkip, SkipKind};
+    use super::{DiscoveryReport, HostTokenField, SkillSkip, SkipKind};
 
     #[test]
     fn as_str_is_snake_case() {
@@ -244,6 +286,7 @@ mod tests {
                 kind,
                 detail: "d".to_owned(),
                 winner_path: None,
+                host_token: None,
             };
             assert_eq!(skip.code(), kind.as_str());
             let json = serde_json::to_string(&skip).expect("ser");
@@ -375,6 +418,7 @@ mod tests {
             kind: SkipKind::NameCollision,
             detail: "already loaded".to_owned(),
             winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+            host_token: None,
         };
         let json = serde_json::to_string(&skip).expect("ser");
         assert!(json.contains("winnerPath"), "json={json}");
@@ -395,6 +439,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "--path / paths token collapses after whitespace trim".to_owned(),
             winner_path: None,
+            host_token: Some(HostTokenField::ExtraPath),
         };
         assert!(collapse.is_host_token_refuse());
         assert!(
@@ -407,6 +452,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "Is a directory".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(!other.is_host_token_refuse());
         let missing = SkillSkip {
@@ -415,6 +461,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "path does not exist: /tmp/no-such-extra (pass --path / paths as a SKILL.md file or a package directory that contains SKILL.md)".to_owned(),
             winner_path: None,
+            host_token: Some(HostTokenField::ExtraPath),
         };
         assert!(
             missing.is_host_token_refuse(),
@@ -434,6 +481,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(parse.matches_requested_name("DEMO"));
         assert!(!parse.matches_requested_name("other"));
@@ -443,6 +491,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file in a named subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(!root.matches_requested_name("skills"));
         assert!(!root.matches_requested_name("   "));
@@ -452,6 +501,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file in a named subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(
             named_root.matches_requested_name("loose"),
@@ -469,6 +519,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(
             skip.matches_requested_name("wanted"),
@@ -487,6 +538,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(
             skip.matches_requested_name("wanted"),
@@ -507,6 +559,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(
             skip.matches_requested_name("demo"),
@@ -524,6 +577,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(skip.matches_requested_name("foo"));
         assert!(
@@ -540,6 +594,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let nameless = SkillSkip {
             path: PathBuf::from("/tmp/alpha/SKILL.md"),
@@ -547,6 +602,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(named.matches_requested_name("alpha"));
         assert!(nameless.matches_requested_name("alpha"));
@@ -565,6 +621,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert!(
             skip.matches_requested_name("wanted"),
@@ -601,6 +658,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file\u{2028}in a named\u{2014}subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let tsv = super::format_skip_tsv(&[skip]);
         assert!(

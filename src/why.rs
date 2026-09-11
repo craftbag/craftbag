@@ -392,6 +392,7 @@ mod tests {
             kind: SkipKind::NameCollision,
             detail: "lost".to_owned(),
             winner_path: Some(PathBuf::from("/a/foo/SKILL.md")),
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![skill],
@@ -416,6 +417,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -442,6 +444,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "Permission denied (os error 13)".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -461,6 +464,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file in a named subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -485,6 +489,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file in a named subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -527,7 +532,6 @@ mod tests {
                         ..crate::DiscoveryOptions::default()
                     },
                 )
-                .expect("discover")
             },
         );
         let why = why(&report, Some("review_pr"), None, None);
@@ -632,6 +636,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -665,6 +670,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let nameless = SkillSkip {
             path: PathBuf::from("/tmp/alpha/SKILL.md"),
@@ -672,6 +678,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![],
@@ -780,6 +787,7 @@ mod tests {
             kind: SkipKind::NameCollision,
             detail: "lost".to_owned(),
             winner_path: Some(PathBuf::from("/a/foo/SKILL.md")),
+            host_token: None,
         };
         let report = DiscoveryReport {
             skills: vec![skill],

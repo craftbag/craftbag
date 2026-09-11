@@ -36,18 +36,16 @@ where
 }
 
 #[derive(Debug, Default, Deserialize)]
-struct DiscoverArgs {
+struct DiscoveryArgs {
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
     vendor: Vec<String>,
     #[serde(default, deserialize_with = "present_non_null")]
     user_dir: Option<String>,
+    /// Reject names outside `a-z0-9-`. Omitted uses the launch default.
     #[serde(default, deserialize_with = "present_non_null")]
-    format: Option<String>,
-    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
-    #[serde(default)]
-    ascii_names: bool,
+    ascii_names: Option<bool>,
     /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
     #[serde(default, deserialize_with = "present_non_null")]
     implicit_roots: Option<bool>,
@@ -57,6 +55,14 @@ struct DiscoverArgs {
     /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DiscoverArgs {
+    #[serde(flatten)]
+    discovery: DiscoveryArgs,
+    #[serde(default, deserialize_with = "present_non_null")]
+    format: Option<String>,
     /// Catalog ranking text (`format=catalog`). JSON, XML, and watch ignore this.
     #[serde(default, deserialize_with = "present_non_null")]
     context: Option<String>,
@@ -76,24 +82,8 @@ struct LoadArgs {
     /// Print one heading section. Key comes from outline.
     #[serde(default, deserialize_with = "present_non_null")]
     section: Option<String>,
-    #[serde(default)]
-    paths: Vec<String>,
-    #[serde(default)]
-    vendor: Vec<String>,
-    #[serde(default, deserialize_with = "present_non_null")]
-    user_dir: Option<String>,
-    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
-    #[serde(default)]
-    ascii_names: bool,
-    /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
-    #[serde(default, deserialize_with = "present_non_null")]
-    implicit_roots: Option<bool>,
-    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
-    #[serde(default)]
-    disabled: Vec<String>,
-    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
-    #[serde(default)]
-    ignore: Vec<String>,
+    #[serde(flatten)]
+    discovery: DiscoveryArgs,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -104,24 +94,8 @@ struct WhyArgs {
     context: Option<String>,
     #[serde(default, deserialize_with = "present_non_null")]
     context_tokens: Option<usize>,
-    #[serde(default)]
-    paths: Vec<String>,
-    #[serde(default)]
-    vendor: Vec<String>,
-    #[serde(default, deserialize_with = "present_non_null")]
-    user_dir: Option<String>,
-    /// Reject names outside `a-z0-9-`. Omitted is false (Unicode / NFKC).
-    #[serde(default)]
-    ascii_names: bool,
-    /// Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true.
-    #[serde(default, deserialize_with = "present_non_null")]
-    implicit_roots: Option<bool>,
-    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
-    #[serde(default)]
-    disabled: Vec<String>,
-    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
-    #[serde(default)]
-    ignore: Vec<String>,
+    #[serde(flatten)]
+    discovery: DiscoveryArgs,
     /// json (default WhyReport) or text (same rows as CLI why).
     #[serde(default, deserialize_with = "present_non_null")]
     format: Option<String>,
@@ -142,24 +116,8 @@ struct CallParams {
     arguments: Value,
 }
 
-fn opts_from(
-    paths: Vec<String>,
-    vendor: Vec<String>,
-    user_dir: Option<String>,
-    ascii_names: bool,
-    implicit_roots: Option<bool>,
-    disabled: Vec<String>,
-    ignore: Vec<String>,
-) -> Result<DiscoveryOptions, String> {
-    let merged = apply_launch_defaults(
-        paths,
-        vendor,
-        user_dir,
-        ascii_names,
-        implicit_roots,
-        disabled,
-        ignore,
-    );
+fn opts_from(discovery: DiscoveryArgs) -> Result<DiscoveryOptions, String> {
+    let merged = apply_launch_defaults(discovery);
     let paths = merged.paths;
     let vendor = merged.vendor;
     let user_dir = merged.user_dir;
@@ -187,21 +145,13 @@ fn opts_from(
 
 fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let opts = opts_from(
-        args.paths,
-        args.vendor,
-        args.user_dir,
-        args.ascii_names,
-        args.implicit_roots,
-        args.disabled,
-        args.ignore,
-    )?;
+    let opts = opts_from(args.discovery)?;
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
     if format == ListFormat::Watch {
         return Ok(format_watch_dirs(&watch_dirs(&cwd, &opts)));
     }
-    let report = discover(&cwd, &opts).map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts);
     if format == ListFormat::Xml {
         return Ok(with_skip_tsv(
             format_available_skills_xml(&report.skills),
@@ -281,19 +231,7 @@ fn load_text(args: LoadArgs) -> Result<String, ToolError> {
         ));
     }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let report = discover(
-        &cwd,
-        &opts_from(
-            args.paths,
-            args.vendor,
-            args.user_dir,
-            args.ascii_names,
-            args.implicit_roots,
-            args.disabled,
-            args.ignore,
-        )?,
-    )
-    .map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts_from(args.discovery)?);
     match find_skill_by_name(&report.skills, &args.name) {
         Some(skill) => {
             let view = if args.outline == Some(true) {
@@ -388,19 +326,7 @@ fn known_launch_flag(flag: &str) -> Option<&'static str> {
 fn why_json(args: WhyArgs) -> Result<String, ToolError> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let format = parse_why_format(args.format.as_deref().unwrap_or("json"))?;
-    let report = discover(
-        &cwd,
-        &opts_from(
-            args.paths,
-            args.vendor,
-            args.user_dir,
-            args.ascii_names,
-            args.implicit_roots,
-            args.disabled,
-            args.ignore,
-        )?,
-    )
-    .map_err(|e| e.to_string())?;
+    let report = discover(&cwd, &opts_from(args.discovery)?);
     let budgets = progressive_budgets(args.context_tokens.unwrap_or(8_000));
     let why = why(
         &report,
@@ -719,37 +645,43 @@ fn launch_defaults() -> LaunchDefaults {
     LAUNCH.get().cloned().unwrap_or_default()
 }
 
-fn apply_launch_defaults(
-    mut paths: Vec<String>,
-    mut vendor: Vec<String>,
-    user_dir: Option<String>,
-    ascii_names: bool,
-    implicit_roots: Option<bool>,
-    mut disabled: Vec<String>,
-    mut ignore: Vec<String>,
-) -> LaunchDefaults {
-    let launch = launch_defaults();
-    if paths.is_empty() {
-        paths = launch.paths;
-    }
-    if vendor.is_empty() {
-        vendor = launch.vendor;
-    }
-    let user_dir = match user_dir {
-        Some(d) => Some(d),
-        None => launch.user_dir,
+fn apply_launch_defaults(discovery: DiscoveryArgs) -> LaunchDefaults {
+    merge_launch(discovery, &launch_defaults())
+}
+
+fn merge_launch(discovery: DiscoveryArgs, launch: &LaunchDefaults) -> LaunchDefaults {
+    let paths = if discovery.paths.is_empty() {
+        launch.paths.clone()
+    } else {
+        discovery.paths
     };
-    let ascii_names = ascii_names || launch.ascii_names;
-    let implicit_roots = match implicit_roots {
+    let vendor = if discovery.vendor.is_empty() {
+        launch.vendor.clone()
+    } else {
+        discovery.vendor
+    };
+    let user_dir = match discovery.user_dir {
+        Some(d) => Some(d),
+        None => launch.user_dir.clone(),
+    };
+    let ascii_names = match discovery.ascii_names {
+        Some(v) => v,
+        None => launch.ascii_names,
+    };
+    let implicit_roots = match discovery.implicit_roots {
         Some(v) => Some(v),
         None => launch.implicit_roots,
     };
-    if disabled.is_empty() {
-        disabled = launch.disabled;
-    }
-    if ignore.is_empty() {
-        ignore = launch.ignore;
-    }
+    let disabled = if discovery.disabled.is_empty() {
+        launch.disabled.clone()
+    } else {
+        discovery.disabled
+    };
+    let ignore = if discovery.ignore.is_empty() {
+        launch.ignore.clone()
+    } else {
+        discovery.ignore
+    };
     LaunchDefaults {
         paths,
         vendor,
@@ -878,7 +810,10 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiscoverArgs, ParsedCli, RpcRequest, handle, list_json, parse_cli_args};
+    use super::{
+        DiscoverArgs, DiscoveryArgs, LaunchDefaults, ParsedCli, RpcRequest, handle, list_json,
+        merge_launch, parse_cli_args,
+    };
     use serde_json::json;
     use std::fs;
     use std::path::PathBuf;
@@ -1535,7 +1470,10 @@ mod tests {
     fn list_json_shape() {
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![corpus_pkg()],
+                discovery: DiscoveryArgs {
+                    paths: vec![corpus_pkg()],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -1562,7 +1500,10 @@ mod tests {
     fn list_catalog_prints_markdown_names() {
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![corpus_pkg()],
+                discovery: DiscoveryArgs {
+                    paths: vec![corpus_pkg()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("catalog".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1610,7 +1551,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let bare = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path.clone()],
+                discovery: DiscoveryArgs {
+                    paths: vec![path.clone()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("catalog".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1623,7 +1567,10 @@ mod tests {
         );
         let ranked = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("catalog".to_owned()),
                 context: Some("debug".to_owned()),
                 ..DiscoverArgs::default()
@@ -1657,7 +1604,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let cat = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("catalog".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1677,7 +1627,10 @@ mod tests {
         let names = |context: Option<String>| {
             let out = empty_home(|| {
                 list_json(DiscoverArgs {
-                    paths: vec![path.clone()],
+                    discovery: DiscoveryArgs {
+                        paths: vec![path.clone()],
+                        ..DiscoveryArgs::default()
+                    },
                     context,
                     ..DiscoverArgs::default()
                 })
@@ -1706,7 +1659,10 @@ mod tests {
         let skills = extra.join("skills");
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![extra_s],
+                discovery: DiscoveryArgs {
+                    paths: vec![extra_s],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1736,7 +1692,10 @@ mod tests {
         let skills = extra.join("skills");
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![extra_s],
+                discovery: DiscoveryArgs {
+                    paths: vec![extra_s],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch-dirs".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1768,7 +1727,10 @@ mod tests {
         let skill_s = skill.display().to_string();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![skill_s],
+                discovery: DiscoveryArgs {
+                    paths: vec![skill_s],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1791,7 +1753,10 @@ mod tests {
         let want = home.join(".claude").join("skills");
         let out = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["claude".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["claude".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1816,7 +1781,10 @@ mod tests {
         );
         let on = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["claude".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["claude".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -1833,7 +1801,10 @@ mod tests {
         let want = home.join(".cursor").join("skills");
         let out = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["cursor".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["cursor".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1858,7 +1829,10 @@ mod tests {
         );
         let on = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["cursor".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["cursor".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -1875,7 +1849,10 @@ mod tests {
         let want = home.join(".grok").join("skills");
         let out = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["grok".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["grok".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("watch".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -1900,7 +1877,10 @@ mod tests {
         );
         let on = craftbag::with_home_override(Some(home), || {
             list_json(DiscoverArgs {
-                vendor: vec!["grok".to_owned()],
+                discovery: DiscoveryArgs {
+                    vendor: vec!["grok".to_owned()],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -1931,7 +1911,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -2026,7 +2009,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -2075,7 +2061,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -2124,7 +2113,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -2173,7 +2165,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 ..DiscoverArgs::default()
             })
             .expect("list")
@@ -2812,7 +2807,10 @@ mod tests {
     fn list_xml_shape() {
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![corpus_pkg()],
+                discovery: DiscoveryArgs {
+                    paths: vec![corpus_pkg()],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("xml".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -2847,7 +2845,10 @@ mod tests {
         let path = extra.path().to_string_lossy().into_owned();
         let out = empty_home(|| {
             list_json(DiscoverArgs {
-                paths: vec![path],
+                discovery: DiscoveryArgs {
+                    paths: vec![path],
+                    ..DiscoveryArgs::default()
+                },
                 format: Some("xml".to_owned()),
                 ..DiscoverArgs::default()
             })
@@ -3014,6 +3015,7 @@ mod tests {
             kind: SkipKind::NameCollision,
             detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
             winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+            ..SkillSkip::default()
         };
         let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
         let mut result = json!({"isError": true});
@@ -4351,6 +4353,38 @@ mod tests {
             assert_eq!(why_v["skips"][0]["kind"], "parse_error", "{why_text}");
             assert_eq!(why_v["skips"][0]["name"], "café", "{why_text}");
         });
+    }
+
+    #[test]
+    fn merge_launch_ascii_names_false_overrides_launch_flag() {
+        let launch = LaunchDefaults {
+            ascii_names: true,
+            ..LaunchDefaults::default()
+        };
+        let omitted = merge_launch(DiscoveryArgs::default(), &launch);
+        assert!(
+            omitted.ascii_names,
+            "omitted per-call must keep launch --ascii-names"
+        );
+        let off = merge_launch(
+            DiscoveryArgs {
+                ascii_names: Some(false),
+                ..DiscoveryArgs::default()
+            },
+            &launch,
+        );
+        assert!(
+            !off.ascii_names,
+            "ascii_names: false must override launch --ascii-names"
+        );
+        let on = merge_launch(
+            DiscoveryArgs {
+                ascii_names: Some(true),
+                ..DiscoveryArgs::default()
+            },
+            &LaunchDefaults::default(),
+        );
+        assert!(on.ascii_names);
     }
 
     #[test]

@@ -123,10 +123,13 @@ Launch `--path`, `--vendor`, `--user-dir`, and `--no-implicit-roots` are the wal
 ```rust
 use craftbag::{discover, DiscoveryOptions};
 
-let cwd = std::env::current_dir()?;
-let report = discover(&cwd, &DiscoveryOptions::default())?;
-for skill in &report.skills {
-    println!("{} {}", skill.name, skill.description);
+fn main() -> std::io::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let report = discover(&cwd, &DiscoveryOptions::default());
+    for skill in &report.skills {
+        println!("{} {}", skill.name, skill.description);
+    }
+    Ok(())
 }
 ```
 

@@ -2430,7 +2430,7 @@ fn why_typo_suggests_extra_path_hyphen_name() {
         .arg(extra.path())
         .output()
         .expect("run");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("did you mean review-pr"),
@@ -2447,7 +2447,7 @@ fn why_typo_suggests_extra_path_hyphen_name() {
 }
 
 #[test]
-fn why_unknown_exits_1() {
+fn why_unknown_exits_2() {
     let tmp = tempfile::tempdir().expect("tmp");
     let (_home, mut cmd) = bin();
     let out = cmd
@@ -2456,7 +2456,7 @@ fn why_unknown_exits_1() {
         .arg("no-such-skill")
         .output()
         .expect("run");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("unknown skill: no-such-skill"),
@@ -2484,7 +2484,7 @@ fn why_path_like_name_hints_frontmatter_and_path() {
         .arg(&pkg)
         .output()
         .expect("run");
-    assert_eq!(out.status.code(), Some(1), "path-as-name must still miss");
+    assert_eq!(out.status.code(), Some(2), "path-as-name must still miss");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("unknown skill:"),
@@ -2518,7 +2518,7 @@ fn why_unknown_json_exposes_error_kind() {
         .arg("--json")
         .output()
         .expect("run");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(
         stderr.trim(),
@@ -5308,7 +5308,7 @@ fn why_vendor_cursor_names_create_rule() {
         .expect("run");
     assert_eq!(
         off_out.status.code(),
-        Some(1),
+        Some(2),
         "cursor vendor is opt-in: stderr={}",
         String::from_utf8_lossy(&off_out.stderr)
     );
@@ -5378,7 +5378,7 @@ fn why_vendor_grok_names_project_grok() {
         .expect("run");
     assert_eq!(
         off_out.status.code(),
-        Some(1),
+        Some(2),
         "grok vendor is opt-in: stderr={}",
         String::from_utf8_lossy(&off_out.stderr)
     );
@@ -5450,7 +5450,7 @@ fn why_vendor_bline_names_project_bline() {
         .expect("run");
     assert_eq!(
         off_out.status.code(),
-        Some(1),
+        Some(2),
         "bline vendor is opt-in: stderr={}",
         String::from_utf8_lossy(&off_out.stderr)
     );
@@ -5554,7 +5554,7 @@ fn why_vendor_claude_names_home_note() {
         .expect("run");
     assert_eq!(
         off_out.status.code(),
-        Some(1),
+        Some(2),
         "claude vendor is opt-in: stderr={}",
         String::from_utf8_lossy(&off_out.stderr)
     );
@@ -6141,7 +6141,7 @@ fn why_disabled_is_unknown() {
         .expect("run");
     assert_eq!(
         out.status.code(),
-        Some(1),
+        Some(2),
         "stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -6280,7 +6280,7 @@ fn why_ignore_is_unknown() {
         .expect("run");
     assert_eq!(
         out.status.code(),
-        Some(1),
+        Some(2),
         "stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -7306,5 +7306,91 @@ fn list_json_broken_pipe_is_not_a_panic() {
     assert!(
         !err.contains("panicked") && !err.contains("Broken pipe"),
         "stderr={err}"
+    );
+}
+
+#[test]
+fn load_json_success_is_json_object() {
+    let extra = tempfile::tempdir().expect("extra");
+    let pkg = extra.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: a demo skill\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "load",
+            "demo",
+            "--json",
+            "--no-implicit-roots",
+            "--path",
+            extra.path().to_str().expect("utf8"),
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("load --json success");
+    assert_eq!(v["name"], "demo", "{stdout}");
+    assert_eq!(v["source"], "extra", "{stdout}");
+    let text = v["text"].as_str().expect("text");
+    assert!(
+        text.contains("[Activated skill: demo]"),
+        "success JSON must carry the envelope: {stdout}"
+    );
+}
+
+#[test]
+fn list_empty_tree_notes_stderr_keeps_stdout_empty() {
+    let extra = tempfile::tempdir().expect("extra");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "list",
+            "--no-implicit-roots",
+            "--path",
+            extra.path().to_str().expect("utf8"),
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        out.stdout.is_empty(),
+        "stdout must stay empty: {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("no skills found"),
+        "empty list must say so on stderr: {stderr}"
+    );
+}
+
+#[test]
+fn why_empty_tree_notes_stderr() {
+    let extra = tempfile::tempdir().expect("extra");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args([
+            "why",
+            "--no-implicit-roots",
+            "--path",
+            extra.path().to_str().expect("utf8"),
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("no skills found"),
+        "empty why must say so on stderr: {stderr}"
     );
 }
