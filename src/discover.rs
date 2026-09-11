@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Error, ParseError};
+use crate::error::ParseError;
 use crate::parse::{
     parse_skill, peek_frontmatter_name, skill_name_matches_directory, unknown_frontmatter_keys,
 };
@@ -80,9 +80,20 @@ impl Default for DiscoveryOptions {
 /// Discover skills for `cwd` using the host-neutral root matrix.
 ///
 /// Missing directories are not an error. Parse and IO problems become
-/// [`SkillSkip`] rows.
-pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> Result<DiscoveryReport, Error> {
-    Ok(discover_report(cwd, opts))
+/// [`SkillSkip`] rows. This function always returns a report.
+///
+/// ```
+/// use craftbag::{discover, DiscoveryOptions};
+///
+/// let cwd = std::env::current_dir()?;
+/// let report = discover(&cwd, &DiscoveryOptions::default());
+/// for skill in &report.skills {
+///     println!("{} {}", skill.name, skill.description);
+/// }
+/// # Ok::<(), std::io::Error>(())
+/// ```
+pub fn discover(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryReport {
+    discover_report(cwd, opts)
 }
 
 /// Existing directories (and lone extra-path `SKILL.md` files) a host
@@ -339,6 +350,20 @@ pub fn unknown_or_skipped_skill_named<'a>(
         .find(|s| s.matches_requested_name(want))
         .or_else(|| skips.iter().find(|s| s.is_host_token_refuse()));
     match skip {
+        Some(skip) if skip.is_host_token_refuse() => {
+            let flag = skip
+                .host_token
+                .map(crate::skip::HostTokenField::flag_name)
+                .unwrap_or("--path / paths");
+            let shown = crate::sanitize_error_token(name);
+            let detail = crate::sanitize_error_token(&skip.detail);
+            SkillMiss {
+                error_kind: skip.kind.as_str(),
+                error: format!("unknown skill: {shown}; refused {flag}: {detail}"),
+                path: Some(skip.path.clone()),
+                winner_path: skip.winner_path.clone(),
+            }
+        }
         Some(skip) => SkillMiss {
             error_kind: skip.kind.as_str(),
             error: format!(
@@ -571,6 +596,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                 kind: SkipKind::Unreadable,
                 detail,
                 winner_path: None,
+                host_token: None,
             }),
         };
     }
@@ -592,6 +618,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                     kind: SkipKind::Unreadable,
                     detail,
                     winner_path: None,
+                    host_token: None,
                 }),
             };
         }
@@ -615,6 +642,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                     kind: SkipKind::Unreadable,
                     detail,
                     winner_path: None,
+                    host_token: None,
                 }),
             };
         }
@@ -634,6 +662,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                     kind: SkipKind::Unreadable,
                     detail,
                     winner_path: None,
+                    host_token: None,
                 }),
             };
         }
@@ -664,6 +693,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                             kind: SkipKind::ParseError,
                             detail: err,
                             winner_path: None,
+                            host_token: None,
                         }),
                     };
                 }
@@ -692,6 +722,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                         kind: SkipKind::NameDirectoryMismatch,
                         detail,
                         winner_path: None,
+                        host_token: None,
                     }),
                 }
             }
@@ -710,6 +741,7 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                     kind: SkipKind::ParseError,
                     detail,
                     winner_path: None,
+                    host_token: None,
                 }),
             }
         }
@@ -1311,6 +1343,7 @@ fn extra_skills_subdir_is_collection(
                 kind: SkipKind::Unreadable,
                 detail: e.to_string(),
                 winner_path: None,
+                host_token: None,
             });
             false
         }
@@ -1526,6 +1559,7 @@ fn load_classified_extra_path_package(
                 kind: SkipKind::ParseError,
                 detail,
                 winner_path: None,
+                host_token: None,
             });
         }
         ExtraPathMd::Unreadable(detail) => {
@@ -1538,6 +1572,7 @@ fn load_classified_extra_path_package(
                 kind: SkipKind::Unreadable,
                 detail,
                 winner_path: None,
+                host_token: None,
             });
         }
         ExtraPathMd::Collection { .. } => {}
@@ -1567,6 +1602,7 @@ fn skip_loose_extra_path_root_skill_md(
             kind: SkipKind::Unreadable,
             detail: "SKILL.md symlink escapes walk root".to_owned(),
             winner_path: None,
+            host_token: None,
         });
         return;
     }
@@ -1577,6 +1613,7 @@ fn skip_loose_extra_path_root_skill_md(
             kind: SkipKind::Unreadable,
             detail,
             winner_path: None,
+            host_token: None,
         });
         return;
     }
@@ -1586,6 +1623,7 @@ fn skip_loose_extra_path_root_skill_md(
         kind: SkipKind::RootFile,
         detail: "put the file in a named subdirectory.".to_owned(),
         winner_path: None,
+        host_token: None,
     });
 }
 
@@ -1820,29 +1858,33 @@ impl HostPathField {
             Self::Validate => format!("path is unreadable: {shown}"),
         }
     }
+
+    fn token_field(self) -> crate::skip::HostTokenField {
+        match self {
+            Self::ExtraPath => crate::skip::HostTokenField::ExtraPath,
+            Self::UserDir => crate::skip::HostTokenField::UserDir,
+            Self::Validate => crate::skip::HostTokenField::Validate,
+        }
+    }
 }
 
 fn skip_line_separator_root(root: &Path, field: HostPathField, skips: &mut Vec<SkillSkip>) {
     // Sanitize path for list/why JSON and miss lines so hosts never
     // echo a raw line separator from skip.path.
     let skill_md = root.join("SKILL.md");
-    skips.push(SkillSkip {
-        path: PathBuf::from(crate::sanitize_error_token(&skill_md.display().to_string())),
-        name: None,
-        kind: SkipKind::Unreadable,
-        detail: field.line_sep_detail().to_owned(),
-        winner_path: None,
-    });
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(crate::sanitize_error_token(&skill_md.display().to_string())),
+        field.line_sep_detail().to_owned(),
+        field.token_field(),
+    ));
 }
 
 fn skip_whitespace_collapse_token(raw: &str, field: HostPathField, skips: &mut Vec<SkillSkip>) {
-    skips.push(SkillSkip {
-        path: PathBuf::from(crate::sanitize_error_token(raw)),
-        name: None,
-        kind: SkipKind::Unreadable,
-        detail: field.collapse_detail().to_owned(),
-        winner_path: None,
-    });
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(crate::sanitize_error_token(raw)),
+        field.collapse_detail().to_owned(),
+        field.token_field(),
+    ));
 }
 
 /// Host-asked extra-path or user_dir that is not a loadable SKILL.md
@@ -1859,13 +1901,11 @@ fn skip_unresolvable_host_path(path: &Path, field: HostPathField, skips: &mut Ve
         Err(_) => field.unreadable_path_detail(&shown),
     };
     let detail = one_line_error(detail);
-    skips.push(SkillSkip {
-        path: PathBuf::from(shown),
-        name: None,
-        kind: SkipKind::Unreadable,
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(shown),
         detail,
-        winner_path: None,
-    });
+        field.token_field(),
+    ));
 }
 
 fn expand_extra_path_arg(raw: &str, cwd: &Path) -> Option<PathBuf> {
@@ -2016,6 +2056,7 @@ fn skip_if_dir_escapes(dir: &Path, confine: &Path, skips: &mut Vec<SkillSkip>) -
             kind: SkipKind::Unreadable,
             detail: "skills directory symlink escapes walk root".to_owned(),
             winner_path: None,
+            host_token: None,
         });
         return true;
     }
@@ -2060,6 +2101,7 @@ fn load_skills_from_dir(
                 kind: SkipKind::Unreadable,
                 detail: e.to_string(),
                 winner_path: None,
+                host_token: None,
             });
             return;
         }
@@ -2086,6 +2128,7 @@ fn load_skills_from_dir(
                         kind: SkipKind::Unreadable,
                         detail: "SKILL.md symlink escapes walk root".to_owned(),
                         winner_path: None,
+                        host_token: None,
                     });
                     continue;
                 }
@@ -2098,6 +2141,7 @@ fn load_skills_from_dir(
                             kind: SkipKind::RootFile,
                             detail: "put the file in a named subdirectory.".to_owned(),
                             winner_path: None,
+                            host_token: None,
                         });
                     }
                     Err(e) => {
@@ -2107,6 +2151,7 @@ fn load_skills_from_dir(
                             kind: SkipKind::Unreadable,
                             detail: e,
                             winner_path: None,
+                            host_token: None,
                         });
                     }
                 }
@@ -2128,6 +2173,7 @@ fn load_skills_from_dir(
                 kind: SkipKind::Unreadable,
                 detail: "skill package symlink escapes walk root".to_owned(),
                 winner_path: None,
+                host_token: None,
             });
             continue;
         }
@@ -2156,6 +2202,7 @@ fn skip_if_skill_md_escapes_package(skill_file: &Path, skips: &mut Vec<SkillSkip
         kind: SkipKind::Unreadable,
         detail: "SKILL.md symlink escapes package root".to_owned(),
         winner_path: None,
+        host_token: None,
     });
     true
 }
@@ -2182,6 +2229,7 @@ fn try_load_skill_file(
                 kind: SkipKind::Unreadable,
                 detail: e,
                 winner_path: None,
+                host_token: None,
             });
             return;
         }
@@ -2209,6 +2257,7 @@ fn finish_load_skill_file(
                 kind: SkipKind::ParseError,
                 detail: e.to_string(),
                 winner_path: None,
+                host_token: None,
             });
         }
     }
@@ -2236,6 +2285,7 @@ fn finish_load_parsed_skill(
             kind: SkipKind::ParseError,
             detail: ascii_names_policy_detail(),
             winner_path: None,
+            host_token: None,
         });
         return;
     }
@@ -2262,6 +2312,7 @@ fn finish_load_parsed_skill(
                 skill.name
             ),
             winner_path: None,
+            host_token: None,
         });
         return;
     }
@@ -2279,6 +2330,7 @@ fn finish_load_parsed_skill(
             kind: SkipKind::NameCollision,
             detail: format!("lost to {}", winner_path.display()),
             winner_path: Some(winner_path),
+            host_token: None,
         });
         return;
     }
@@ -2440,9 +2492,7 @@ mod tests {
         opts: &DiscoveryOptions,
     ) -> crate::skip::DiscoveryReport {
         let home = tempfile::tempdir().expect("home");
-        with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd, opts).expect("discover")
-        })
+        with_home_override(Some(home.path().to_path_buf()), || discover(cwd, opts))
     }
 
     fn write_skill(dir: &std::path::Path, name: &str, body: &str) {
@@ -2467,6 +2517,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("bad_name", &[skip]);
         assert!(msg.contains("skipped skill: Bad_Name"), "msg={msg}");
@@ -2494,6 +2545,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let skipped = unknown_or_skipped_skill("bad_name", std::slice::from_ref(&skip));
         assert_eq!(skipped.error_kind, "parse_error");
@@ -2518,6 +2570,7 @@ mod tests {
                 kind,
                 detail: "d".to_owned(),
                 winner_path: None,
+                host_token: None,
             };
             let miss = unknown_or_skipped_skill("x", &[row]);
             assert_eq!(miss.error_kind, kind.as_str(), "kind={kind}");
@@ -2634,6 +2687,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("reviewpr", std::slice::from_ref(&skip));
         assert!(
@@ -2661,6 +2715,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML: name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let skipped = unknown_or_skipped_skill("bad_name", std::slice::from_ref(&skip));
         assert_eq!(
@@ -2705,6 +2760,7 @@ mod tests {
             kind: SkipKind::NameCollision,
             detail: "lost to /tmp/a/foo/SKILL.md".to_owned(),
             winner_path: Some(PathBuf::from("/tmp/a/foo/SKILL.md")),
+            host_token: None,
         };
         let miss = unknown_or_skipped_skill("foo", std::slice::from_ref(&skip));
         assert_eq!(miss.error_kind, "name_collision");
@@ -2737,6 +2793,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let parse_miss = unknown_or_skipped_skill("demo", &[parse]);
         assert!(
@@ -2759,6 +2816,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML: expected `key: value`, got: x\u{2029}y".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("foo\u{2028}bar", &[skip]);
         assert!(
@@ -2792,6 +2850,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "Permission denied (os error 13)".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("demo", &[skip]);
         assert!(
@@ -2810,6 +2869,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("DEMO", &[skip]);
         assert!(
@@ -2828,6 +2888,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "name must be lowercase alphanumeric and hyphens only".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let msg = unknown_or_skipped_skill_message("demo", &[skip]);
         assert!(
@@ -2845,6 +2906,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "invalid YAML".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let nameless = SkillSkip {
             path: PathBuf::from("/tmp/alpha/SKILL.md"),
@@ -2852,6 +2914,7 @@ mod tests {
             kind: SkipKind::ParseError,
             detail: "missing required field: name".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let skips = [named, nameless];
         let load_alpha = unknown_or_skipped_skill_message("alpha", &skips);
@@ -3246,6 +3309,7 @@ mod tests {
             kind: SkipKind::RootFile,
             detail: "put the file in a named subdirectory.".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         let dir = SkillSkip {
             path: PathBuf::from("/tmp/.agents/skills"),
@@ -3253,6 +3317,7 @@ mod tests {
             kind: SkipKind::Unreadable,
             detail: "Permission denied (os error 13)".to_owned(),
             winner_path: None,
+            host_token: None,
         };
         assert_eq!(
             unknown_or_skipped_skill_message("skills", std::slice::from_ref(&root)),
@@ -5081,7 +5146,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         assert_eq!(
             report
@@ -5543,7 +5607,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         assert!(
             report.skills.iter().all(|s| s.name != "demo"),
@@ -5615,7 +5678,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         assert!(
             report.skills.iter().all(|s| s.name != "demo"),
@@ -6011,7 +6073,7 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         let home = corpus_dir().join("incumbent/claude-user");
         let off = with_home_override(Some(home.clone()), || {
-            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+            discover(cwd.path(), &DiscoveryOptions::default())
         });
         assert!(
             off.skills.iter().all(|s| s.name != "home-note"),
@@ -6025,7 +6087,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         let skill = on
             .skills
@@ -6095,7 +6156,7 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         let home = corpus_dir().join("incumbent/cursor-user");
         let off = with_home_override(Some(home.clone()), || {
-            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+            discover(cwd.path(), &DiscoveryOptions::default())
         });
         assert!(
             off.skills.iter().all(|s| s.name != "home-rule"),
@@ -6109,7 +6170,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         let skill = on
             .skills
@@ -6142,7 +6202,7 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         let home = corpus_dir().join("incumbent/grok-user");
         let off = with_home_override(Some(home.clone()), || {
-            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+            discover(cwd.path(), &DiscoveryOptions::default())
         });
         assert!(
             off.skills.iter().all(|s| s.name != "home-grok"),
@@ -6156,7 +6216,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover")
         });
         let skill = on
             .skills
@@ -6283,7 +6342,7 @@ mod tests {
             "HOME override must not leak after panic"
         );
         let cwd = tempfile::tempdir().expect("cwd");
-        let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("discover");
+        let report = discover(cwd.path(), &DiscoveryOptions::default());
         assert!(
             report.skills.iter().all(|s| s.name != "leaked"),
             "leaked home skill visible after panic: {:?}",
@@ -6308,7 +6367,7 @@ mod tests {
         let cwd = tempfile::tempdir().expect("cwd");
         with_home_override(Some(outer.path().to_path_buf()), || {
             with_home_override(Some(inner.path().to_path_buf()), || {
-                let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("inner");
+                let report = discover(cwd.path(), &DiscoveryOptions::default());
                 assert_eq!(report.skills.len(), 1);
                 assert_eq!(report.skills[0].name, "inner");
             });
@@ -6317,7 +6376,7 @@ mod tests {
                 Some(outer.path()),
                 "nested override must restore outer home"
             );
-            let report = discover(cwd.path(), &DiscoveryOptions::default()).expect("outer");
+            let report = discover(cwd.path(), &DiscoveryOptions::default());
             assert_eq!(report.skills.len(), 1, "skills={:?}", report.skills);
             assert_eq!(report.skills[0].name, "outer");
         });
@@ -7047,7 +7106,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let report = with_home_override(Some(home_path), || {
-                discover(&root_path, &DiscoveryOptions::default()).expect("discover")
+                discover(&root_path, &DiscoveryOptions::default())
             });
             let _ = tx.send(report);
         });
@@ -7328,7 +7387,6 @@ mod tests {
                         ..DiscoveryOptions::default()
                     },
                 )
-                .expect("discover")
             });
             let _ = tx.send(report);
         });
@@ -7722,7 +7780,6 @@ mod tests {
                         ..DiscoveryOptions::default()
                     },
                 )
-                .expect("discover")
             });
             let _ = tx.send(report);
         });
@@ -7774,7 +7831,6 @@ mod tests {
                         ..DiscoveryOptions::default()
                     },
                 )
-                .expect("discover")
             });
             let _ = tx.send(report);
         });
@@ -8778,7 +8834,7 @@ mod tests {
                 ..DiscoveryOptions::default()
             };
             let report = with_home_override(Some(home.path().to_path_buf()), || {
-                discover(cwd.path(), &opts).expect("discover")
+                discover(cwd.path(), &opts)
             });
             assert!(
                 report.skills.is_empty(),
@@ -8818,7 +8874,7 @@ mod tests {
                 ..DiscoveryOptions::default()
             };
             let report = with_home_override(Some(home.path().to_path_buf()), || {
-                discover(cwd.path(), &opts).expect("discover")
+                discover(cwd.path(), &opts)
             });
             assert!(
                 report.skills.is_empty(),
@@ -8865,7 +8921,7 @@ mod tests {
                 ..DiscoveryOptions::default()
             };
             let report = with_home_override(Some(home.path().to_path_buf()), || {
-                discover(cwd.path(), &opts).expect("discover")
+                discover(cwd.path(), &opts)
             });
             assert!(
                 report.skills.is_empty(),
@@ -8935,7 +8991,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover extra")
         });
         let extra_skip = extra
             .skips
@@ -8971,7 +9026,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("discover user")
         });
         let user_skip = user
             .skips
@@ -9157,6 +9211,16 @@ mod tests {
         assert!(
             extra_miss.error.contains("--path") && extra_miss.error.contains("paths"),
             "named load error must name --path / paths: {}",
+            extra_miss.error
+        );
+        assert!(
+            extra_miss.error.contains("unknown skill: demo"),
+            "refuse must not claim demo was a skipped package: {}",
+            extra_miss.error
+        );
+        assert!(
+            !extra_miss.error.contains("skipped skill: demo"),
+            "refuse must not fuse the name into a skip row: {}",
             extra_miss.error
         );
 
@@ -9674,7 +9738,6 @@ mod tests {
                         ..DiscoveryOptions::default()
                     },
                 )
-                .expect("discover")
             });
             let _ = tx.send(report);
         });
@@ -10727,9 +10790,7 @@ mod tests {
         let opts_thread = opts.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let report = with_home_override(Some(home_path), || {
-                discover(&cwd_path, &opts_thread).expect("discover")
-            });
+            let report = with_home_override(Some(home_path), || discover(&cwd_path, &opts_thread));
             let _ = tx.send(report);
         });
         let report = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
@@ -10821,7 +10882,7 @@ mod tests {
         .expect("write leftover");
         let _ = take_read_skill_md_paths();
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(home.path(), &DiscoveryOptions::default()).expect("discover")
+            discover(home.path(), &DiscoveryOptions::default())
         });
         assert_eq!(
             report
@@ -10958,7 +11019,7 @@ mod tests {
             ..DiscoveryOptions::default()
         };
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &collection_only).expect("discover")
+            discover(cwd.path(), &collection_only)
         });
         assert_eq!(
             names_in(&report),
@@ -10975,7 +11036,7 @@ mod tests {
         );
 
         let defaulted = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &DiscoveryOptions::default()).expect("discover")
+            discover(cwd.path(), &DiscoveryOptions::default())
         });
         assert!(
             find_skill_by_name(&defaulted.skills, "leaked").is_some(),
@@ -11012,7 +11073,6 @@ mod tests {
                     ..DiscoveryOptions::default()
                 },
             )
-            .expect("empty collection-only is not an error")
         });
         assert!(
             report.skills.is_empty() && report.skips.is_empty(),
@@ -11156,7 +11216,7 @@ mod tests {
             "watch_dirs must omit an ignored extra path: {dirs:?}"
         );
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &opts).expect("discover")
+            discover(cwd.path(), &opts)
         });
         assert!(
             find_skill_by_name(&report.skills, "wanted").is_some(),
@@ -11199,7 +11259,7 @@ mod tests {
             "watch_dirs must omit ignored HOME .agents/skills: {dirs:?}"
         );
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &opts).expect("discover")
+            discover(cwd.path(), &opts)
         });
         assert!(
             find_skill_by_name(&report.skills, "wanted").is_some(),
@@ -11242,7 +11302,7 @@ mod tests {
             "watch_dirs must omit ignored cwd .agents/skills: {dirs:?}"
         );
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &opts).expect("discover")
+            discover(cwd.path(), &opts)
         });
         assert!(
             find_skill_by_name(&report.skills, "wanted").is_some(),
@@ -11286,7 +11346,7 @@ mod tests {
             "watch_dirs must omit an ignored user_dir: {dirs:?}"
         );
         let report = with_home_override(Some(home.path().to_path_buf()), || {
-            discover(cwd.path(), &opts).expect("discover")
+            discover(cwd.path(), &opts)
         });
         assert!(
             find_skill_by_name(&report.skills, "wanted").is_some(),

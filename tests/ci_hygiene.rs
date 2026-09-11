@@ -45,7 +45,8 @@ fn parse_jobs(yaml: &str) -> Vec<(String, String)> {
 
     for line in yaml.lines() {
         if !in_jobs {
-            if line == "jobs:" {
+            let trimmed = line.trim_end();
+            if trimmed == "jobs:" || trimmed.starts_with("jobs: #") {
                 in_jobs = true;
             }
             continue;
@@ -128,6 +129,17 @@ fn harden_runner_linux_gated(yaml: &str) -> Option<usize> {
         }
     }
     None
+}
+
+#[test]
+fn parse_jobs_accepts_trailing_comment_and_rejects_empty() {
+    let yaml = "name: x\njobs: # keep\n  lint:\n    runs-on: ubuntu-latest\n";
+    let jobs = parse_jobs(yaml);
+    assert_eq!(
+        jobs.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+        ["lint"]
+    );
+    assert!(parse_jobs("name: x\n# jobs:\n  lint:\n    runs-on: ubuntu-latest\n").is_empty());
 }
 
 #[test]

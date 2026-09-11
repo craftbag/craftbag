@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Unknown frontmatter lists load.** A block sequence under a host key
+  (`tags:`) is ignored. Only `triggers` collects items. A sequence under
+  a known scalar (`license:`) is still invalid YAML ([#353](https://github.com/craftbag/craftbag/issues/353)).
+- **Fence lines are `---` alone.** `---x` does not open frontmatter.
+  Closing `---x` no longer prepends `x` to the body
+  ([#362](https://github.com/craftbag/craftbag/issues/362)).
+- **MCP `ascii_names: false` overrides launch `--ascii-names`.**
+  Omitted still uses the launch default
+  ([#354](https://github.com/craftbag/craftbag/issues/354)).
+- **`load --json` emits JSON on success.** The object has `name`,
+  `path`, `source`, and `text` ([#355](https://github.com/craftbag/craftbag/issues/355)).
+- **`why NAME` miss exits 2**, same as `load`. Tool errors stay 1
+  ([#356](https://github.com/craftbag/craftbag/issues/356)).
+- **Refused `--path` is not a skipped skill by that name.** The miss
+  says `unknown skill: NAME; refused --path / paths: ...` and still
+  peels `error_kind=unreadable` ([#360](https://github.com/craftbag/craftbag/issues/360)).
+- **Empty `list` / `why` print a stderr note** built from `watch_dirs`.
+  Stdout stays empty. Exit stays 0
+  ([#361](https://github.com/craftbag/craftbag/issues/361)).
+- **README Library example compiles.** `discover` returns
+  `DiscoveryReport` directly ([#357](https://github.com/craftbag/craftbag/issues/357)
+  [#358](https://github.com/craftbag/craftbag/issues/358)).
+
 ### Changed
 
 - **Getting started runs on a clone.** The first README commands point

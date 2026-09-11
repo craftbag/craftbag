@@ -39,6 +39,31 @@ struct Cli {
     cmd: Cmd,
 }
 
+#[derive(clap::Args, Debug, Clone)]
+struct DiscoveryArgs {
+    /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
+    #[arg(long = "path", value_name = "PATH")]
+    paths: Vec<String>,
+    /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
+    #[arg(long, value_delimiter = ',')]
+    vendor: Vec<String>,
+    /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
+    #[arg(long = "user-dir")]
+    user_dir: Option<PathBuf>,
+    /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
+    #[arg(long = "ascii-names")]
+    ascii_names: bool,
+    /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
+    #[arg(long = "no-implicit-roots")]
+    no_implicit_roots: bool,
+    /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
+    #[arg(long = "disabled", value_name = "NAME")]
+    disabled: Vec<String>,
+    /// Path prefix never loaded (silent; no skip row). Relative prefixes join cwd. Example: --ignore ./secret
+    #[arg(long = "ignore", value_name = "PATH")]
+    ignore: Vec<String>,
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     /// Catalog discovered skills.
@@ -61,27 +86,8 @@ enum Cmd {
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
-        #[arg(long = "path", value_name = "PATH")]
-        paths: Vec<String>,
-        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
-        #[arg(long, value_delimiter = ',')]
-        vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
-        #[arg(long = "user-dir")]
-        user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
-        #[arg(long = "ascii-names")]
-        ascii_names: bool,
-        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
-        #[arg(long = "no-implicit-roots")]
-        no_implicit_roots: bool,
-        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
-        #[arg(long = "disabled", value_name = "NAME")]
-        disabled: Vec<String>,
-        /// Path prefix never loaded (silent; no skip row). Relative prefixes join cwd. Example: --ignore ./secret
-        #[arg(long = "ignore", value_name = "PATH")]
-        ignore: Vec<String>,
+        #[command(flatten)]
+        discovery: DiscoveryArgs,
         /// Catalog ranking text (`--catalog` / `--format catalog`). JSON, XML, TSV, and watch ignore this. Example: --context rebase
         #[arg(long)]
         context: Option<String>,
@@ -93,7 +99,7 @@ enum Cmd {
     Load {
         /// Frontmatter skill name (not a package path). Discover with list --path DIR.
         name: String,
-        /// Print `{ error_kind, error }` on a miss (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
+        /// Success is `{ name, path, source, text }` (text is the envelope, including --outline / --section). On a miss, print `{ error_kind, error }` (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Exit 2 on a miss.
         #[arg(long)]
         json: bool,
         /// Print SKILL.md heading keys and token costs instead of the body.
@@ -105,33 +111,14 @@ enum Cmd {
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
         #[arg(long = "args", default_value = "")]
         args: String,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
-        #[arg(long = "path", value_name = "PATH")]
-        paths: Vec<String>,
-        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
-        #[arg(long, value_delimiter = ',')]
-        vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
-        #[arg(long = "user-dir")]
-        user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
-        #[arg(long = "ascii-names")]
-        ascii_names: bool,
-        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
-        #[arg(long = "no-implicit-roots")]
-        no_implicit_roots: bool,
-        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
-        #[arg(long = "disabled", value_name = "NAME")]
-        disabled: Vec<String>,
-        /// Path prefix never loaded (silent; no skip row). Relative prefixes join cwd. Example: --ignore ./secret
-        #[arg(long = "ignore", value_name = "PATH")]
-        ignore: Vec<String>,
+        #[command(flatten)]
+        discovery: DiscoveryArgs,
     },
     /// Explain loaded, skipped, and activation decisions.
     Why {
         /// Optional frontmatter skill name filter (not a package path).
         name: Option<String>,
-        /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`.
+        /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Exit 2 on a name miss. Exit 1 on a tool error.
         #[arg(long)]
         json: bool,
         /// Activation context text. Example: --context rebase
@@ -140,27 +127,8 @@ enum Cmd {
         /// Model context window size (default 8000).
         #[arg(long, default_value_t = 8_000)]
         context_tokens: usize,
-        /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --path ./my-skill
-        #[arg(long = "path", value_name = "PATH")]
-        paths: Vec<String>,
-        /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
-        #[arg(long, value_delimiter = ',')]
-        vendor: Vec<String>,
-        /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: --user-dir ~/myskills
-        #[arg(long = "user-dir")]
-        user_dir: Option<PathBuf>,
-        /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
-        #[arg(long = "ascii-names")]
-        ascii_names: bool,
-        /// Skip cwd-to-git .agents / vendor trees and $HOME/.agents / vendor trees. Default is on. Extra --path and --user-dir still load.
-        #[arg(long = "no-implicit-roots")]
-        no_implicit_roots: bool,
-        /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
-        #[arg(long = "disabled", value_name = "NAME")]
-        disabled: Vec<String>,
-        /// Path prefix never loaded (silent; no skip row). Relative prefixes join cwd. Example: --ignore ./secret
-        #[arg(long = "ignore", value_name = "PATH")]
-        ignore: Vec<String>,
+        #[command(flatten)]
+        discovery: DiscoveryArgs,
     },
     /// Validate one SKILL.md file or package directory. `--json` success is ValidationReport (no error_kind).
     Validate {
@@ -193,39 +161,17 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             catalog,
             watch_dirs: watch,
             format,
-            paths,
-            vendor,
-            user_dir,
-            ascii_names,
-            no_implicit_roots,
-            disabled,
-            ignore,
+            discovery,
             context,
             context_tokens,
         } => {
             let mode = list_output_mode(json, xml, catalog, watch, format)?;
+            let (cwd, opts) = discovery_opts(&discovery)?;
             if matches!(mode, ListOutput::Watch) {
-                let (cwd, opts) = discovery_opts(
-                    &paths,
-                    &vendor,
-                    user_dir,
-                    ascii_names,
-                    !no_implicit_roots,
-                    &disabled,
-                    &ignore,
-                )?;
                 write_stdout(&format_watch_dirs(&watch_dirs(&cwd, &opts)))?;
                 return Ok(ExitCode::SUCCESS);
             }
-            let report = discover_cwd(
-                &paths,
-                &vendor,
-                user_dir,
-                ascii_names,
-                !no_implicit_roots,
-                &disabled,
-                &ignore,
-            )?;
+            let report = discover(&cwd, &opts);
             if matches!(mode, ListOutput::Catalog) {
                 write_stdout(&format_catalog(
                     &report.skills,
@@ -247,6 +193,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             if !matches!(mode, ListOutput::Json) {
                 let _ = write!(io::stderr(), "{}", format_skip_tsv(&report.skips));
             }
+            if report.skills.is_empty()
+                && report.skips.is_empty()
+                && !matches!(mode, ListOutput::Json | ListOutput::Xml)
+            {
+                write_empty_tree_note(&cwd, &opts);
+            }
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Load {
@@ -255,23 +207,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             outline,
             section,
             args,
-            paths,
-            vendor,
-            user_dir,
-            ascii_names,
-            no_implicit_roots,
-            disabled,
-            ignore,
+            discovery,
         } => {
-            let report = discover_cwd(
-                &paths,
-                &vendor,
-                user_dir,
-                ascii_names,
-                !no_implicit_roots,
-                &disabled,
-                &ignore,
-            )?;
+            let report = discover_cwd(&discovery)?;
             match find_skill_by_name(&report.skills, &name) {
                 Some(skill) => {
                     let view = if outline {
@@ -283,7 +221,19 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                     };
                     match format_load_view(skill, &args, FormatOptions::default(), view) {
                         Ok(text) => {
-                            write_stdout(&text)?;
+                            if json {
+                                let v = serde_json::json!({
+                                    "name": skill.name,
+                                    "path": skill.source_path.as_ref().map(|p| p.display().to_string()),
+                                    "source": skill.source.as_str(),
+                                    "text": text,
+                                });
+                                writeln_stdout(
+                                    &serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
+                                )?;
+                            } else {
+                                write_stdout(&text)?;
+                            }
                             Ok(ExitCode::SUCCESS)
                         }
                         Err(msg) => {
@@ -322,23 +272,10 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             json,
             context,
             context_tokens,
-            paths,
-            vendor,
-            user_dir,
-            ascii_names,
-            no_implicit_roots,
-            disabled,
-            ignore,
+            discovery,
         } => {
-            let report = discover_cwd(
-                &paths,
-                &vendor,
-                user_dir,
-                ascii_names,
-                !no_implicit_roots,
-                &disabled,
-                &ignore,
-            )?;
+            let (cwd, opts) = discovery_opts(&discovery)?;
+            let report = discover(&cwd, &opts);
             let budgets = progressive_budgets(context_tokens);
             let why = why(&report, name.as_deref(), context.as_deref(), Some(budgets));
             if let Some(miss) = why.unknown_skill_miss() {
@@ -348,12 +285,15 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                         &serde_json::to_string_pretty(&miss).map_err(|e| e.to_string())?,
                     )?;
                 }
-                return Ok(ExitCode::from(1));
+                return Ok(ExitCode::from(2));
             }
             if json {
                 writeln_stdout(&serde_json::to_string_pretty(&why).map_err(|e| e.to_string())?)?;
             } else {
                 write_stdout(&format_why_text(&why))?;
+                if report.skills.is_empty() && report.skips.is_empty() {
+                    write_empty_tree_note(&cwd, &opts);
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -420,46 +360,45 @@ fn list_output_mode(
     Ok(ListOutput::Tsv)
 }
 
-fn discovery_opts(
-    paths: &[String],
-    vendor: &[String],
-    user_dir: Option<PathBuf>,
-    ascii_names: bool,
-    implicit_roots: bool,
-    disabled: &[String],
-    ignore: &[String],
-) -> Result<(PathBuf, DiscoveryOptions), String> {
+fn discovery_opts(discovery: &DiscoveryArgs) -> Result<(PathBuf, DiscoveryOptions), String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-    let vendor_roots = SkillSource::parse_vendor_roots(vendor)?;
+    let vendor_roots = SkillSource::parse_vendor_roots(&discovery.vendor)?;
     let opts = DiscoveryOptions {
-        paths: paths.to_vec(),
-        ignore: ignore.to_vec(),
-        disabled: disabled.to_vec(),
+        paths: discovery.paths.clone(),
+        ignore: discovery.ignore.clone(),
+        disabled: discovery.disabled.clone(),
         vendor_roots,
-        user_skills_dir: user_dir,
-        ascii_names,
-        implicit_roots,
+        user_skills_dir: discovery.user_dir.clone(),
+        ascii_names: discovery.ascii_names,
+        implicit_roots: !discovery.no_implicit_roots,
     };
     Ok((cwd, opts))
 }
 
-fn discover_cwd(
-    paths: &[String],
-    vendor: &[String],
-    user_dir: Option<PathBuf>,
-    ascii_names: bool,
-    implicit_roots: bool,
-    disabled: &[String],
-    ignore: &[String],
-) -> Result<craftbag::DiscoveryReport, String> {
-    let (cwd, opts) = discovery_opts(
-        paths,
-        vendor,
-        user_dir,
-        ascii_names,
-        implicit_roots,
-        disabled,
-        ignore,
-    )?;
-    discover(&cwd, &opts).map_err(|e| e.to_string())
+fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
+    let dirs = watch_dirs(cwd, opts);
+    let _ = writeln!(io::stderr(), "no skills found. searched:");
+    if dirs.is_empty() {
+        let _ = writeln!(
+            io::stderr(),
+            "  (no walk roots; pass --path DIR for a collection)"
+        );
+    } else {
+        for dir in dirs {
+            let _ = writeln!(
+                io::stderr(),
+                "  {}",
+                craftbag::sanitize_error_token(&dir.display().to_string())
+            );
+        }
+    }
+    let _ = writeln!(
+        io::stderr(),
+        "hint: a skill is a directory containing SKILL.md; pass --path DIR for a collection root"
+    );
+}
+
+fn discover_cwd(discovery: &DiscoveryArgs) -> Result<craftbag::DiscoveryReport, String> {
+    let (cwd, opts) = discovery_opts(discovery)?;
+    Ok(discover(&cwd, &opts))
 }

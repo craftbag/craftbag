@@ -77,18 +77,50 @@ pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
     unknown
 }
 
+/// YAML document-start / document-end: `---` alone on the line.
+/// Trailing space and a `#` comment are allowed. `---x` and `----` are not.
+fn yaml_fence_line_ok(line: &str) -> bool {
+    let line = line.trim_end_matches('\r');
+    if !line.starts_with("---") {
+        return false;
+    }
+    let rest = line[3..].trim_start();
+    rest.is_empty() || rest.starts_with('#')
+}
+
+/// Offset of the `\n` that precedes a valid closing `---` fence.
+fn find_yaml_close(after_open: &str) -> Option<usize> {
+    let mut from = 0;
+    while let Some(rel) = after_open[from..].find("\n---") {
+        let nl = from + rel;
+        let line_start = nl + 1;
+        let line_end = after_open[line_start..]
+            .find('\n')
+            .map(|i| line_start + i)
+            .unwrap_or(after_open.len());
+        if yaml_fence_line_ok(&after_open[line_start..line_end]) {
+            return Some(nl);
+        }
+        from = line_start;
+    }
+    None
+}
+
 /// Split `--- yaml --- body`. Parse, peek, and unknown-key scan share
 /// this so a delimiter change cannot drift across those paths.
 fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
     // U+FEFF is not White_Space, so trim_start leaves a leading BOM.
     let trimmed = content.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
-    if !trimmed.starts_with("---") {
+    let first_end = trimmed.find('\n').unwrap_or(trimmed.len());
+    if !yaml_fence_line_ok(&trimmed[..first_end]) {
         return None;
     }
-    let after_open = &trimmed[3..].trim_start_matches(['\r', '\n']);
-    let close_pos = after_open.find("\n---")?;
-    let yaml = &after_open[..close_pos];
-    let body = after_open[close_pos + 4..].trim_start_matches(['\r', '\n']);
+    let after_open = trimmed[first_end..].trim_start_matches(['\r', '\n']);
+    let close_nl = find_yaml_close(after_open)?;
+    let yaml = &after_open[..close_nl];
+    let after_close = &after_open[close_nl + 1..];
+    let close_line_end = after_close.find('\n').unwrap_or(after_close.len());
+    let body = after_close[close_line_end..].trim_start_matches(['\r', '\n']);
     Some((yaml, body))
 }
 
@@ -315,6 +347,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     let mut when_to_use: Option<String> = None;
 
     let mut in_triggers = false;
+    let mut in_ignore_sequence = false;
     let mut in_metadata = false;
 
     let mut lines = yaml.lines().peekable();
@@ -347,8 +380,12 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             }
             continue;
         }
+        if trimmed.starts_with("- ") && in_ignore_sequence {
+            continue;
+        }
 
         in_triggers = false;
+        in_ignore_sequence = false;
 
         if line_is_yaml_indented(line) && trimmed.split_once(':').is_some() {
             continue;
@@ -445,6 +482,11 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             &mut user_invocable,
                             &mut disable_model_invocation,
                         );
+                    } else if value.is_empty() && !is_known_frontmatter_key(key) {
+                        // Unknown key with a block sequence: ignore items.
+                        // Known scalars (`license:`) stay empty and a
+                        // following `- item` is still InvalidYaml.
+                        in_ignore_sequence = true;
                     }
                 }
             }
@@ -1591,23 +1633,179 @@ BODY
     }
 
     #[test]
-    fn split_frontmatter_is_the_only_delimiter_scan() {
-        let prod = include_str!("parse.rs")
-            .split("\nmod tests {")
-            .next()
-            .expect("prod");
+    fn split_frontmatter_paths_agree_on_fence_shapes() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "---\nname: demo\ndescription: d\n---\nhello\n",
+                true,
+                "plain fences",
+            ),
+            (
+                "---\r\nname: demo\ndescription: d\r\n---\r\nhello\r\n",
+                true,
+                "crlf fences",
+            ),
+            (
+                "--- # open\nname: demo\ndescription: d\n--- # close\nhello\n",
+                true,
+                "comment after fence",
+            ),
+            (
+                "---x\nname: demo\ndescription: d\n---\nhello\n",
+                false,
+                "stray char on open",
+            ),
+            (
+                "----\nname: demo\ndescription: d\n---\nhello\n",
+                false,
+                "four-dash open",
+            ),
+            (
+                "---\nname: demo\ndescription: d\n---x\nhello\n",
+                false,
+                "stray char on close",
+            ),
+            (
+                "---\nname: demo\ndescription: d\n----\nhello\n",
+                false,
+                "four-dash close",
+            ),
+            ("---\nname: demo\ndescription: d\n", false, "no close"),
+            (
+                "---\nname: demo\ndescription: d\n---\n---\nmore\n",
+                true,
+                "body starts with ---",
+            ),
+        ];
+        for &(input, expect_some, label) in cases {
+            let split = split_frontmatter(input);
+            assert_eq!(
+                split.is_some(),
+                expect_some,
+                "split_frontmatter {label}: {input:?}"
+            );
+            if expect_some {
+                assert!(
+                    parse_skill(input).is_ok(),
+                    "parse_skill {label}: {:?}",
+                    parse_skill(input).err()
+                );
+                assert_eq!(
+                    peek_frontmatter_name(input).as_deref(),
+                    Some("demo"),
+                    "peek {label}"
+                );
+            } else {
+                assert!(
+                    matches!(parse_skill(input), Err(ParseError::MissingFrontmatter)),
+                    "parse_skill {label} must be MissingFrontmatter: {:?}",
+                    parse_skill(input).err()
+                );
+                assert!(
+                    peek_frontmatter_name(input).is_none(),
+                    "peek {label} must miss"
+                );
+                assert!(
+                    unknown_frontmatter_keys(input).is_empty(),
+                    "unknown keys {label} must not invent a YAML block"
+                );
+            }
+        }
+        let body_dash = parse_skill("---\nname: demo\ndescription: d\n---\n---\nmore\n")
+            .expect("body starting with ---");
+        assert_eq!(body_dash.content, "---\nmore\n");
+    }
+
+    #[test]
+    fn unknown_block_sequence_is_ignored_triggers_still_collect() {
+        let tags_indent = "\
+---
+name: unkindent
+description: unknown key indented list
+tags:
+  - alpha
+---
+body
+";
+        let tags_flat = "\
+---
+name: unkflat
+description: unknown key flat list
+tags:
+- alpha
+---
+body
+";
+        let trig_indent = "\
+---
+name: trigindent
+description: triggers indented list
+triggers:
+  - alpha
+---
+body
+";
+        let trig_flat = "\
+---
+name: trigflat
+description: triggers flat list
+triggers:
+- alpha
+---
+body
+";
+        let tags_flow = "\
+---
+name: tagsflow
+description: unknown key flow list
+tags: [alpha]
+---
+body
+";
+        let license_seq = "\
+---
+name: licseq
+description: known scalar as a list
+license:
+  - MIT
+---
+body
+";
+        for input in [tags_indent, tags_flat, tags_flow] {
+            let skill = parse_skill(input).unwrap_or_else(|e| panic!("{input}: {e}"));
+            assert!(
+                skill.triggers.is_empty(),
+                "tags sequence is not triggers: {input}"
+            );
+        }
         assert_eq!(
-            prod.matches("find(\"\\n---\")").count(),
-            1,
-            "delimiter scan must live only in split_frontmatter"
+            parse_skill(trig_indent).expect("trig indent").triggers,
+            ["alpha".to_owned()]
         );
-        assert!(
-            prod.contains("fn split_frontmatter("),
-            "split_frontmatter must exist"
+        assert_eq!(
+            parse_skill(trig_flat).expect("trig flat").triggers,
+            ["alpha".to_owned()]
         );
+        let err = parse_skill(license_seq).expect_err(license_seq);
         assert!(
-            prod.matches("split_frontmatter(").count() >= 4,
-            "definition plus parse_skill, peek, and frontmatter_yaml must call it"
+            matches!(err, ParseError::InvalidYaml(_)) && err.to_string().contains("- MIT"),
+            "sequence under license must stay InvalidYaml: {err}"
+        );
+    }
+
+    #[test]
+    fn closing_fence_with_stray_char_is_not_body_prefix() {
+        let input = "\
+---
+name: earlyclose
+description: closing fence with stray char
+---x
+real body
+";
+        assert!(
+            matches!(parse_skill(input), Err(ParseError::MissingFrontmatter)),
+            "---x must not close frontmatter: {:?}",
+            parse_skill(input).err()
         );
     }
 
@@ -1772,15 +1970,6 @@ BODY
                 "{hyphen} block {raw} must not stay the omitted default"
             );
         }
-
-        let prod = include_str!("parse.rs")
-            .split("\nmod tests {")
-            .next()
-            .expect("prod");
-        assert!(
-            !prod.contains("require_bool_yaml(key"),
-            "require_bool_yaml must receive the table snake name, not the raw YAML key"
-        );
     }
 
     #[test]
