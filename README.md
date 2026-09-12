@@ -51,7 +51,7 @@ cargo install --locked craftbag-mcp
 Library dependency:
 
 ```toml
-craftbag = "0.1"
+craftbag = "0.2"
 ```
 
 From git (unreleased tip):

@@ -358,6 +358,14 @@ fn readme_names_the_product_and_is_path_filtered() {
         readme.contains("## Library"),
         "README must show a library embedder path"
     );
+    assert!(
+        readme.contains("craftbag = \"0.2\""),
+        "library install pin must match the 0.2 discover sample"
+    );
+    assert!(
+        !readme.contains("craftbag = \"0.1\""),
+        "crates.io 0.1 pin stays on 0.1.2 and does not compile the 0.2 sample"
+    );
     let ci = read_rel(".github/workflows/ci.yml");
     assert!(
         ci.contains("- 'README.md'"),
