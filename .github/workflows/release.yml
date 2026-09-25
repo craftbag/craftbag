@@ -41,7 +41,7 @@ jobs:
           # Tag push: the tag commit. Dispatch: this workflow file
           # (main tip) while TAG still names the GitHub Release.
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: "1.85"
       - name: Check publish script
@@ -118,11 +118,11 @@ jobs:
           # Tag push: the tag commit. Dispatch: this workflow file
           # (main tip) while TAG still names the GitHub Release.
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: "1.85"
           targets: ${{ matrix.target }}
-      - uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2
+      - uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2
         with:
           tool: cargo-dist@0.31.0
       - name: Dist build
