@@ -1,13 +1,26 @@
-# Opens a microsoft/winget-pkgs pull request for the latest release.
-# Skips when WINGET_TOKEN is unset. Create that token in a GitHub
-# account that can open winget-pkgs pull requests, then:
-# gh secret set WINGET_TOKEN --repo craftbag/craftbag
+# Opens a microsoft/winget-pkgs version pull request.
+# The first package is Craftbag.Craftbag (0.1.0 is already on master).
+# winget-releaser cannot create that id. fork-user is the fork owner,
+# not the craftbag org.
 name: Publish WinGet package
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.2.0)"
+        required: true
+        type: string
+    secrets:
+      WINGET_TOKEN:
+        required: false
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag. Empty uses the latest GitHub Release."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: publish-winget-${{ github.ref }}
@@ -26,6 +39,22 @@ jobs:
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
+      - name: Resolve tag
+        id: meta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --repo craftbag/craftbag --json tagName --jq .tagName)"
+          fi
+          version="${tag#v}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved winget ${tag}"
       - name: Skip without a token
         id: gate
         env:
@@ -40,8 +69,12 @@ jobs:
           fi
       - name: Publish
         if: steps.gate.outputs.present == 'true'
+        continue-on-error: true
         uses: vedantmgoyal9/winget-releaser@a8fff44b123f115ce4c21543edf8b677376fc7e0 # v2
         with:
-          identifier: craftbag.craftbag
+          identifier: Craftbag.Craftbag
+          version: ${{ steps.meta.outputs.version }}
+          release-tag: ${{ steps.meta.outputs.tag }}
           installers-regex: craftbag-x86_64-pc-windows-msvc\.zip$
+          fork-user: SebTardif
           token: ${{ secrets.WINGET_TOKEN }}

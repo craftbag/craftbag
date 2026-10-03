@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/dist/mcpb-manifest.schema.json",
+  "manifest_version": "0.3",
+  "name": "craftbag-mcp",
+  "display_name": "craftbag",
+  "version": "0.2.0",
+  "description": "MCP server to list, load, explain, and validate Agent Skills.",
+  "long_description": "craftbag-mcp is the stdio MCP server for Agent Skills. It catalogs, loads, explains, and validates SKILL.md packages. The bundle starts the craftbag-mcp binary already on PATH (cargo install, GitHub Releases, Scoop, or Homebrew). It does not download a second copy.",
+  "author": {
+    "name": "Craftbag",
+    "url": "https://github.com/craftbag"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/craftbag/craftbag.git"
+  },
+  "homepage": "https://docs.rs/craftbag",
+  "documentation": "https://docs.rs/craftbag-mcp",
+  "support": "https://github.com/craftbag/craftbag/issues",
+  "license": "Apache-2.0 OR MIT",
+  "keywords": ["mcp", "skills", "agents", "craftbag"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/run.mjs",
+    "mcp_config": {
+      "command": "craftbag-mcp",
+      "args": [],
+      "env": {},
+      "platform_overrides": {
+        "win32": {
+          "command": "craftbag-mcp.exe",
+          "args": []
+        }
+      }
+    }
+  },
+  "tools_generated": true,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

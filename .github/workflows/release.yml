@@ -54,6 +54,10 @@ jobs:
           toolchain: "1.85"
       - name: Check publish script
         run: bash factory/scripts/publish-crates.sh --self-test
+      # crates.io matches the OIDC caller filename. release-please.yml
+      # calls this file, and a direct tag push runs release.yml. Both
+      # names are trusted publishers. The API token stays until a tag
+      # job exchanges an OIDC token on its own.
       - name: Authenticate with crates.io
         id: crates-auth
         continue-on-error: true
@@ -288,3 +292,46 @@ jobs:
               git push origin HEAD:main
             fi
           )
+
+  publish-winget:
+    name: Publish WinGet
+    needs: dist-binaries
+    permissions:
+      contents: read
+    secrets:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    uses: ./.github/workflows/publish-winget.yml
+    with:
+      tag: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
+
+  publish-chocolatey:
+    name: Publish Chocolatey
+    needs: dist-binaries
+    permissions:
+      contents: read
+    secrets:
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+    uses: ./.github/workflows/publish-chocolatey.yml
+    with:
+      tag: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
+
+  publish-smithery:
+    name: Publish Smithery
+    needs: dist-binaries
+    permissions:
+      contents: read
+    secrets:
+      SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+    uses: ./.github/workflows/publish-smithery.yml
+    with:
+      tag: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
+
+  publish-mcp-registry:
+    name: Publish MCP Registry
+    needs: publish
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-mcp-registry.yml
+    with:
+      version: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}

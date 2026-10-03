@@ -1,17 +1,26 @@
-# Publish server.json with GitHub OIDC. Dispatch only until the
-# registry accepts the cargo package marker on a published version.
+# Lists server.json on the official MCP Registry after the cargo README
+# for that version contains the visible mcp-name line.
+# A GITHUB_TOKEN release event does not start a second workflow, so
+# release.yml calls this job after crates.io publish.
 name: Publish MCP Registry
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Tag or version (for example v0.2.1)"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (for example 0.2.1)"
-        required: true
+        description: "Tag or version. Empty uses the latest GitHub Release."
+        required: false
         type: string
+        default: ""
 
 concurrency:
-  group: publish-mcp-registry-${{ inputs.version }}
+  group: publish-mcp-registry-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -21,7 +30,8 @@ jobs:
   publish:
     name: Publish server.json
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    if: ${{ !github.event.repository.private }}
     permissions:
       contents: read
       id-token: write
@@ -33,23 +43,98 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Stamp version
+      - name: Resolve version
+        id: version
         env:
-          VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          jq --arg v "$VERSION" '.version = $v | .packages[].version = $v' \
-            server.json > server.json.tmp
+          version="${INPUT_VERSION:-}"
+          if [ -z "$version" ]; then
+            version="$(gh release view --json tagName --jq .tagName)"
+          fi
+          version="${version#v}"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "Could not resolve a package version" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version}"
+      - name: Wait for the crates.io ownership marker
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MCP_NAME: io.github.craftbag/craftbag-mcp
+          CRATES_UA: craftbag-mcp-registry (https://github.com/craftbag/craftbag)
+        run: |
+          set -euo pipefail
+          # 20 * 30s. crates.io README lag after cargo publish.
+          attempts=20
+          for i in $(seq 1 "$attempts"); do
+            http_code="$(curl -sS -L -o /tmp/crates-readme.html -w '%{http_code}' \
+              -A "$CRATES_UA" \
+              "https://crates.io/api/v1/crates/craftbag-mcp/${VERSION}/readme" \
+              || echo "000")"
+            if [ "$http_code" = "200" ] \
+              && grep -Fq "mcp-name: ${MCP_NAME}" /tmp/crates-readme.html; then
+              echo "cargo marker present on crates.io ${VERSION}"
+              exit 0
+            fi
+            echo "cargo marker not visible for ${VERSION} (http=${http_code}, attempt ${i}/${attempts})"
+            if [ "$i" -lt "$attempts" ]; then
+              sleep 30
+            fi
+          done
+          echo "Timed out waiting for mcp-name on crates.io ${VERSION}" >&2
+          exit 1
+      - name: Stamp server.json version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          jq --arg v "$VERSION" '
+            .version = $v
+            | .packages |= map(.version = $v)
+          ' server.json > server.json.tmp
           mv server.json.tmp server.json
+          desc_len="$(jq -r '.description | length' server.json)"
+          if [ "$desc_len" -gt 100 ]; then
+            echo "server.json description is ${desc_len} chars; registry max is 100" >&2
+            exit 1
+          fi
+          echo "server.json ${VERSION} description ${desc_len} chars"
       - name: Install mcp-publisher
         run: |
           set -euo pipefail
-          curl -sSfL \
+          curl -fsSL \
             "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
             | tar xz mcp-publisher
-      - name: Publish
+          ./mcp-publisher --help >/dev/null
+      - name: Authenticate
+        run: ./mcp-publisher login github-oidc
+      - name: Validate server.json
+        run: ./mcp-publisher validate server.json
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish server.json
+      - name: Verify listing
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          ./mcp-publisher login github-oidc
-          ./mcp-publisher validate server.json
-          ./mcp-publisher publish server.json
+          for i in 1 2 3 4 5 6; do
+            body="$(curl -fsSL \
+              "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.craftbag/craftbag-mcp")"
+            if printf '%s' "$body" | jq -e --arg v "$VERSION" '
+              .servers[]?
+              | .server
+              | select(.name == "io.github.craftbag/craftbag-mcp")
+              | select(.version == $v)
+            ' >/dev/null; then
+              echo "Verified io.github.craftbag/craftbag-mcp@${VERSION}"
+              exit 0
+            fi
+            echo "Listing not visible yet (attempt ${i})"
+            sleep 15
+          done
+          echo "Search did not return io.github.craftbag/craftbag-mcp@${VERSION}" >&2
+          exit 1

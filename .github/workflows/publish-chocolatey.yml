@@ -1,11 +1,24 @@
-# Packs nothing until CHOCOLATEY_API_KEY is set. A release stays
-# green without that secret.
+# Pack the portable zip package and push it when CHOCOLATEY_API_KEY is set.
+# A missing key still packs, then skips the push, so the release stays green.
 name: Publish Chocolatey package
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.2.0)"
+        required: true
+        type: string
+    secrets:
+      CHOCOLATEY_API_KEY:
+        required: false
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag. Empty uses the latest GitHub Release."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: publish-chocolatey-${{ github.ref }}
@@ -24,14 +37,68 @@ jobs:
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
-      - name: Skip without an API key
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve tag and download the checksum
+        id: meta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --repo craftbag/craftbag --json tagName --jq .tagName)"
+          fi
+          version="${tag#v}"
+          mkdir -p artifacts
+          gh release download "$tag" --repo craftbag/craftbag \
+            --pattern 'craftbag-x86_64-pc-windows-msvc.zip.sha256' \
+            --dir artifacts
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved chocolatey ${tag}"
+      - name: Update package metadata
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/update-chocolatey-package.py --self-test
+          python3 scripts/update-chocolatey-package.py \
+            --version "$VERSION" \
+            --artifacts-dir artifacts \
+            --package-dir chocolatey
+      - name: Pack nupkg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          choco pack chocolatey/craftbag.nuspec --outputdirectory dist
+          Get-ChildItem dist/*.nupkg | ForEach-Object { Write-Host "Packed $($_.Name)" }
+      - name: Upload nupkg
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: chocolatey-nupkg
+          path: dist/*.nupkg
+          if-no-files-found: error
+      - name: Push to chocolatey.org
+        continue-on-error: true
+        shell: pwsh
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
-        shell: bash
         run: |
-          if [ -z "${CHOCOLATEY_API_KEY}" ]; then
-            echo "OK: CHOCOLATEY_API_KEY is unset"
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+            Write-Host "OK: CHOCOLATEY_API_KEY is unset; package was packed"
             exit 0
-          fi
-          echo "CHOCOLATEY_API_KEY is set. Add chocolatey/craftbag.nuspec before pushing."
-          exit 1
+          }
+          $nupkg = Get-ChildItem dist/craftbag.*.nupkg | Select-Object -First 1
+          if (-not $nupkg) {
+            throw "No nupkg found under dist/"
+          }
+          Write-Host "Pushing $($nupkg.Name)"
+          choco push $nupkg.FullName `
+            --source 'https://push.chocolatey.org/' `
+            --api-key $env:CHOCOLATEY_API_KEY

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>craftbag</id>
+    <version>0.2.0</version>
+    <title>craftbag</title>
+    <authors>Craftbag</authors>
+    <owners>SebTardif</owners>
+    <summary>Discover and load Agent Skills for CLI and MCP hosts</summary>
+    <description>
+      craftbag walks project and home skill trees and catalogs, loads, explains,
+      and validates Agent Skills (SKILL.md). craftbag-mcp exposes the same
+      operations over MCP stdio.
+
+      This package downloads the portable Windows zip from GitHub Releases
+      and shims craftbag.exe and craftbag-mcp.exe onto PATH.
+    </description>
+    <!-- projectUrl is the docs page. projectSourceUrl is the git tree. -->
+    <projectUrl>https://docs.rs/craftbag</projectUrl>
+    <projectSourceUrl>https://github.com/craftbag/craftbag</projectSourceUrl>
+    <packageSourceUrl>https://github.com/craftbag/craftbag/tree/main/chocolatey</packageSourceUrl>
+    <docsUrl>https://docs.rs/craftbag</docsUrl>
+    <bugTrackerUrl>https://github.com/craftbag/craftbag/issues</bugTrackerUrl>
+    <licenseUrl>https://github.com/craftbag/craftbag/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>cli mcp agents rust skills craftbag</tags>
+    <releaseNotes>https://github.com/craftbag/craftbag/releases/tag/v0.2.0</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
