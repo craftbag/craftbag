@@ -106,9 +106,15 @@ jobs:
       - name: Install mcp-publisher
         run: |
           set -euo pipefail
-          curl -fsSL \
-            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
-            | tar xz mcp-publisher
+          # This job has id-token: write. Pin the binary. Do not follow
+          # the floating "latest" tag.
+          version=1.8.1
+          file="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o "$file" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${version}/${file}"
+          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  ${file}" \
+            | sha256sum -c -
+          tar xzf "$file" mcp-publisher
           ./mcp-publisher --help >/dev/null
       - name: Authenticate
         run: ./mcp-publisher login github-oidc
