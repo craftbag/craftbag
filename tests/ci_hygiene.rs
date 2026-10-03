@@ -215,6 +215,9 @@ fn workflows_have_dispatch_concurrency_timeouts_and_harden() {
         let jobs = parse_jobs(&yaml);
         assert!(!jobs.is_empty(), "{rel} must declare jobs");
         for (name, body) in &jobs {
+            if body.contains("uses: ./.github/workflows/") {
+                continue;
+            }
             assert!(
                 body.contains("timeout-minutes:"),
                 "{rel} job {name} must set timeout-minutes"
