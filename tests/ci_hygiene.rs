@@ -622,3 +622,31 @@ fn published_lib_crate_omits_factory_demo_brand() {
         "include must root-anchor README and LICENSE so demo/ and rustup fixtures stay out"
     );
 }
+
+/// Locks from the review of commits since v0.2.0.
+#[test]
+fn review_since_v020_pins_publisher_and_triage() {
+    let registry = read_rel(".github/workflows/publish-mcp-registry.yml");
+    assert!(
+        !registry.contains("releases/latest"),
+        "mcp-publisher must not follow the floating latest tag"
+    );
+    assert!(
+        registry.contains("a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"),
+        "mcp-publisher v1.8.1 linux amd64 hash must stay pinned"
+    );
+    let triage = read_rel(".github/workflows/issue-triage.yml");
+    assert!(
+        !triage.contains("\"MEMBER\"") && !triage.contains("\"COLLABORATOR\""),
+        "org members and read collaborators must not skip triage"
+    );
+    assert!(
+        triage.contains("\"OWNER\"") && triage.contains("\"write\""),
+        "repo owners and write permission still skip the inbox"
+    );
+    let dependabot = read_rel(".github/workflows/dependabot-auto-merge.yml");
+    assert!(
+        dependabot.contains("updated-dependencies-json") && dependabot.contains("prevVersion"),
+        "a grouped SHA pin must not hide a real semver major"
+    );
+}

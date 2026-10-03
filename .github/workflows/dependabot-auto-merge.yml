@@ -43,12 +43,25 @@ jobs:
         id: sha-pin
         env:
           PREV: ${{ steps.metadata.outputs.previous-version }}
+          DEPS: ${{ steps.metadata.outputs.updated-dependencies-json }}
         run: |
-          if printf '%s' "$PREV" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "sha=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=false" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          # previous-version is only the first dependency in a group.
+          # update-type is the highest bump in that group. A real major
+          # may sit beside a commit pin. Every previous version has to
+          # be a 40-hex pin before this PR is treated as a false major.
+          sha=false
+          if [ -n "${DEPS}" ] && [ "${DEPS}" != "null" ]; then
+            if printf '%s' "$DEPS" | jq -e '
+              type == "array" and length > 0 and
+              all(.[]; (.prevVersion // "") | test("^[0-9a-f]{40}$"))
+            ' >/dev/null; then
+              sha=true
+            fi
+          elif printf '%s' "$PREV" | grep -Eq '^[0-9a-f]{40}$'; then
+            sha=true
           fi
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
       - name: Approve and enable auto-merge (patch/minor only)
         if: >-
           steps.metadata.outputs.update-type != 'version-update:semver-major' ||

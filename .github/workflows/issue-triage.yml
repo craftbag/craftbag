@@ -37,7 +37,11 @@ jobs:
           DISPATCH_ISSUE: ${{ github.event.inputs.issue_number }}
         with:
           script: |
-            const TRUSTED_ASSOC = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+            // MEMBER includes org members with no access to this repo.
+            // COLLABORATOR includes read and triage invites. Those are
+            // not maintainers. Only the repo owner skips the permission
+            // lookup; everyone else needs admin, maintain, or write.
+            const TRUSTED_ASSOC = new Set(["OWNER"]);
             const TRUSTED_PERM = new Set(["admin", "maintain", "write"]);
             const owner = context.repo.owner;
             const repo = context.repo.repo;
