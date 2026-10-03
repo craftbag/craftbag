@@ -304,7 +304,6 @@ Unexpected skip-kind or `winnerPath` mismatches: none.
 ## Out of scope here
 
 - Editing Bline source.
-- Bline path-dep (that is
-  [blineai/bline#3497](https://github.com/blineai/bline/issues/3497)).
+- Bline path-dep (blineai/bline issue 3497).
 - crates.io publish.
 - MCP Registry / Smithery listings.

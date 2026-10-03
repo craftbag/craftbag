@@ -12,6 +12,12 @@ on:
       tag:
         description: "Release tag (for example v0.1.0)"
         required: true
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.2.1)"
+        required: true
+        type: string
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
@@ -27,10 +33,12 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
@@ -40,15 +48,19 @@ jobs:
           persist-credentials: false
           # Tag push: the tag commit. Dispatch: this workflow file
           # (main tip) while TAG still names the GitHub Release.
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || (inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref) }}
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: "1.85"
       - name: Check publish script
         run: bash factory/scripts/publish-crates.sh --self-test
+      - name: Authenticate with crates.io
+        id: crates-auth
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
       - name: Publish crates
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
         run: bash factory/scripts/publish-crates.sh
       - name: GitHub Release
         env:
@@ -92,6 +104,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -102,12 +116,14 @@ jobs:
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
@@ -117,7 +133,7 @@ jobs:
           persist-credentials: false
           # Tag push: the tag commit. Dispatch: this workflow file
           # (main tip) while TAG still names the GitHub Release.
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || (inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref) }}
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: "1.85"
@@ -125,6 +141,12 @@ jobs:
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-dist@0.31.0
+      - name: Install the Linux arm64 linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
       - name: Dist build
         run: dist build --artifacts=local --target ${{ matrix.target }}
       - name: Pack combined archive
@@ -136,14 +158,49 @@ jobs:
           "$PY" factory/scripts/publish-install-channels.py \
             --pack \
             --artifacts-dir target \
-            --out-dir /tmp/craftbag-dist
+            --out-dir "${{ runner.temp }}/craftbag-dist"
+      - name: Record archive path
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(find "${{ runner.temp }}/craftbag-dist" -name 'craftbag-${{ matrix.target }}.*' \
+            ! -name '*.sigstore' ! -name '*.spdx.json' ! -name '*.intoto.jsonl' | head -1)
+          echo "path=${archive}" >> "$GITHUB_OUTPUT"
+      - name: SBOM
+        uses: anchore/sbom-action@e11c554f704a0b820cbf8c51673f6945e0731532 # v0.20.0
+        with:
+          file: ${{ steps.archive.outputs.path }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/craftbag-dist/sbom-${{ matrix.target }}.spdx.json
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+      - name: Sign the archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${{ steps.archive.outputs.path }}"
+          cosign sign-blob --yes --bundle "${archive}.sigstore" "$archive"
+      - name: Attest the archive
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.archive.outputs.path }}
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "$TAG" /tmp/craftbag-dist/craftbag-* --clobber
+          dest="${{ runner.temp }}/craftbag-dist"
+          files=("${{ steps.archive.outputs.path }}" "${{ steps.archive.outputs.path }}.sigstore")
+          sbom="${dest}/sbom-${{ matrix.target }}.spdx.json"
+          [ -f "$sbom" ] && files+=("$sbom")
+          if [ -n "${{ steps.attest.outputs.bundle-path }}" ]; then
+            intoto="${dest}/craftbag-${{ matrix.target }}.intoto.jsonl"
+            cp "${{ steps.attest.outputs.bundle-path }}" "$intoto"
+            files+=("$intoto")
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
 
   publish-taps:
     name: Publish Homebrew and Scoop
@@ -153,7 +210,7 @@ jobs:
     permissions:
       contents: read
     env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      TAG: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
@@ -163,7 +220,7 @@ jobs:
           persist-credentials: false
           # Tag push: the tag commit. Dispatch: this workflow file
           # (main tip) while TAG still names the GitHub Release.
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || (inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref) }}
           path: project
       - name: Generate App token
         id: app-token

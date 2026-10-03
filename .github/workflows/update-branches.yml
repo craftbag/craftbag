@@ -1,0 +1,54 @@
+name: Update PR branches
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: update-branches-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  update-branches:
+    name: Update open pull requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTO_APPROVE_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_APPROVE_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Merge main into open pull requests
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open \
+            --json number,headRefName --jq '.[] | [.number, .headRefName] | @tsv' \
+            > /tmp/prs.txt
+          while IFS="$(printf '\t')" read -r pr head; do
+            [ -n "${pr}" ] || continue
+            case "${head}" in
+              release-please*)
+                echo "Skip PR #${pr} (${head})"
+                continue
+                ;;
+            esac
+            echo "Updating PR #${pr}"
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}/update-branch" \
+              -X PUT -f update_method=merge || echo "Skipped PR #${pr}"
+          done < /tmp/prs.txt

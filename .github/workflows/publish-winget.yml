@@ -1,0 +1,47 @@
+# Opens a microsoft/winget-pkgs pull request for the latest release.
+# Skips when WINGET_TOKEN is unset. Create that token in a GitHub
+# account that can open winget-pkgs pull requests, then:
+# gh secret set WINGET_TOKEN --repo craftbag/craftbag
+name: Publish WinGet package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-winget-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Open winget-pkgs pull request
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Skip without a token
+        id: gate
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "${WINGET_TOKEN}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "OK: WINGET_TOKEN is unset"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish
+        if: steps.gate.outputs.present == 'true'
+        uses: vedantmgoyal9/winget-releaser@a8fff44b123f115ce4c21543edf8b677376fc7e0 # v2
+        with:
+          identifier: craftbag.craftbag
+          installers-regex: craftbag-x86_64-pc-windows-msvc\.zip$
+          token: ${{ secrets.WINGET_TOKEN }}

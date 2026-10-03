@@ -1,0 +1,161 @@
+# Opens the version PR from conventional commits and, on merge,
+# publishes that tag. A GITHUB_TOKEN tag does not start release.yml
+# by itself, so publish is called from here.
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr: ${{ steps.rp.outputs.pr }}
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  sync-release-pr-versions:
+    name: Sync release PR lock
+    needs: release-please
+    if: >-
+      always() && !failure() && !cancelled() &&
+      needs.release-please.outputs.release_created != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: "0"
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Resolve release-please head
+        id: branch
+        env:
+          PR_JSON: ${{ needs.release-please.outputs.pr }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          name=""
+          if [ -n "${PR_JSON}" ] && [ "${PR_JSON}" != "null" ]; then
+            name=$(printf '%s\n' "$PR_JSON" | jq -r '.headBranchName // empty')
+          fi
+          if [ -z "${name}" ] || [ "${name}" = "null" ]; then
+            name=$(gh pr list --label "autorelease: pending" --state open \
+              --json headRefName --jq '.[0].headRefName // empty')
+          fi
+          if [ -z "${name}" ]; then
+            echo "OK: no open release PR"
+          fi
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.branch.outputs.name != ''
+        with:
+          ref: ${{ github.sha }}
+          path: publisher
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.branch.outputs.name != ''
+        with:
+          ref: ${{ steps.branch.outputs.name }}
+          path: release
+          persist-credentials: false
+      - name: Install clang for the fuzz lock refresh
+        if: steps.branch.outputs.name != ''
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends clang
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        if: steps.branch.outputs.name != ''
+        with:
+          toolchain: "1.85"
+      - name: Refresh locks
+        if: steps.branch.outputs.name != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+          REPO: ${{ github.repository }}
+        working-directory: release
+        run: |
+          set -euo pipefail
+          SYNC_ROOT="$PWD" bash ../publisher/factory/scripts/sync-release-versions.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock Cargo.toml crates/craftbag-cli/Cargo.toml crates/craftbag-mcp/Cargo.toml
+          git add fuzz/Cargo.lock
+          if git diff --cached --quiet; then
+            echo "OK: locks already match crate versions"
+            exit 0
+          fi
+          git commit -s -m "chore: sync Cargo.lock workspace versions"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git push origin "HEAD:${BRANCH}"
+
+  release:
+    name: Publish release
+    needs: release-please
+    if: >-
+      always() && !failure() && !cancelled() &&
+      needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  apply-release-notes:
+    name: Apply release notes
+    needs: release-please
+    if: >-
+      always() && !failure() && !cancelled() &&
+      needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+      RELEASE_NOTES: ${{ vars.RELEASE_NOTES }}
+      RELEASE_NOTES_TAG: ${{ vars.RELEASE_NOTES_TAG }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Apply curated notes
+        run: bash factory/scripts/apply-release-notes.sh

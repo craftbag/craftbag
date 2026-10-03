@@ -1,9 +1,16 @@
-# Dispatch only until FOSSA_API_KEY exists and stealth drops.
-# Do not add push-to-main. That would start a second job on every squash.
+# Pull requests that touch the lockfile. Not on push to main:
+# a squash already ran the product matrix, and this scan is separate.
 name: FOSSA
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+      - "deny.toml"
+      - ".github/workflows/fossa.yml"
 
 concurrency:
   group: fossa-${{ github.ref }}

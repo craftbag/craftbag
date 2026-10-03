@@ -1,0 +1,36 @@
+# Soft-skips until SMITHERY_API_KEY is set. Packing an MCPB bundle
+# is still required before a real publish.
+name: Publish Smithery
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-smithery-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Smithery bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Skip without an API key
+        env:
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+        run: |
+          if [ -z "${SMITHERY_API_KEY}" ]; then
+            echo "OK: SMITHERY_API_KEY is unset"
+            exit 0
+          fi
+          echo "SMITHERY_API_KEY is set. Pack target/mcpb before publishing."
+          exit 1

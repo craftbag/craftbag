@@ -1,0 +1,12 @@
+exclude = [
+  'https://img.shields.io',
+  'https://app.fossa.com',
+  'https://bestpractices.dev',
+  'https://api.securityscorecards.dev',
+  'https://securityscorecards.dev',
+  'https://crates.io',
+  'https://docs.rs',
+]
+exclude_path = ['.git', 'target', 'fuzz/artifacts']
+max_retries = 2
+timeout = 20

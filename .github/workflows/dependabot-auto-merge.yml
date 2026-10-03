@@ -39,8 +39,20 @@ jobs:
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Detect a SHA pin labeled as a major
+        id: sha-pin
+        env:
+          PREV: ${{ steps.metadata.outputs.previous-version }}
+        run: |
+          if printf '%s' "$PREV" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "sha=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Approve and enable auto-merge (patch/minor only)
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: >-
+          steps.metadata.outputs.update-type != 'version-update:semver-major' ||
+          steps.sha-pin.outputs.sha == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -48,5 +60,7 @@ jobs:
           gh pr review --approve "$PR_URL"
           gh pr merge --auto --squash "$PR_URL"
       - name: Skip major updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-major' &&
+          steps.sha-pin.outputs.sha != 'true'
         run: echo "Skipping major version update; requires manual review"
