@@ -65,7 +65,7 @@ MSRV is 1.85.
 
 ## Getting started
 
-Default `list` walks cwd-to-git `.agents` / vendor trees and `$HOME/.agents` / vendor trees. This clone has no project `.agents`, so `craftbag list` here prints nothing and exits 0. Point `--path` at the demo tree (same catalog as the demo GIF):
+Default `list` walks cwd-to-git `.agents` / vendor trees and `$HOME/.agents` / vendor trees. This clone has no project `.agents`. When those directories are absent, `craftbag list` exits 0 and says no skills were found. Point `--path` at the demo tree (same catalog as the demo GIF):
 
 ```bash
 git clone https://github.com/craftbag/craftbag
