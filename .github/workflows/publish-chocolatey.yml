@@ -55,8 +55,13 @@ jobs:
           version="${tag#v}"
           mkdir -p artifacts
           gh release download "$tag" --repo craftbag/craftbag \
-            --pattern 'craftbag-x86_64-pc-windows-msvc.zip.sha256' \
+            --pattern 'craftbag-x86_64-pc-windows-msvc.zip' \
             --dir artifacts
+          if ! gh release download "$tag" --repo craftbag/craftbag \
+            --pattern 'craftbag-x86_64-pc-windows-msvc.zip.sha256' \
+            --dir artifacts; then
+            echo "OK: release has no checksum asset; hashing the zip"
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Resolved chocolatey ${tag}"
       - name: Update package metadata

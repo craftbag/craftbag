@@ -64,6 +64,14 @@ fn release_tag_workflow_uses_dist_build_not_cargo_build() {
         release.contains("x-access-token:") && release.contains(".insteadOf"),
         "tap push must use an App-token insteadOf URL, not persist-credentials"
     );
+    assert!(
+        release.contains("! -name '*.sha256'"),
+        "archive picker must skip the checksum sidecar; find's * matches it too"
+    );
+    assert!(
+        release.contains(".sha256\" \"${{ steps.archive.outputs.path }}.sigstore\""),
+        "release upload must publish the checksum sidecar next to the archive"
+    );
 }
 
 #[test]
