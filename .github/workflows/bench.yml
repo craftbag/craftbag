@@ -1,0 +1,60 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 7 * * 1"
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate stays under two seconds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: "1.85"
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        with:
+          tool: hyperfine@1.18.0
+      - name: Build
+        run: cargo build --release -p craftbag-cli
+      - name: Time validate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bench-skill
+          cat > /tmp/bench-skill/SKILL.md <<'EOF'
+          ---
+          name: bench-skill
+          description: Bench fixture
+          ---
+          # Bench
+          Body.
+          EOF
+          hyperfine --warmup 3 --min-runs 10 \
+            --export-json /tmp/bench.json \
+            "./target/release/craftbag validate /tmp/bench-skill"
+          python3 - <<'PY'
+          import json
+          data = json.load(open("/tmp/bench.json"))
+          seconds = data["results"][0]["mean"]
+          print(f"mean_s={seconds:.3f}")
+          if seconds > 2.0:
+              raise SystemExit(f"FAIL: validate mean {seconds:.3f}s exceeds 2s")
+          PY

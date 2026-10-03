@@ -1,0 +1,37 @@
+# Download the latest GitHub Release archive and run both binaries.
+# Does not compile.
+name: Nightly smoke
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Latest release runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Download and run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          asset="craftbag-x86_64-unknown-linux-gnu.tar.xz"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir /tmp/craftbag-smoke
+          tar -C /tmp/craftbag-smoke -xJf "/tmp/craftbag-smoke/${asset}"
+          /tmp/craftbag-smoke/craftbag --version
+          /tmp/craftbag-smoke/craftbag-mcp --version

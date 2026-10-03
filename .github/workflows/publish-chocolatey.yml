@@ -1,0 +1,37 @@
+# Packs nothing until CHOCOLATEY_API_KEY is set. A release stays
+# green without that secret.
+name: Publish Chocolatey package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-chocolatey-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Push Chocolatey package
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+      - name: Skip without an API key
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${CHOCOLATEY_API_KEY}" ]; then
+            echo "OK: CHOCOLATEY_API_KEY is unset"
+            exit 0
+          fi
+          echo "CHOCOLATEY_API_KEY is set. Add chocolatey/craftbag.nuspec before pushing."
+          exit 1

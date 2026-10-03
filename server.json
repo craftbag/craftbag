@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.craftbag/craftbag-mcp",
+  "title": "craftbag",
+  "description": "MCP server to list, load, explain, and validate Agent Skills.",
+  "repository": {
+    "url": "https://github.com/craftbag/craftbag",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "cargo",
+      "identifier": "craftbag-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
