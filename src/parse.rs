@@ -332,6 +332,12 @@ fn line_is_yaml_indented(line: &str) -> bool {
     matches!(line.chars().next(), Some(c) if c.is_whitespace())
 }
 
+fn peek_starts_yaml_list(lines: &mut std::iter::Peekable<std::str::Lines<'_>>) -> bool {
+    lines
+        .peek()
+        .is_some_and(|line| line.trim_start().starts_with("- "))
+}
+
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
 pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     let mut name: Option<String> = None;
@@ -439,11 +445,14 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
                 "description" => {
                     if value.is_empty() {
-                        return Err(ParseError::InvalidYaml(
-                            "description value is empty".to_owned(),
-                        ));
+                        if !peek_starts_yaml_list(&mut lines) {
+                            return Err(ParseError::InvalidYaml(
+                                "description value is empty".to_owned(),
+                            ));
+                        }
+                    } else {
+                        description = Some(value);
                     }
-                    description = Some(value);
                 }
                 "triggers" => {
                     if value.is_empty() {
@@ -1098,6 +1107,36 @@ Use pdftotext.
         assert!(
             !skill_name_matches_directory(Path::new("wanted/．/SKILL.md"), "．"),
             "NFKC `.` is a path component, not a skill name"
+        );
+    }
+
+    #[test]
+    fn description_block_list_is_not_an_empty_value() {
+        let input = "\
+---
+name: desc-list
+description:
+  - not
+  - a
+  - string
+---
+# X
+";
+        let err = parse_skill(input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("- not"),
+            "list item must be in the error, got {msg}"
+        );
+        assert!(
+            !msg.contains("value is empty"),
+            "a list is not an empty description: {msg}"
+        );
+        let empty = "---\nname: desc-empty\ndescription:\n---\n# X\n";
+        let empty_err = parse_skill(empty).unwrap_err();
+        assert!(
+            empty_err.to_string().contains("description value is empty"),
+            "{empty_err}"
         );
     }
 
