@@ -168,8 +168,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The packer writes the archive and archive.sha256. find's *
+          # matches both, so exclude the sidecar or head -1 can sign it.
           archive=$(find "${{ runner.temp }}/craftbag-dist" -name 'craftbag-${{ matrix.target }}.*' \
-            ! -name '*.sigstore' ! -name '*.spdx.json' ! -name '*.intoto.jsonl' | head -1)
+            ! -name '*.sha256' ! -name '*.sigstore' ! -name '*.spdx.json' ! -name '*.intoto.jsonl' \
+            | sort)
+          lines=$(printf '%s\n' "$archive" | grep -c . || true)
+          if [ "$lines" -ne 1 ]; then
+            echo "expected one combined archive, found ${lines}" >&2
+            printf '%s\n' "$archive" >&2
+            exit 1
+          fi
           echo "path=${archive}" >> "$GITHUB_OUTPUT"
       - name: SBOM
         uses: anchore/sbom-action@e11c554f704a0b820cbf8c51673f6945e0731532 # v0.20.0
@@ -196,7 +205,11 @@ jobs:
         run: |
           set -euo pipefail
           dest="${{ runner.temp }}/craftbag-dist"
-          files=("${{ steps.archive.outputs.path }}" "${{ steps.archive.outputs.path }}.sigstore")
+          files=("${{ steps.archive.outputs.path }}" "${{ steps.archive.outputs.path }}.sha256" "${{ steps.archive.outputs.path }}.sigstore")
+          if [ ! -f "${{ steps.archive.outputs.path }}.sha256" ]; then
+            echo "checksum sidecar was not packed" >&2
+            exit 1
+          fi
           sbom="${dest}/sbom-${{ matrix.target }}.spdx.json"
           [ -f "$sbom" ] && files+=("$sbom")
           if [ -n "${{ steps.attest.outputs.bundle-path }}" ]; then

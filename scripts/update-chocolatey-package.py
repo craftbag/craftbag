@@ -8,6 +8,7 @@ the cargo-dist ``.sha256`` file (hash, then optional filename).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import pathlib
 import re
 import sys
@@ -17,13 +18,25 @@ ASSET = "craftbag-x86_64-pc-windows-msvc.zip"
 REPO = "https://github.com/craftbag/craftbag"
 
 
-def checksum_from_artifact(artifacts_dir: pathlib.Path) -> str:
-    path = artifacts_dir / f"{ASSET}.sha256"
-    text = path.read_text(encoding="utf-8").strip()
-    token = text.split()[0].lower()
+def parse_sha256_sidecar(path: pathlib.Path) -> str:
+    token = path.read_text(encoding="utf-8").strip().split()[0].lower()
     if not re.fullmatch(r"[0-9a-f]{64}", token):
         raise SystemExit(f"bad sha256 in {path}")
     return token
+
+
+def checksum_from_artifact(artifacts_dir: pathlib.Path) -> str:
+    sidecar = artifacts_dir / f"{ASSET}.sha256"
+    zip_path = artifacts_dir / ASSET
+    sidecar_hash = parse_sha256_sidecar(sidecar) if sidecar.is_file() else ""
+    if zip_path.is_file():
+        digest = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+        if sidecar_hash and sidecar_hash != digest:
+            raise SystemExit(f"checksum asset does not match {zip_path.name}")
+        return digest
+    if sidecar_hash:
+        return sidecar_hash
+    raise SystemExit(f"missing {ASSET} and its checksum in {artifacts_dir}")
 
 
 def zip_url(version: str) -> str:
@@ -145,6 +158,23 @@ def self_test() -> None:
             pass
         else:
             raise SystemExit("self-test: bad checksum was accepted")
+        zip_dir = root / "zip-artifacts"
+        zip_dir.mkdir()
+        blob = b"craftbag-zip"
+        (zip_dir / ASSET).write_bytes(blob)
+        digest = hashlib.sha256(blob).hexdigest()
+        if checksum_from_artifact(zip_dir) != digest:
+            raise SystemExit("self-test: zip without a sidecar was not hashed")
+        (zip_dir / f"{ASSET}.sha256").write_text(
+            f"{'cd' * 32}  {ASSET}\n",
+            encoding="utf-8",
+        )
+        try:
+            checksum_from_artifact(zip_dir)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit("self-test: mismatched sidecar was accepted")
     print("DONE: ok=true")
 
 
