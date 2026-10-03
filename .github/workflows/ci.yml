@@ -53,6 +53,7 @@ jobs:
               - 'deny.toml'
               - '.github/workflows/**'
               - '.github/zizmor.yml'
+              - '.github/requirements/**'
               - 'factory/scripts/**'
               - 'dist-workspace.toml'
               - 'Makefile'

@@ -276,8 +276,25 @@ fn ci_pins_current_workflow_linters() {
         "gitleaks install must pin 8.30.1"
     );
     assert!(
-        ci.contains("'zizmor==1.29.0'"),
+        ci.contains("--require-hashes")
+            && ci.contains("--only-binary=:all:")
+            && ci.contains("-r .github/requirements/zizmor.txt"),
+        "workflows job must hash-pin zizmor from .github/requirements/zizmor.txt"
+    );
+    assert!(
+        ci.contains("- '.github/requirements/**'"),
+        "rust path-filter must include the zizmor hash pin"
+    );
+    let pins = read_rel(".github/requirements/zizmor.txt");
+    assert!(
+        pins.contains("zizmor==1.29.0"),
         "workflows job must pin zizmor 1.29.0"
+    );
+    assert!(
+        pins.contains(
+            "--hash=sha256:587b99c2e1b34575c6c8565c2bfde415ca8bc0310f5589f19bc948c8dea10a20"
+        ),
+        "zizmor pin must include the manylinux x86_64 wheel hash"
     );
 }
 
