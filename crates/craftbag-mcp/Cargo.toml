@@ -9,6 +9,8 @@ repository = "https://github.com/craftbag/craftbag"
 keywords = ["skills", "mcp", "agents"]
 categories = ["command-line-utilities", "development-tools"]
 publish = true
+# crates.io renders this file. The MCP Registry ownership check reads it.
+readme = "README.md"
 
 [[bin]]
 name = "craftbag-mcp"

@@ -1,0 +1,6 @@
+{
+  "name": "craftbag-mcp-bundle",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MCPB launcher metadata for craftbag-mcp. Not an npm package."
+}

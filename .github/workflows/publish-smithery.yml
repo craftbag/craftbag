@@ -1,11 +1,23 @@
-# Soft-skips until SMITHERY_API_KEY is set. Packing an MCPB bundle
-# is still required before a real publish.
+# Packs an MCPB bundle on every release. Publishes when SMITHERY_API_KEY is set.
 name: Publish Smithery
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.2.0)"
+        required: true
+        type: string
+    secrets:
+      SMITHERY_API_KEY:
+        required: false
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag. Empty uses the latest GitHub Release."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: publish-smithery-${{ github.ref }}
@@ -24,13 +36,40 @@ jobs:
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
         with:
           egress-policy: audit
-      - name: Skip without an API key
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve version
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --json tagName --jq .tagName)"
+          fi
+          version="${tag#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved smithery ${version}"
+      - name: Pack MCPB
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash scripts/pack-mcpb.sh --self-test
+          bash scripts/pack-mcpb.sh
+      - name: Upload MCPB
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: craftbag-mcpb
+          path: target/mcpb/*.mcpb
+          if-no-files-found: error
+      - name: Publish
+        continue-on-error: true
         env:
           SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
-        run: |
-          if [ -z "${SMITHERY_API_KEY}" ]; then
-            echo "OK: SMITHERY_API_KEY is unset"
-            exit 0
-          fi
-          echo "SMITHERY_API_KEY is set. Pack target/mcpb before publishing."
-          exit 1
+          VERSION: ${{ steps.meta.outputs.version }}
+          SMITHERY_SERVER: craftbag/craftbag-mcp
+        run: bash scripts/publish-smithery.sh
