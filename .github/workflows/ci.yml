@@ -235,7 +235,8 @@ jobs:
       - uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
       - name: zizmor
         run: |
-          python3 -m pip install --user 'zizmor==1.29.0'
+          python3 -m pip install --user --require-hashes --only-binary=:all: --no-deps \
+            -r .github/requirements/zizmor.txt
           "$HOME/.local/bin/zizmor" --min-severity=high .github/workflows
       - run: bash factory/scripts/write-ledger.sh --self-test
 
