@@ -58,6 +58,21 @@ pub(super) fn dir_load<'a>(
     }
 }
 
+/// Symlink whose target is gone. `Path::is_dir` is false, so a broken
+/// package link would otherwise look like an ignored file.
+fn dangling_symlink(path: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !meta.file_type().is_symlink() {
+        return false;
+    }
+    match std::fs::metadata(path) {
+        Err(err) => err.kind() == std::io::ErrorKind::NotFound,
+        Ok(_) => false,
+    }
+}
+
 pub(super) fn load_skills_from_dir(
     dir: &Path,
     load: &DirLoad<'_>,
@@ -89,6 +104,25 @@ pub(super) fn load_skills_from_dir(
             continue;
         }
         if !path.is_dir() {
+            if dangling_symlink(&path)
+                && !is_skill_md_filename(&path)
+                && !path_is_ignored(&path, load.ignore)
+            {
+                let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
+                let detail = match std::fs::read_link(&path) {
+                    Ok(target) => format!("dangling symlink: {}", target.display()),
+                    Err(_) => "dangling symlink".to_owned(),
+                };
+                skips.push(SkillSkip {
+                    path,
+                    name,
+                    kind: SkipKind::Unreadable,
+                    detail,
+                    winner_path: None,
+                    host_token: None,
+                });
+                continue;
+            }
             if path
                 .file_name()
                 .and_then(|n| n.to_str())
