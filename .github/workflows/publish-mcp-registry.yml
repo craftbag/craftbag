@@ -121,7 +121,23 @@ jobs:
       - name: Validate server.json
         run: ./mcp-publisher validate server.json
       - name: Publish to MCP Registry
-        run: ./mcp-publisher publish server.json
+        run: |
+          set -euo pipefail
+          set +e
+          out="$(./mcp-publisher publish server.json 2>&1)"
+          code=$?
+          set -e
+          printf '%s\n' "$out"
+          if [ "$code" -eq 0 ]; then
+            exit 0
+          fi
+          # A retry of this tag is not a new version. The registry
+          # rejects a second publish of the same semver.
+          if printf '%s' "$out" | grep -Eqi 'duplicate|already exists|already published'; then
+            echo "OK: this version is already on the registry"
+            exit 0
+          fi
+          exit "$code"
       - name: Verify listing
         env:
           VERSION: ${{ steps.version.outputs.version }}
