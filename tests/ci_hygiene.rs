@@ -677,3 +677,23 @@ fn curated_notes_wait_for_changelog_edit() {
         "the changelog edit is why notes must run later"
     );
 }
+
+/// cargo-dist asks for cargo-zigbuild when an x64 runner cross-builds
+/// arm64 Linux. The native arm runner does not.
+#[test]
+fn arm64_linux_dist_runs_on_arm() {
+    let release = read_rel(".github/workflows/release.yml");
+    assert!(
+        release.contains("ubuntu-24.04-arm"),
+        "aarch64 linux must build on an arm runner"
+    );
+    assert!(
+        release.contains("runner.arch == 'X64'"),
+        "the cross linker is only for an x64 runner"
+    );
+    let registry = read_rel(".github/workflows/publish-mcp-registry.yml");
+    assert!(
+        registry.contains("already on the registry"),
+        "republishing the same version must not fail the release"
+    );
+}
