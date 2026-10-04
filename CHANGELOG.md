@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/craftbag/craftbag/compare/v0.2.0...v0.2.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* name a description list item that contains a colon ([#388](https://github.com/craftbag/craftbag/issues/388)) ([529b322](https://github.com/craftbag/craftbag/commit/529b3226b0361a7c84cea0f817400614b8c7524a))
+* report a description list as invalid YAML ([#380](https://github.com/craftbag/craftbag/issues/380)) ([e3a1dc5](https://github.com/craftbag/craftbag/commit/e3a1dc5f82cc934ad6c2b50123ffc2da901641ee))
+
 ## [Unreleased]
 
 ## [0.2.0] - 2026-09-11
