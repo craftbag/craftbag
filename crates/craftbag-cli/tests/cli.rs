@@ -100,6 +100,20 @@ fn validate_package_dir_ok() {
 }
 
 #[test]
+fn validate_inside_package_accepts_dot_and_skill_md() {
+    let pkg = corpus().join("agentskills/minimal-valid");
+    for arg in [".", "SKILL.md", "./SKILL.md", "./"] {
+        let (_home, mut cmd) = bin();
+        cmd.current_dir(&pkg)
+            .arg("validate")
+            .arg(arg)
+            .assert()
+            .success()
+            .stdout(predicates::str::contains("ok\tminimal-valid"));
+    }
+}
+
+#[test]
 fn validate_package_dir_json_path_is_skill_md() {
     let pkg = corpus().join("agentskills/minimal-valid");
     let skill = pkg.join("SKILL.md");
