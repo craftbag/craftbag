@@ -6077,13 +6077,13 @@ fn list_disabled_omits_named_skill() {
         "---\nname: keep\ndescription: stay\n---\nKEEP\n",
     )
     .expect("write keep");
-    let off = extra.path().join("off");
-    fs::create_dir_all(&off).expect("off");
+    let hidden = extra.path().join("hidden");
+    fs::create_dir_all(&hidden).expect("hidden");
     fs::write(
-        off.join("SKILL.md"),
-        "---\nname: off\ndescription: hide\n---\nOFF\n",
+        hidden.join("SKILL.md"),
+        "---\nname: hidden\ndescription: hide\n---\nHIDDEN\n",
     )
-    .expect("write off");
+    .expect("write hidden");
 
     let (_home, mut cmd) = bin();
     let out = cmd
@@ -6093,7 +6093,7 @@ fn list_disabled_omits_named_skill() {
         .arg(extra.path())
         .arg("--no-implicit-roots")
         .arg("--disabled")
-        .arg("off")
+        .arg("hidden")
         .output()
         .expect("run");
     assert!(
@@ -6109,7 +6109,7 @@ fn list_disabled_omits_named_skill() {
         .iter()
         .filter_map(|s| s["name"].as_str())
         .collect();
-    assert_eq!(names, ["keep"], "disabled off must not appear: {stdout}");
+    assert_eq!(names, ["keep"], "disabled hidden must not appear: {stdout}");
     let skips = v["skips"].as_array().expect("skips");
     assert!(
         skips.is_empty(),
@@ -6120,23 +6120,23 @@ fn list_disabled_omits_named_skill() {
 #[test]
 fn load_disabled_is_unknown() {
     let extra = tempfile::tempdir().expect("extra");
-    let off = extra.path().join("off");
-    fs::create_dir_all(&off).expect("off");
+    let hidden = extra.path().join("hidden");
+    fs::create_dir_all(&hidden).expect("hidden");
     fs::write(
-        off.join("SKILL.md"),
-        "---\nname: off\ndescription: hide\n---\nOFF\n",
+        hidden.join("SKILL.md"),
+        "---\nname: hidden\ndescription: hide\n---\nHIDDEN\n",
     )
-    .expect("write off");
+    .expect("write hidden");
 
     let (_home, mut cmd) = bin();
     let out = cmd
         .arg("load")
-        .arg("off")
+        .arg("hidden")
         .arg("--path")
         .arg(extra.path())
         .arg("--no-implicit-roots")
         .arg("--disabled")
-        .arg("OFF")
+        .arg("HIDDEN")
         .output()
         .expect("run");
     assert_eq!(
@@ -6147,7 +6147,7 @@ fn load_disabled_is_unknown() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("unknown skill: off"),
+        stderr.contains("unknown skill: hidden"),
         "disabled load must be unknown, not a skip row: {stderr}"
     );
 }
@@ -6155,24 +6155,24 @@ fn load_disabled_is_unknown() {
 #[test]
 fn why_disabled_is_unknown() {
     let extra = tempfile::tempdir().expect("extra");
-    let off = extra.path().join("off");
-    fs::create_dir_all(&off).expect("off");
+    let hidden = extra.path().join("hidden");
+    fs::create_dir_all(&hidden).expect("hidden");
     fs::write(
-        off.join("SKILL.md"),
-        "---\nname: off\ndescription: hide\n---\nOFF\n",
+        hidden.join("SKILL.md"),
+        "---\nname: hidden\ndescription: hide\n---\nHIDDEN\n",
     )
-    .expect("write off");
+    .expect("write hidden");
 
     let (_home, mut cmd) = bin();
     let out = cmd
         .arg("why")
-        .arg("off")
+        .arg("hidden")
         .arg("--json")
         .arg("--path")
         .arg(extra.path())
         .arg("--no-implicit-roots")
         .arg("--disabled")
-        .arg("off")
+        .arg("hidden")
         .output()
         .expect("run");
     assert_eq!(

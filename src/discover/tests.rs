@@ -2583,14 +2583,14 @@ fn cursor_denylist_is_silent() {
 fn disabled_name_is_silent() {
     let root = tempfile::tempdir().expect("tmp");
     write_skill(
-        &root.path().join(".agents").join("skills").join("off"),
-        "off",
+        &root.path().join(".agents").join("skills").join("hidden"),
+        "hidden",
         "x",
     );
     let report = empty_home_discover(
         root.path(),
         &DiscoveryOptions {
-            disabled: vec!["off".to_owned()],
+            disabled: vec!["hidden".to_owned()],
             ..DiscoveryOptions::default()
         },
     );
