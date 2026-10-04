@@ -4530,6 +4530,67 @@ fn package_dir_symlink_escape_is_unreadable() {
 
 #[cfg(unix)]
 #[test]
+fn dangling_package_symlink_is_unreadable() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    write_skill(&skills.join("ok"), "ok", "body");
+    fs::create_dir_all(skills.join("assets")).expect("mkdir assets");
+    fs::write(skills.join("README.md"), "notes").expect("readme");
+    std::os::unix::fs::symlink(skills.join("README.md"), skills.join("readme-link"))
+        .expect("file symlink");
+    let missing = root.path().join("missing-package");
+    std::os::unix::fs::symlink(&missing, skills.join("gone")).expect("dangling symlink");
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "ok"),
+        "real package must still load: {:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with(".agents/skills/gone"))
+        .unwrap_or_else(|| {
+            panic!(
+                "dangling package must be a skip: skills={:?} skips={:?}",
+                report
+                    .skills
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>(),
+                report.skips
+            )
+        });
+    assert_eq!(skip.kind, SkipKind::Unreadable);
+    assert!(
+        skip.detail.contains("dangling symlink"),
+        "detail={}",
+        skip.detail
+    );
+    assert!(
+        skip.detail.contains("missing-package"),
+        "detail={}",
+        skip.detail
+    );
+    assert!(
+        report.skips.iter().all(|s| {
+            let name = s.path.file_name().and_then(|n| n.to_str());
+            name != Some("README.md") && name != Some("readme-link") && name != Some("assets")
+        }),
+        "files and empty dirs are not dangling packages: {:?}",
+        report.skips
+    );
+    let msg = unknown_or_skipped_skill_message("gone", &report.skips);
+    assert!(
+        msg.contains("dangling symlink"),
+        "load must name the broken package: {msg}"
+    );
+    assert!(!msg.contains("unknown skill"), "msg={msg}");
+}
+
+#[cfg(unix)]
+#[test]
 fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
     let root = tempfile::tempdir().expect("tmp");
     let outside = tempfile::tempdir().expect("out");
