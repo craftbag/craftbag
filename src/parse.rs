@@ -383,6 +383,19 @@ fn unquoted_yaml_null(raw: &str) -> bool {
     matches!(raw.trim(), "null" | "Null" | "NULL" | "~")
 }
 
+/// Unquoted YAML 1.1 boolean words (`true`, `yes`, `on`, and the
+/// false set). Case folds. Digits `0` and `1` stay text because
+/// metadata `version: 1` is a string. A quoted `"true"` is the word.
+fn unquoted_yaml_bool_word(raw: &str) -> bool {
+    if quoted_yaml_scalar(raw) {
+        return false;
+    }
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "true" | "false" | "yes" | "no" | "on" | "off"
+    )
+}
+
 /// A scalar wrapped in `"` or `'`. The whole value is one token.
 fn quoted_yaml_scalar(raw: &str) -> bool {
     let s = raw.trim();
@@ -438,6 +451,93 @@ fn unquoted_argument_hint_brackets(raw_value: &str) -> bool {
         return false;
     }
     s.starts_with('[')
+}
+
+fn reject_optional_string_bool(key: &str, raw_value: &str) -> Result<(), ParseError> {
+    if !unquoted_yaml_bool_word(raw_value) {
+        return Ok(());
+    }
+    let shown_key = crate::sanitize_error_token(key);
+    let shown = crate::sanitize_error_token(raw_value.trim());
+    Err(ParseError::InvalidYaml(format!(
+        "{shown_key} must be a string, got: {shown}"
+    )))
+}
+
+fn reject_metadata_bool_word(raw: &str) -> Result<(), ParseError> {
+    if !unquoted_yaml_bool_word(raw) {
+        return Ok(());
+    }
+    let shown = crate::sanitize_error_token(raw.trim());
+    Err(ParseError::InvalidYaml(format!(
+        "metadata value must be a string, got: {shown}"
+    )))
+}
+
+fn unquoted_yaml_flow_map(raw: &str) -> bool {
+    unquoted_yaml_flow_collection(raw) && raw.trim().starts_with('{')
+}
+
+/// Next significant line when it is an indented `key:` (a nested map).
+/// A following `- item` stays in the iterator so the list error still
+/// names that item. Blank lines and comments are skipped.
+fn peek_indented_nested_key<'a, I>(lines: &mut std::iter::Peekable<I>) -> Option<String>
+where
+    I: Iterator<Item = &'a str>,
+{
+    loop {
+        let skip = match lines.peek().copied() {
+            Some(line) => {
+                let trimmed = line.trim();
+                trimmed.is_empty() || trimmed.starts_with('#')
+            }
+            None => return None,
+        };
+        if !skip {
+            break;
+        }
+        lines.next();
+    }
+    let line = lines.peek().copied()?;
+    if !line_is_yaml_indented(line) {
+        return None;
+    }
+    let trimmed = line.trim();
+    if trimmed.starts_with("- ") || trimmed == "-" {
+        return None;
+    }
+    if trimmed.split_once(':').is_some() {
+        Some(trimmed.to_owned())
+    } else {
+        None
+    }
+}
+
+fn optional_frontmatter_string<'a, I>(
+    key: &str,
+    raw_value: &str,
+    value: &str,
+    lines: &mut std::iter::Peekable<I>,
+    allow_argument_hint_brackets: bool,
+) -> Result<Option<String>, ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    if value.is_empty() || unquoted_yaml_null(raw_value) {
+        if let Some(nested) = peek_indented_nested_key(lines) {
+            let shown_key = crate::sanitize_error_token(key);
+            let shown = crate::sanitize_error_token(&nested);
+            return Err(ParseError::InvalidYaml(format!(
+                "{shown_key} must be a string, got: {shown}"
+            )));
+        }
+        return Ok(None);
+    }
+    if !(allow_argument_hint_brackets && unquoted_argument_hint_brackets(raw_value)) {
+        reject_optional_string_flow(key, raw_value)?;
+    }
+    reject_optional_string_bool(key, raw_value)?;
+    Ok(optional_string_value(raw_value, value))
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -500,6 +600,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             "metadata {shown} must be a string"
                         )));
                     }
+                    reject_metadata_bool_word(raw_v)?;
                     if let Some(stored) = metadata_scalar_or_skip(raw_v) {
                         if !k.is_empty() {
                             metadata.insert(k, stored);
@@ -587,7 +688,10 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
             match key {
                 "name" => {
-                    if value.is_empty() || unquoted_yaml_null(raw_value) {
+                    if value.is_empty()
+                        || unquoted_yaml_null(raw_value)
+                        || unquoted_yaml_bool_word(raw_value)
+                    {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
                         }
@@ -602,7 +706,10 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             "description must be a string, got: {shown}"
                         )));
                     }
-                    if value.is_empty() || unquoted_yaml_null(raw_value) {
+                    if value.is_empty()
+                        || unquoted_yaml_null(raw_value)
+                        || unquoted_yaml_bool_word(raw_value)
+                    {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml(
                                 "description value is empty".to_owned(),
@@ -623,21 +730,24 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         }
                     }
                 }
-                "license" if !value.is_empty() => {
-                    reject_optional_string_flow(key, raw_value)?;
-                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                "license" => {
+                    if let Some(stored) =
+                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                    {
                         license = Some(stored);
                     }
                 }
-                "compatibility" if !value.is_empty() => {
-                    reject_optional_string_flow(key, raw_value)?;
-                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                "compatibility" => {
+                    if let Some(stored) =
+                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                    {
                         compatibility = Some(stored);
                     }
                 }
-                "allowed-tools" | "allowed_tools" if !value.is_empty() => {
-                    reject_optional_string_flow(key, raw_value)?;
-                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                "allowed-tools" | "allowed_tools" => {
+                    if let Some(stored) =
+                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                    {
                         allowed_tools = Some(stored);
                     }
                 }
@@ -648,17 +758,17 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         push_inline_metadata(&mut metadata, &value)?;
                     }
                 }
-                "argument-hint" | "argument_hint" if !value.is_empty() => {
-                    if !unquoted_argument_hint_brackets(raw_value) {
-                        reject_optional_string_flow(key, raw_value)?;
-                    }
-                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                "argument-hint" | "argument_hint" => {
+                    if let Some(stored) =
+                        optional_frontmatter_string(key, raw_value, &value, &mut lines, true)?
+                    {
                         argument_hint = Some(stored);
                     }
                 }
-                "when-to-use" | "when_to_use" if !value.is_empty() => {
-                    reject_optional_string_flow(key, raw_value)?;
-                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                "when-to-use" | "when_to_use" => {
+                    if let Some(stored) =
+                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                    {
                         when_to_use = Some(stored);
                     }
                 }
@@ -675,6 +785,18 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                                 &mut disable_model_invocation,
                             );
                         }
+                    } else if key == "author" && value.is_empty() {
+                        if peek_indented_nested_key(&mut lines).is_some() {
+                            return Err(ParseError::InvalidYaml(
+                                "metadata author must be a string".to_owned(),
+                            ));
+                        }
+                        in_ignore_sequence = true;
+                    } else if key == "author" && unquoted_yaml_flow_map(raw_value) {
+                        let shown = crate::sanitize_error_token(raw_value.trim());
+                        return Err(ParseError::InvalidYaml(format!(
+                            "metadata value must be a string, got: {shown}"
+                        )));
                     } else if value.is_empty() && !is_known_frontmatter_key(key) {
                         // Unknown key with a block sequence: ignore items.
                         // Known scalars (`license:`) stay empty and a
@@ -807,6 +929,7 @@ fn push_inline_metadata(
                 "metadata value must be a string, got: {shown}"
             )));
         }
+        reject_metadata_bool_word(raw_v)?;
         if let Some(stored) = metadata_scalar_or_skip(raw_v) {
             if !k.is_empty() {
                 metadata.insert(k, stored);
@@ -1620,6 +1743,258 @@ body
             list_msg.contains("expected `key: value`") && list_msg.contains("- MIT"),
             "{list_msg}"
         );
+    }
+
+    #[test]
+    fn unquoted_yaml_bool_words_are_not_stored_text() {
+        for token in [
+            "true", "false", "yes", "no", "on", "off", "TRUE", "Yes", "OFF",
+        ] {
+            let description = format!("---\nname: n\ndescription: {token}\n---\nbody\n");
+            let err = parse_skill(&description).expect_err(&description);
+            let msg = err.to_string();
+            assert!(msg.contains("description value is empty"), "{token}: {msg}");
+            assert!(!msg.contains("must be a string"), "{token}: {msg}");
+            let name = format!("---\nname: {token}\ndescription: d\n---\nbody\n");
+            let err = parse_skill(&name).expect_err(&name);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("name value is empty"),
+                "{token} must not become a skill name: {msg}"
+            );
+            assert!(!msg.contains("lowercase alphanumeric"), "{token}: {msg}");
+        }
+        let commented = parse_skill("---\nname: n\ndescription: yes # placeholder\n---\nbody\n")
+            .expect_err("comment");
+        assert!(
+            commented.to_string().contains("description value is empty"),
+            "{commented}"
+        );
+
+        for (key, token) in [
+            ("license", "true"),
+            ("compatibility", "false"),
+            ("allowed-tools", "yes"),
+            ("allowed_tools", "no"),
+            ("argument-hint", "on"),
+            ("argument_hint", "off"),
+            ("when-to-use", "TRUE"),
+            ("when_to_use", "Yes"),
+        ] {
+            let input = format!("---\nname: n\ndescription: d\n{key}: {token}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("{key} must be a string, got: {token}")),
+                "{key} {token}: {msg}"
+            );
+            assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        }
+
+        let quoted = parse_skill(
+            "---\nname: \"true\"\ndescription: \"false\"\nlicense: 'yes'\nwhen-to-use: \"on\"\nargument-hint: \"off\"\n---\nbody\n",
+        )
+        .expect("quoted bool words stay text");
+        assert_eq!(quoted.name, "true");
+        assert_eq!(quoted.description, "false");
+        assert_eq!(quoted.license.as_deref(), Some("yes"));
+        assert_eq!(quoted.when_to_use.as_deref(), Some("on"));
+        assert_eq!(quoted.argument_hint.as_deref(), Some("off"));
+
+        let phrase =
+            parse_skill("---\nname: n\ndescription: true story\nlicense: yesman\n---\nbody\n")
+                .expect("longer words are text");
+        assert_eq!(phrase.description, "true story");
+        assert_eq!(phrase.license.as_deref(), Some("yesman"));
+        let digits =
+            parse_skill("---\nname: n\ndescription: 1\nlicense: 0\n---\nbody\n").expect("digits");
+        assert_eq!(digits.description, "1");
+        assert_eq!(digits.license.as_deref(), Some("0"));
+
+        let block = parse_skill("---\nname: n\ndescription: |\n  true\n---\nbody\n")
+            .expect("block scalar is text");
+        assert_eq!(block.description, "true");
+
+        let flagged =
+            parse_skill("---\nname: n\ndescription: d\nuser-invocable: false\n---\nbody\n")
+                .expect("bool key");
+        assert!(!flagged.user_invocable);
+
+        let meta = parse_skill(
+            "---\nname: n\ndescription: d\nmetadata: {author: true, version: 1}\n---\nbody\n",
+        )
+        .expect_err("flow metadata bool");
+        assert!(
+            meta.to_string()
+                .contains("metadata value must be a string, got: true"),
+            "{meta}"
+        );
+        let meta_block = parse_skill(
+            "---\nname: n\ndescription: d\nmetadata:\n  author: YES\n  version: 1\n---\nbody\n",
+        )
+        .expect_err("block metadata bool");
+        assert!(meta_block.to_string().contains("got: YES"), "{meta_block}");
+        let meta_quoted = parse_skill(
+            "---\nname: n\ndescription: d\nmetadata: {author: \"true\", version: 1}\n---\nbody\n",
+        )
+        .expect("quoted metadata bool word");
+        assert_eq!(
+            meta_quoted.metadata.get("author").map(String::as_str),
+            Some("true")
+        );
+        assert_eq!(
+            meta_quoted.metadata.get("version").map(String::as_str),
+            Some("1")
+        );
+        let meta_num =
+            parse_skill("---\nname: n\ndescription: d\nmetadata:\n  version: 1\n---\nbody\n")
+                .expect("digit metadata stays");
+        assert_eq!(
+            meta_num.metadata.get("version").map(String::as_str),
+            Some("1")
+        );
+    }
+
+    #[test]
+    fn nested_block_under_known_scalar_is_not_omitted() {
+        for (key, nested) in [
+            ("license", "spdx: MIT"),
+            ("compatibility", "os: linux"),
+            ("allowed-tools", "bash: git"),
+            ("allowed_tools", "bash: git"),
+            ("when-to-use", "task: review"),
+            ("when_to_use", "task: review"),
+            ("argument-hint", "name: file"),
+            ("argument_hint", "name: file"),
+        ] {
+            let input = format!("---\nname: n\ndescription: d\n{key}:\n  {nested}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("{key} must be a string, got: {nested}")),
+                "{key}: {msg}"
+            );
+            assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        }
+        let commented = "\
+---
+name: n
+description: d
+license:
+  # later
+  spdx: MIT
+---
+body
+";
+        let err = parse_skill(commented).expect_err("comment before nested");
+        assert!(
+            err.to_string()
+                .contains("license must be a string, got: spdx: MIT"),
+            "{err}"
+        );
+        let blank = "\
+---
+name: n
+description: d
+license:
+
+  spdx: MIT
+---
+body
+";
+        let err = parse_skill(blank).expect_err("blank before nested");
+        assert!(err.to_string().contains("spdx: MIT"), "{err}");
+        let nbsp = "---\nname: n\ndescription: d\nlicense:\n\u{00a0}spdx: MIT\n---\nbody\n";
+        let err = parse_skill(nbsp).expect_err("nbsp indent");
+        assert!(err.to_string().contains("spdx: MIT"), "{err}");
+        let deeper = "\
+---
+name: n
+description: d
+compatibility:
+  os:
+    name: linux
+---
+body
+";
+        let err = parse_skill(deeper).expect_err("deeper");
+        assert!(
+            err.to_string()
+                .contains("compatibility must be a string, got: os:"),
+            "{err}"
+        );
+        let hostile = format!(
+            "---\nname: n\ndescription: d\nlicense:\n  spdx: MIT{}\n---\nbody\n",
+            "\u{2028}"
+        );
+        let err = parse_skill(&hostile).expect_err("line sep");
+        let msg = err.to_string();
+        assert!(!msg.contains('\u{2028}'), "{msg:?}");
+        assert_eq!(msg.lines().count(), 1, "{msg:?}");
+
+        let list = parse_skill("---\nname: n\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
+            .expect_err("list stays the list error");
+        let list_msg = list.to_string();
+        assert!(
+            list_msg.contains("expected `key: value`") && list_msg.contains("- MIT"),
+            "{list_msg}"
+        );
+
+        let literal =
+            parse_skill("---\nname: n\ndescription: d\nlicense: |\n  spdx: MIT\n---\nbody\n")
+                .expect("literal block is a string");
+        assert_eq!(literal.license.as_deref(), Some("spdx: MIT"));
+        let quoted = parse_skill(
+            "---\nname: n\ndescription: d\nlicense: \"spdx: MIT\"\ncompatibility: 'os: linux'\n---\nbody\n",
+        )
+        .expect("quoted colon stays");
+        assert_eq!(quoted.license.as_deref(), Some("spdx: MIT"));
+        assert_eq!(quoted.compatibility.as_deref(), Some("os: linux"));
+
+        let author = "\
+---
+author:
+  name: ada
+name: n
+description: d
+---
+body
+";
+        let err = parse_skill(author).expect_err("top-level author block");
+        assert!(
+            err.to_string().contains("metadata author must be a string"),
+            "{err}"
+        );
+        let author_flow =
+            parse_skill("---\nname: n\ndescription: d\nauthor: {name: ada}\n---\nbody\n")
+                .expect_err("top-level author flow");
+        assert!(
+            author_flow
+                .to_string()
+                .contains("metadata value must be a string, got: {name: ada}"),
+            "{author_flow}"
+        );
+        let author_text =
+            parse_skill("---\nname: n\ndescription: d\nauthor: Ada Lovelace\n---\nbody\n")
+                .expect("scalar author is still an unknown key");
+        assert!(author_text.metadata.is_empty());
+        let author_list =
+            parse_skill("---\nname: n\ndescription: d\nauthor:\n  - ada\n---\nbody\n")
+                .expect("author list stays ignored");
+        assert!(author_list.metadata.is_empty());
+        let author_quoted =
+            parse_skill("---\nname: n\ndescription: d\nauthor: \"{name: ada}\"\n---\nbody\n")
+                .expect("quoted author flow stays ignored");
+        assert!(author_quoted.metadata.is_empty());
+        let hooks =
+            parse_skill("---\nname: n\ndescription: d\nhooks:\n  name: pre-commit\n---\nbody\n")
+                .expect("hooks nested map still loads");
+        assert_eq!(hooks.name, "n");
+        let version =
+            parse_skill("---\nname: n\ndescription: d\nversion:\n  major: 1\n---\nbody\n")
+                .expect("unknown nested map still loads");
+        assert_eq!(version.name, "n");
+        assert!(version.metadata.is_empty());
     }
 
     #[test]

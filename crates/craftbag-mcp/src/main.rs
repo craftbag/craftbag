@@ -5035,13 +5035,13 @@ mod tests {
             "---\nname: keep\ndescription: stay\n---\nKEEP\n",
         )
         .expect("write keep");
-        let off = extra.path().join("off");
-        fs::create_dir_all(&off).expect("off");
+        let hidden = extra.path().join("hidden");
+        fs::create_dir_all(&hidden).expect("hidden");
         fs::write(
-            off.join("SKILL.md"),
-            "---\nname: off\ndescription: hide\n---\nOFF\n",
+            hidden.join("SKILL.md"),
+            "---\nname: hidden\ndescription: hide\n---\nHIDDEN\n",
         )
-        .expect("write off");
+        .expect("write hidden");
         let listed = empty_home(|| {
             call(
                 147,
@@ -5049,7 +5049,7 @@ mod tests {
                 json!({
                     "paths": [extra.path().display().to_string()],
                     "implicit_roots": false,
-                    "disabled": ["OFF"]
+                    "disabled": ["HIDDEN"]
                 }),
             )
         });
@@ -5059,8 +5059,8 @@ mod tests {
             "disabled list must still include keep: {text}"
         );
         assert!(
-            !text.contains("off"),
-            "disabled OFF must NFKC-hide off: {text}"
+            !text.contains("hidden"),
+            "disabled HIDDEN must hide hidden: {text}"
         );
         let defaulted = empty_home(|| {
             call(
@@ -5074,30 +5074,30 @@ mod tests {
         });
         let default_text = call_text(&defaulted);
         assert!(
-            default_text.contains("off") && default_text.contains("keep"),
-            "omitted disabled must still load off: {default_text}"
+            default_text.contains("hidden") && default_text.contains("keep"),
+            "omitted disabled must still load hidden: {default_text}"
         );
     }
 
     #[test]
     fn skills_load_disabled_is_unknown() {
         let extra = tempfile::tempdir().expect("extra");
-        let off = extra.path().join("off");
-        fs::create_dir_all(&off).expect("off");
+        let hidden = extra.path().join("hidden");
+        fs::create_dir_all(&hidden).expect("hidden");
         fs::write(
-            off.join("SKILL.md"),
-            "---\nname: off\ndescription: hide\n---\nOFF\n",
+            hidden.join("SKILL.md"),
+            "---\nname: hidden\ndescription: hide\n---\nHIDDEN\n",
         )
-        .expect("write off");
+        .expect("write hidden");
         let resp = empty_home(|| {
             call(
                 149,
                 "skills_load",
                 json!({
-                    "name": "off",
+                    "name": "hidden",
                     "paths": [extra.path().display().to_string()],
                     "implicit_roots": false,
-                    "disabled": ["off"]
+                    "disabled": ["hidden"]
                 }),
             )
         });
