@@ -650,3 +650,30 @@ fn review_since_v020_pins_publisher_and_triage() {
         "a grouped SHA pin must not hide a real semver major"
     );
 }
+
+/// `release.yml` rewrites the GitHub Release body from CHANGELOG.md.
+/// Curated notes must run after that job, or the edit wins and the
+/// notes branch is already deleted.
+#[test]
+fn curated_notes_wait_for_changelog_edit() {
+    let please = read_rel(".github/workflows/release-please.yml");
+    let jobs = parse_jobs(&please);
+    let body = jobs
+        .iter()
+        .find(|(name, _)| name == "apply-release-notes")
+        .map(|(_, body)| body.as_str())
+        .expect("apply-release-notes job");
+    let needs = body
+        .lines()
+        .find(|line| line.trim_start().starts_with("needs:"))
+        .expect("apply-release-notes needs");
+    assert!(
+        needs.contains("[release-please, release]"),
+        "curated notes must wait for the release workflow: {needs}"
+    );
+    let release = read_rel(".github/workflows/release.yml");
+    assert!(
+        release.contains("gh release edit \"$TAG\" --notes-file /tmp/release-notes.md"),
+        "the changelog edit is why notes must run later"
+    );
+}
