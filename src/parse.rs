@@ -393,6 +393,16 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         in_triggers = false;
         in_ignore_sequence = false;
 
+        // A list item can contain a colon (`- use foo: bar`). That is
+        // not a nested key. Name the item. Do not fall through to a
+        // missing description.
+        if trimmed.starts_with("- ") {
+            let shown = crate::sanitize_error_token(trimmed);
+            return Err(ParseError::InvalidYaml(format!(
+                "expected `key: value`, got: {shown}"
+            )));
+        }
+
         if line_is_yaml_indented(line) && trimmed.split_once(':').is_some() {
             continue;
         }
@@ -1137,6 +1147,32 @@ description:
         assert!(
             empty_err.to_string().contains("description value is empty"),
             "{empty_err}"
+        );
+    }
+
+    #[test]
+    fn description_block_list_item_with_colon_names_the_item() {
+        let input = "\
+---
+name: desc-colon
+description:
+  - use foo: bar
+---
+# X
+";
+        let err = parse_skill(input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("- use foo: bar"),
+            "list item must be in the error, got {msg}"
+        );
+        assert!(
+            msg.contains("expected `key: value`"),
+            "a list item is not a missing description: {msg}"
+        );
+        assert!(
+            !msg.contains("missing required field"),
+            "a present list must not look like a missing field: {msg}"
         );
     }
 
