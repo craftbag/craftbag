@@ -144,7 +144,10 @@ jobs:
 
   apply-release-notes:
     name: Apply release notes
-    needs: release-please
+    # release.yml rewrites the Release body from CHANGELOG.md.
+    # Run after that edit. Otherwise the notes branch is deleted
+    # and the changelog wins.
+    needs: [release-please, release]
     if: >-
       always() && !failure() && !cancelled() &&
       needs.release-please.outputs.release_created == 'true'
