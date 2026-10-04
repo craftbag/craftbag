@@ -353,6 +353,10 @@ fn line_is_yaml_indented(line: &str) -> bool {
     matches!(line.chars().next(), Some(c) if c.is_whitespace())
 }
 
+fn yaml_indent_width(line: &str) -> usize {
+    line.chars().take_while(|c| c.is_whitespace()).count()
+}
+
 fn peek_starts_yaml_list(lines: &mut std::iter::Peekable<std::str::Lines<'_>>) -> bool {
     loop {
         let skip = match lines.peek().copied() {
@@ -442,6 +446,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     let mut in_triggers = false;
     let mut in_ignore_sequence = false;
     let mut in_metadata = false;
+    let mut metadata_key_indent: Option<usize> = None;
 
     let mut lines = yaml.lines().peekable();
     while let Some(line) = lines.next() {
@@ -453,18 +458,46 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         if in_metadata {
             let is_indented = line_is_yaml_indented(line);
             if is_indented {
+                let indent = yaml_indent_width(line);
+                if metadata_key_indent.is_some_and(|base| indent > base) {
+                    let shown = crate::sanitize_error_token(trimmed);
+                    return Err(ParseError::InvalidYaml(format!(
+                        "metadata value must be a string, got: {shown}"
+                    )));
+                }
+                if metadata_key_indent.is_none() {
+                    metadata_key_indent = Some(indent);
+                }
+                if trimmed.starts_with("- ") || trimmed == "-" {
+                    let shown = crate::sanitize_error_token(trimmed);
+                    return Err(ParseError::InvalidYaml(format!(
+                        "metadata value must be a string, got: {shown}"
+                    )));
+                }
                 if let Some((k, v)) = trimmed.split_once(':') {
                     let k = unquote_yaml_scalar(k.trim());
                     let raw_v = strip_yaml_inline_comment(v);
+                    if raw_v.trim().is_empty() {
+                        let shown = crate::sanitize_error_token(&k);
+                        return Err(ParseError::InvalidYaml(format!(
+                            "metadata {shown} must be a string"
+                        )));
+                    }
                     if let Some(stored) = metadata_scalar_or_skip(raw_v) {
                         if !k.is_empty() {
                             metadata.insert(k, stored);
                         }
                     }
+                } else {
+                    let shown = crate::sanitize_error_token(trimmed);
+                    return Err(ParseError::InvalidYaml(format!(
+                        "metadata value must be a string, got: {shown}"
+                    )));
                 }
                 continue;
             }
             in_metadata = false;
+            metadata_key_indent = None;
         }
 
         if trimmed.starts_with("- ") && in_triggers {
@@ -1593,6 +1626,61 @@ body
         let err = parse_skill("---\nname: n\ndescription: d\nmetadata: null\n---\nbody\n")
             .expect_err("scalar metadata");
         assert!(err.to_string().contains("must be a map"), "{err}");
+    }
+
+    #[test]
+    fn nested_metadata_is_not_a_flat_string_map() {
+        let nested = "\
+---
+name: nested
+description: d
+metadata:
+  author:
+    name: ada
+  tags:
+    - one
+---
+body
+";
+        let err = parse_skill(nested).expect_err("nested metadata");
+        let msg = err.to_string();
+        assert!(msg.contains("metadata author must be a string"), "{msg}");
+        let list = "\
+---
+name: tagged
+description: d
+metadata:
+  tags:
+    - one
+---
+body
+";
+        let list_err = parse_skill(list).expect_err("metadata list");
+        assert!(
+            list_err.to_string().contains("must be a string"),
+            "{list_err}"
+        );
+        let bare_list = "\
+---
+name: bare
+description: d
+metadata:
+  - one
+---
+body
+";
+        let bare_err = parse_skill(bare_list).expect_err("metadata sequence");
+        assert!(
+            bare_err.to_string().contains("must be a string")
+                && bare_err.to_string().contains("- one"),
+            "{bare_err}"
+        );
+        let flat = parse_skill(
+            "---\nname: flat\ndescription: d\nmetadata:\n  author: ada\n  version: \"\"\n---\nbody\n",
+        )
+        .expect("flat metadata");
+        assert_eq!(flat.metadata.get("author").map(String::as_str), Some("ada"));
+        assert_eq!(flat.metadata.get("version").map(String::as_str), Some(""));
     }
 
     #[test]
