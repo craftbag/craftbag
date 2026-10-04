@@ -386,6 +386,15 @@ fn optional_string_value(raw_value: &str, value: &str) -> Option<String> {
     }
 }
 
+/// Unquoted null in a metadata pair is omitted. Quoted `"null"` stays.
+fn metadata_scalar_or_skip(raw: &str) -> Option<String> {
+    if unquoted_yaml_null(raw) {
+        None
+    } else {
+        Some(unquote_yaml_scalar(raw))
+    }
+}
+
 /// `argument-hint: [name]` is placeholder text. A flow map is not.
 fn unquoted_argument_hint_brackets(raw_value: &str) -> bool {
     let s = raw_value.trim();
@@ -425,9 +434,11 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             if is_indented {
                 if let Some((k, v)) = trimmed.split_once(':') {
                     let k = unquote_yaml_scalar(k.trim());
-                    let v = unquote_yaml_scalar(strip_yaml_inline_comment(v));
-                    if !k.is_empty() {
-                        metadata.insert(k.to_owned(), v.to_owned());
+                    let raw_v = strip_yaml_inline_comment(v);
+                    if let Some(stored) = metadata_scalar_or_skip(raw_v) {
+                        if !k.is_empty() {
+                            metadata.insert(k, stored);
+                        }
                     }
                 }
                 continue;
@@ -714,9 +725,10 @@ fn push_inline_metadata(
             )));
         };
         let k = unquote_yaml_scalar(k.trim());
-        let v = unquote_yaml_scalar(v.trim());
-        if !k.is_empty() {
-            metadata.insert(k.to_owned(), v.to_owned());
+        if let Some(stored) = metadata_scalar_or_skip(v.trim()) {
+            if !k.is_empty() {
+                metadata.insert(k, stored);
+            }
         }
     }
     Ok(())
@@ -1526,6 +1538,40 @@ body
             list_msg.contains("expected `key: value`") && list_msg.contains("- MIT"),
             "{list_msg}"
         );
+    }
+
+    #[test]
+    fn metadata_null_value_is_omitted() {
+        let flow = parse_skill(
+            "---\nname: n\ndescription: d\nmetadata: {author: null, version: 1}\n---\nbody\n",
+        )
+        .expect("flow metadata");
+        assert!(
+            !flow.metadata.contains_key("author"),
+            "author stored {:?}",
+            flow.metadata.get("author")
+        );
+        assert_eq!(flow.metadata.get("version").map(String::as_str), Some("1"));
+        let quoted =
+            parse_skill("---\nname: n\ndescription: d\nmetadata: {author: \"null\"}\n---\nbody\n")
+                .expect("quoted metadata null");
+        assert_eq!(
+            quoted.metadata.get("author").map(String::as_str),
+            Some("null")
+        );
+        let block = parse_skill(
+            "---\nname: n\ndescription: d\nmetadata:\n  author: ~\n  version: 1\n---\nbody\n",
+        )
+        .expect("block metadata");
+        assert!(
+            !block.metadata.contains_key("author"),
+            "{:?}",
+            block.metadata
+        );
+        assert_eq!(block.metadata.get("version").map(String::as_str), Some("1"));
+        let err = parse_skill("---\nname: n\ndescription: d\nmetadata: null\n---\nbody\n")
+            .expect_err("scalar metadata");
+        assert!(err.to_string().contains("must be a map"), "{err}");
     }
 
     #[test]
