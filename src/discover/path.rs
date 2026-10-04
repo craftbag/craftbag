@@ -3,6 +3,8 @@
 use std::cell::RefCell;
 use std::path::{Component, Path, PathBuf};
 
+use crate::source::SkillSource;
+
 use super::host_token::{
     host_token_collapses_after_whitespace, nfkc_dot_path_components, path_has_line_separator,
     str_has_line_separator,
@@ -15,7 +17,10 @@ thread_local! {
 /// Ancestors of `cwd` through the nearest `.git` (cwd first).
 ///
 /// When no `.git` exists, the walk is `cwd` only so a nested tree
-/// without a repo does not climb into an unrelated parent.
+/// without a repo does not climb into an unrelated parent. The
+/// exception is a cwd already inside `.agents` or `.{vendor}`: keep
+/// that directory and its parent, which is the project that holds the
+/// skill tree.
 pub fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut current = Some(cwd.to_path_buf());
@@ -29,11 +34,33 @@ pub fn walk_cwd_to_git_root(cwd: &Path) -> Vec<PathBuf> {
         current = dir.parent().map(Path::to_path_buf);
     }
     if found_git {
-        out
-    } else {
-        out.truncate(1);
-        out
+        return out;
     }
+    match out.iter().position(|dir| enclosing_skill_root(dir)) {
+        Some(idx) => {
+            let keep = idx.saturating_add(2);
+            if keep < out.len() {
+                out.truncate(keep);
+            }
+            out
+        }
+        None => {
+            out.truncate(1);
+            out
+        }
+    }
+}
+
+fn enclosing_skill_root(dir: &Path) -> bool {
+    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if name == ".agents" {
+        return true;
+    }
+    SkillSource::VENDOR_TOKENS
+        .iter()
+        .any(|token| name.strip_prefix('.').is_some_and(|rest| rest == *token))
 }
 
 pub(super) fn home_dir() -> Option<PathBuf> {
