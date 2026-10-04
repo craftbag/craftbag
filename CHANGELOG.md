@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/craftbag/craftbag/compare/v0.2.1...v0.2.2) (2026-10-04)
+
+
+### Bug Fixes
+
+* accept hyphenated load args and report dangling skill links ([#397](https://github.com/craftbag/craftbag/issues/397)) ([aadae68](https://github.com/craftbag/craftbag/commit/aadae6822198074621c0d183deb79a3d0d067eda))
+* accept validate . and SKILL.md inside the package ([#399](https://github.com/craftbag/craftbag/issues/399)) ([f3a8ff1](https://github.com/craftbag/craftbag/commit/f3a8ff1b8d0f0859459ff490a25eb8e5fdbe60e8))
+* find skills from inside .agents when there is no git repo ([#400](https://github.com/craftbag/craftbag/issues/400)) ([8fcb9da](https://github.com/craftbag/craftbag/commit/8fcb9da13ae33f634729cbe9c58081e383467855))
+* keep a comma inside a quoted trigger scalar ([#403](https://github.com/craftbag/craftbag/issues/403)) ([5af30d9](https://github.com/craftbag/craftbag/commit/5af30d959311a3f85315afb7e9b1595f575574da))
+* omit unquoted null and reject flow on optional frontmatter ([#396](https://github.com/craftbag/craftbag/issues/396)) ([ea02fc9](https://github.com/craftbag/craftbag/commit/ea02fc997b2017d7529f56a891e955252d913ed5))
+* reject a nested flow map stored as metadata text ([#402](https://github.com/craftbag/craftbag/issues/402)) ([a197f7f](https://github.com/craftbag/craftbag/commit/a197f7fb49be95a91cdf554cb61f5f2049a9c0ba))
+* reject nested metadata instead of flattening it ([#401](https://github.com/craftbag/craftbag/issues/401)) ([1c27b81](https://github.com/craftbag/craftbag/commit/1c27b81f05c5150be4a0f52f401bdcd7e5ad69f1))
+* reject null, flow, and delayed description lists ([#394](https://github.com/craftbag/craftbag/issues/394)) ([9f9195d](https://github.com/craftbag/craftbag/commit/9f9195d886ff0189665a136de63290500af4f6f3))
+* treat empty frontmatter fences as a missing name ([#398](https://github.com/craftbag/craftbag/issues/398)) ([25db518](https://github.com/craftbag/craftbag/commit/25db5183edc29395c1a792968afa5a7d694d7d0d))
+
 ## [0.2.1](https://github.com/craftbag/craftbag/compare/v0.2.0...v0.2.1) (2026-10-04)
 
 
