@@ -367,6 +367,34 @@ fn unquoted_yaml_flow_collection(raw: &str) -> bool {
     s.starts_with('[') || s.starts_with('{')
 }
 
+fn reject_optional_string_flow(key: &str, raw_value: &str) -> Result<(), ParseError> {
+    if !unquoted_yaml_flow_collection(raw_value) {
+        return Ok(());
+    }
+    let shown_key = crate::sanitize_error_token(key);
+    let shown = crate::sanitize_error_token(raw_value.trim());
+    Err(ParseError::InvalidYaml(format!(
+        "{shown_key} must be a string, got: {shown}"
+    )))
+}
+
+fn optional_string_value(raw_value: &str, value: &str) -> Option<String> {
+    if unquoted_yaml_null(raw_value) {
+        None
+    } else {
+        Some(value.to_owned())
+    }
+}
+
+/// `argument-hint: [name]` is placeholder text. A flow map is not.
+fn unquoted_argument_hint_brackets(raw_value: &str) -> bool {
+    let s = raw_value.trim();
+    if s.starts_with('"') || s.starts_with('\'') {
+        return false;
+    }
+    s.starts_with('[')
+}
+
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
 pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     let mut name: Option<String> = None;
@@ -505,18 +533,27 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 "triggers" => {
                     if value.is_empty() {
                         in_triggers = true;
-                    } else {
+                    } else if !unquoted_yaml_null(raw_value) {
                         push_inline_triggers(&mut triggers, &value);
                     }
                 }
                 "license" if !value.is_empty() => {
-                    license = Some(value);
+                    reject_optional_string_flow(key, raw_value)?;
+                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                        license = Some(stored);
+                    }
                 }
                 "compatibility" if !value.is_empty() => {
-                    compatibility = Some(value);
+                    reject_optional_string_flow(key, raw_value)?;
+                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                        compatibility = Some(stored);
+                    }
                 }
                 "allowed-tools" | "allowed_tools" if !value.is_empty() => {
-                    allowed_tools = Some(value);
+                    reject_optional_string_flow(key, raw_value)?;
+                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                        allowed_tools = Some(stored);
+                    }
                 }
                 "metadata" if !line_is_yaml_indented(line) => {
                     if value.is_empty() {
@@ -526,10 +563,18 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     }
                 }
                 "argument-hint" | "argument_hint" if !value.is_empty() => {
-                    argument_hint = Some(value);
+                    if !unquoted_argument_hint_brackets(raw_value) {
+                        reject_optional_string_flow(key, raw_value)?;
+                    }
+                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                        argument_hint = Some(stored);
+                    }
                 }
                 "when-to-use" | "when_to_use" if !value.is_empty() => {
-                    when_to_use = Some(value);
+                    reject_optional_string_flow(key, raw_value)?;
+                    if let Some(stored) = optional_string_value(raw_value, &value) {
+                        when_to_use = Some(stored);
+                    }
                 }
                 _ => {
                     if let Some(canon) = canonical_bool_yaml_key(key) {
@@ -684,7 +729,11 @@ fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
         .and_then(|s| s.strip_suffix(']'))
         .unwrap_or(trimmed);
     for part in inner.split(',') {
-        let item = unquote_yaml_scalar(part.trim());
+        let raw_part = part.trim();
+        if unquoted_yaml_null(raw_part) {
+            continue;
+        }
+        let item = unquote_yaml_scalar(raw_part);
         if !item.is_empty() {
             triggers.push(item.to_owned());
         }
@@ -1389,6 +1438,93 @@ body
         assert!(
             quoted_name.to_string().contains("lowercase alphanumeric"),
             "{quoted_name}"
+        );
+    }
+
+    #[test]
+    fn optional_string_null_and_flow_are_not_stored_text() {
+        for (key, field) in [
+            ("license", "license"),
+            ("compatibility", "compatibility"),
+            ("allowed-tools", "allowed_tools"),
+            ("allowed_tools", "allowed_tools"),
+            ("argument-hint", "argument_hint"),
+            ("argument_hint", "argument_hint"),
+            ("when-to-use", "when_to_use"),
+            ("when_to_use", "when_to_use"),
+        ] {
+            for token in ["null", "Null", "NULL", "~"] {
+                let input = format!("---\nname: n\ndescription: d\n{key}: {token}\n---\nbody\n");
+                let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
+                let got = match field {
+                    "license" => skill.license,
+                    "compatibility" => skill.compatibility,
+                    "allowed_tools" => skill.allowed_tools,
+                    "argument_hint" => skill.argument_hint,
+                    "when_to_use" => skill.when_to_use,
+                    other => panic!("{other}"),
+                };
+                assert!(got.is_none(), "{key}: {token} stored {got:?}");
+            }
+        }
+        let quoted = parse_skill(
+            "---\nname: n\ndescription: d\nlicense: \"null\"\nwhen-to-use: \"~\"\n---\nbody\n",
+        )
+        .expect("quoted null stays");
+        assert_eq!(quoted.license.as_deref(), Some("null"));
+        assert_eq!(quoted.when_to_use.as_deref(), Some("~"));
+
+        for (input_key, raw) in [
+            ("when-to-use", "[editing]"),
+            ("license", "[MIT]"),
+            ("argument-hint", "{a: b}"),
+        ] {
+            let input = format!("---\nname: n\ndescription: d\n{input_key}: {raw}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("must be a string, got: ") && msg.contains(raw),
+                "{msg}"
+            );
+            assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        }
+        let brackets =
+            parse_skill("---\nname: n\ndescription: d\nwhen-to-use: \"see [one]\"\n---\nbody\n")
+                .expect("quoted brackets");
+        assert_eq!(brackets.when_to_use.as_deref(), Some("see [one]"));
+        for key in ["argument-hint", "argument_hint"] {
+            let input = format!("---\nname: n\ndescription: d\n{key}: [name]\n---\nbody\n");
+            let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
+            assert_eq!(skill.argument_hint.as_deref(), Some("[name]"), "{key}");
+        }
+
+        for token in ["null", "NULL", "~"] {
+            let input = format!("---\nname: n\ndescription: d\ntriggers: {token}\n---\nbody\n");
+            let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
+            assert!(skill.triggers.is_empty(), "{token}: {:?}", skill.triggers);
+        }
+        let quoted_trigger =
+            parse_skill("---\nname: n\ndescription: d\ntriggers: [\"null\", git]\n---\nbody\n")
+                .expect("quoted trigger null");
+        assert_eq!(
+            quoted_trigger.triggers,
+            vec!["null".to_owned(), "git".to_owned()]
+        );
+        let skipped =
+            parse_skill("---\nname: n\ndescription: d\ntriggers: [null, git]\n---\nbody\n")
+                .expect("skip null item");
+        assert_eq!(skipped.triggers, vec!["git".to_owned()]);
+        let kept =
+            parse_skill("---\nname: n\ndescription: d\ntriggers: [git, rebase]\n---\nbody\n")
+                .expect("flow triggers");
+        assert_eq!(kept.triggers, vec!["git".to_owned(), "rebase".to_owned()]);
+
+        let list = parse_skill("---\nname: n\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
+            .expect_err("license list");
+        let list_msg = list.to_string();
+        assert!(
+            list_msg.contains("expected `key: value`") && list_msg.contains("- MIT"),
+            "{list_msg}"
         );
     }
 
