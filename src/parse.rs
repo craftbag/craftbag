@@ -477,6 +477,12 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 if let Some((k, v)) = trimmed.split_once(':') {
                     let k = unquote_yaml_scalar(k.trim());
                     let raw_v = strip_yaml_inline_comment(v);
+                    if unquoted_yaml_flow_collection(raw_v) {
+                        let shown = crate::sanitize_error_token(raw_v.trim());
+                        return Err(ParseError::InvalidYaml(format!(
+                            "metadata value must be a string, got: {shown}"
+                        )));
+                    }
                     if raw_v.trim().is_empty() {
                         let shown = crate::sanitize_error_token(&k);
                         return Err(ParseError::InvalidYaml(format!(
@@ -779,7 +785,14 @@ fn push_inline_metadata(
             )));
         };
         let k = unquote_yaml_scalar(k.trim());
-        if let Some(stored) = metadata_scalar_or_skip(v.trim()) {
+        let raw_v = v.trim();
+        if unquoted_yaml_flow_collection(raw_v) {
+            let shown = crate::sanitize_error_token(raw_v);
+            return Err(ParseError::InvalidYaml(format!(
+                "metadata value must be a string, got: {shown}"
+            )));
+        }
+        if let Some(stored) = metadata_scalar_or_skip(raw_v) {
             if !k.is_empty() {
                 metadata.insert(k, stored);
             }
@@ -1681,6 +1694,31 @@ body
         .expect("flat metadata");
         assert_eq!(flat.metadata.get("author").map(String::as_str), Some("ada"));
         assert_eq!(flat.metadata.get("version").map(String::as_str), Some(""));
+        let flow = parse_skill(
+            "---\nname: flow\ndescription: d\nmetadata: {author: {name: ada}, version: 1}\n---\nbody\n",
+        )
+        .expect_err("nested flow metadata");
+        assert!(
+            flow.to_string().contains("metadata value must be a string")
+                && flow.to_string().contains("{name: ada}"),
+            "{flow}"
+        );
+        let block_flow = parse_skill(
+            "---\nname: block\ndescription: d\nmetadata:\n  author: {name: ada}\n---\nbody\n",
+        )
+        .expect_err("block flow metadata");
+        assert!(
+            block_flow.to_string().contains("{name: ada}"),
+            "{block_flow}"
+        );
+        let quoted = parse_skill(
+            "---\nname: quoted\ndescription: d\nmetadata: {author: \"{name: ada}\"}\n---\nbody\n",
+        )
+        .expect("quoted flow text");
+        assert_eq!(
+            quoted.metadata.get("author").map(String::as_str),
+            Some("{name: ada}")
+        );
     }
 
     #[test]
