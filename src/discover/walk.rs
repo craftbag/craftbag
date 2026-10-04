@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::ParseError;
 use crate::miss::SkillMiss;
 use crate::parse::{
-    parse_skill, peek_frontmatter_name, skill_name_matches_directory, unknown_frontmatter_keys,
+    parse_skill, peek_frontmatter_name, skill_md_package_dir_name, skill_name_matches_directory,
+    unknown_frontmatter_keys,
 };
 use crate::skill::Skill;
 use crate::skip::{DiscoveryReport, SkillSkip, SkipKind};
@@ -290,6 +291,21 @@ pub fn validate_path(path: &Path) -> ValidationReport {
     validate_path_with_options(path, false)
 }
 
+/// Prefix `cwd` when `path` has no package directory component.
+fn anchor_package_path(path: &Path) -> PathBuf {
+    let candidate = match resolve_validate_target(path) {
+        Ok(joined) => joined,
+        Err(_) => path.to_path_buf(),
+    };
+    if skill_md_package_dir_name(&candidate).is_some() {
+        return path.to_path_buf();
+    }
+    match std::env::current_dir() {
+        Ok(cwd) => cwd.join(path),
+        Err(_) => path.to_path_buf(),
+    }
+}
+
 /// Validate a SKILL.md path or a package directory.
 ///
 /// When `strict` is true, unknown frontmatter keys are errors. Default
@@ -323,6 +339,9 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
     // Same NFKC `.` / `..` rewrite as extra-path, so
     // `wanted/evil/‥/SKILL.md` is the `wanted` package.
     let path = nfkc_dot_path_components(path);
+    // `validate .` and `validate SKILL.md` from inside the package have
+    // no directory component. Join cwd so the parent name is that package.
+    let path = anchor_package_path(&path);
     let path_buf = match resolve_validate_target(&path) {
         Ok(p) => p,
         Err(detail) => {
