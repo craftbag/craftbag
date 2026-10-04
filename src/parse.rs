@@ -383,6 +383,17 @@ fn unquoted_yaml_null(raw: &str) -> bool {
     matches!(raw.trim(), "null" | "Null" | "NULL" | "~")
 }
 
+/// A scalar wrapped in `"` or `'`. The whole value is one token.
+fn quoted_yaml_scalar(raw: &str) -> bool {
+    let s = raw.trim();
+    let bytes = s.as_bytes();
+    if bytes.len() < 2 {
+        return false;
+    }
+    let quote = bytes[0];
+    (quote == b'"' || quote == b'\'') && bytes[bytes.len() - 1] == quote
+}
+
 /// Unquoted flow sequence or flow map. Quoted text may contain brackets.
 fn unquoted_yaml_flow_collection(raw: &str) -> bool {
     let s = raw.trim();
@@ -605,7 +616,11 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     if value.is_empty() {
                         in_triggers = true;
                     } else if !unquoted_yaml_null(raw_value) {
-                        push_inline_triggers(&mut triggers, &value);
+                        if quoted_yaml_scalar(raw_value) {
+                            triggers.push(value);
+                        } else {
+                            push_inline_triggers(&mut triggers, &value);
+                        }
                     }
                 }
                 "license" if !value.is_empty() => {
@@ -1604,6 +1619,27 @@ body
         assert!(
             list_msg.contains("expected `key: value`") && list_msg.contains("- MIT"),
             "{list_msg}"
+        );
+    }
+
+    #[test]
+    fn quoted_trigger_scalar_keeps_a_comma() {
+        let quoted = parse_skill(
+            "---\nname: n\ndescription: d\ntriggers: \"changelog, release\"\n---\nbody\n",
+        )
+        .expect("quoted trigger");
+        assert_eq!(quoted.triggers, vec!["changelog, release".to_owned()]);
+        let single = parse_skill(
+            "---\nname: n\ndescription: d\ntriggers: 'changelog, release'\n---\nbody\n",
+        )
+        .expect("single quoted trigger");
+        assert_eq!(single.triggers, vec!["changelog, release".to_owned()]);
+        let split =
+            parse_skill("---\nname: n\ndescription: d\ntriggers: changelog, release\n---\nbody\n")
+                .expect("unquoted triggers");
+        assert_eq!(
+            split.triggers,
+            vec!["changelog".to_owned(), "release".to_owned()]
         );
     }
 
