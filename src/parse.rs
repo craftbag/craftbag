@@ -333,9 +333,38 @@ fn line_is_yaml_indented(line: &str) -> bool {
 }
 
 fn peek_starts_yaml_list(lines: &mut std::iter::Peekable<std::str::Lines<'_>>) -> bool {
+    loop {
+        let skip = match lines.peek().copied() {
+            Some(line) => {
+                let trimmed = line.trim();
+                trimmed.is_empty() || trimmed.starts_with('#')
+            }
+            None => return false,
+        };
+        if !skip {
+            break;
+        }
+        lines.next();
+    }
     lines
         .peek()
-        .is_some_and(|line| line.trim_start().starts_with("- "))
+        .copied()
+        .is_some_and(|line| line.trim().starts_with("- "))
+}
+
+/// Unquoted YAML null (`null`, `Null`, `NULL`, `~`).
+/// A quoted `"null"` is the word, not an empty scalar.
+fn unquoted_yaml_null(raw: &str) -> bool {
+    matches!(raw.trim(), "null" | "Null" | "NULL" | "~")
+}
+
+/// Unquoted flow sequence or flow map. Quoted text may contain brackets.
+fn unquoted_yaml_flow_collection(raw: &str) -> bool {
+    let s = raw.trim();
+    if s.starts_with('"') || s.starts_with('\'') {
+        return false;
+    }
+    s.starts_with('[') || s.starts_with('{')
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -448,13 +477,22 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
             match key {
                 "name" => {
-                    if value.is_empty() {
-                        return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
+                    if value.is_empty() || unquoted_yaml_null(raw_value) {
+                        if !peek_starts_yaml_list(&mut lines) {
+                            return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
+                        }
+                    } else {
+                        name = Some(value);
                     }
-                    name = Some(value);
                 }
                 "description" => {
-                    if value.is_empty() {
+                    if unquoted_yaml_flow_collection(raw_value) {
+                        let shown = crate::sanitize_error_token(raw_value.trim());
+                        return Err(ParseError::InvalidYaml(format!(
+                            "description must be a string, got: {shown}"
+                        )));
+                    }
+                    if value.is_empty() || unquoted_yaml_null(raw_value) {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml(
                                 "description value is empty".to_owned(),
@@ -495,12 +533,17 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
                 _ => {
                     if let Some(canon) = canonical_bool_yaml_key(key) {
-                        assign_parsed_bool(
-                            canon,
-                            require_bool_yaml(canon, &value)?,
-                            &mut user_invocable,
-                            &mut disable_model_invocation,
-                        );
+                        // A block list is not an empty boolean. The `- `
+                        // check names the item.
+                        let list_follows = value.is_empty() && peek_starts_yaml_list(&mut lines);
+                        if !list_follows {
+                            assign_parsed_bool(
+                                canon,
+                                require_bool_yaml(canon, &value)?,
+                                &mut user_invocable,
+                                &mut disable_model_invocation,
+                            );
+                        }
                     } else if value.is_empty() && !is_known_frontmatter_key(key) {
                         // Unknown key with a block sequence: ignore items.
                         // Known scalars (`license:`) stay empty and a
@@ -1173,6 +1216,222 @@ description:
         assert!(
             !msg.contains("missing required field"),
             "a present list must not look like a missing field: {msg}"
+        );
+    }
+
+    #[test]
+    fn description_list_after_blank_or_comment_names_the_item() {
+        let assert_names_item = |input: &str| {
+            let err = parse_skill(input).expect_err(input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("expected `key: value`") && msg.contains("- use foo: bar"),
+                "{msg}"
+            );
+            assert!(!msg.contains("value is empty"), "{msg}");
+        };
+        assert_names_item(
+            "\
+---
+name: n
+description:
+
+  - use foo: bar
+---
+body
+",
+        );
+        assert_names_item(
+            "\
+---
+name: n
+description:
+  # when
+  - use foo: bar
+---
+body
+",
+        );
+        let empty = parse_skill("---\nname: n\ndescription:\n---\nbody\n").expect_err("empty");
+        assert!(
+            empty.to_string().contains("description value is empty"),
+            "{empty}"
+        );
+        let when = parse_skill(
+            "\
+---
+name: n
+description: d
+when-to-use:
+
+  - editing
+---
+body
+",
+        )
+        .expect_err("when-to-use");
+        let when_msg = when.to_string();
+        assert!(
+            when_msg.contains("expected `key: value`") && when_msg.contains("- editing"),
+            "{when_msg}"
+        );
+    }
+
+    #[test]
+    fn name_and_bool_keys_name_a_following_list() {
+        let assert_names_item = |input: &str, item: &str| {
+            let err = parse_skill(input).expect_err(input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("expected `key: value`") && msg.contains(item),
+                "{msg}"
+            );
+            assert!(!msg.contains("value is empty"), "{msg}");
+        };
+        assert_names_item(
+            "\
+---
+name:
+  - my-skill
+description: d
+---
+body
+",
+            "- my-skill",
+        );
+        assert_names_item(
+            "\
+---
+name: n
+description: d
+user-invocable:
+  - true
+---
+body
+",
+            "- true",
+        );
+        assert_names_item(
+            "\
+---
+name: n
+description: d
+disable-model-invocation:
+  - true
+---
+body
+",
+            "- true",
+        );
+        assert_names_item(
+            "\
+---
+name: n
+description: d
+user_invocable:
+
+  # later
+  - true
+---
+body
+",
+            "- true",
+        );
+        let empty_name = parse_skill("---\nname:\ndescription: d\n---\nbody\n").expect_err("name");
+        assert!(
+            empty_name.to_string().contains("name value is empty"),
+            "{empty_name}"
+        );
+        let empty_bool = parse_skill("---\nname: n\ndescription: d\nuser-invocable:\n---\nbody\n")
+            .expect_err("bool");
+        assert!(
+            empty_bool
+                .to_string()
+                .contains("user_invocable value is empty"),
+            "{empty_bool}"
+        );
+    }
+
+    #[test]
+    fn unquoted_null_and_tilde_are_empty_scalars() {
+        for token in ["null", "Null", "NULL", "~"] {
+            let description = format!("---\nname: n\ndescription: {token}\n---\nbody\n");
+            let err = parse_skill(&description).expect_err(&description);
+            assert!(
+                err.to_string().contains("description value is empty"),
+                "{token}: {err}"
+            );
+            let name = format!("---\nname: {token}\ndescription: d\n---\nbody\n");
+            let err = parse_skill(&name).expect_err(&name);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("name value is empty"),
+                "{token} must not fail the charset check: {msg}"
+            );
+            assert!(!msg.contains("lowercase alphanumeric"), "{token}: {msg}");
+        }
+        let quoted = parse_skill(
+            "---\nname: \"null\"\ndescription: 'null'\nlicense: \"NULL\"\ncompatibility: '~'\n---\nbody\n",
+        )
+        .expect("quoted null is the word");
+        assert_eq!(quoted.name, "null");
+        assert_eq!(quoted.description, "null");
+        assert_eq!(quoted.license.as_deref(), Some("NULL"));
+        assert_eq!(quoted.compatibility.as_deref(), Some("~"));
+        let word = parse_skill("---\nname: n\ndescription: nullnull\n---\nbody\n")
+            .expect("nullnull is not a null token");
+        assert_eq!(word.description, "nullnull");
+        let quoted_tilde = parse_skill("---\nname: n\ndescription: \"~\"\n---\nbody\n")
+            .expect("quoted tilde is the character");
+        assert_eq!(quoted_tilde.description, "~");
+        let quoted_name = parse_skill("---\nname: \"~\"\ndescription: d\n---\nbody\n")
+            .expect_err("quoted tilde is not an empty name");
+        assert!(
+            quoted_name.to_string().contains("lowercase alphanumeric"),
+            "{quoted_name}"
+        );
+    }
+
+    #[test]
+    fn description_flow_collection_is_invalid_yaml() {
+        let assert_flow = |raw: &str| {
+            let input = format!("---\nname: n\ndescription: {raw}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains("description must be a string, got: ") && msg.contains(raw),
+                "{msg}"
+            );
+            assert!(!msg.contains("value is empty"), "{msg}");
+            assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        };
+        assert_flow("[one, two]");
+        assert_flow("{a: b}");
+        assert_flow("[]");
+        assert_flow("{}");
+        let hostile = format!(
+            "---\nname: n\ndescription: [{}\u{2028}]\n---\nbody\n",
+            "one"
+        );
+        let err = parse_skill(&hostile).expect_err(&hostile);
+        let msg = err.to_string();
+        assert!(!msg.contains('\u{2028}'), "{msg:?}");
+        assert!(msg.contains("[one?]"), "{msg}");
+        let quoted =
+            parse_skill("---\nname: n\ndescription: \"see [one]\"\nlicense: '{a: b}'\n---\nbody\n")
+                .expect("quoted brackets stay text");
+        assert_eq!(quoted.description, "see [one]");
+        assert_eq!(quoted.license.as_deref(), Some("{a: b}"));
+        let quoted_flow = parse_skill("---\nname: n\ndescription: \"[one, two]\"\n---\nbody\n")
+            .expect("a quoted flow is still a string");
+        assert_eq!(quoted_flow.description, "[one, two]");
+        let noted = parse_skill("---\nname: n\ndescription: [one, two] # note\n---\nbody\n")
+            .expect_err("comment");
+        assert!(
+            noted
+                .to_string()
+                .contains("description must be a string, got: [one, two]"),
+            "{noted}"
         );
     }
 
