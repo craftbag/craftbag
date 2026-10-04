@@ -115,13 +115,34 @@ fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
     if !yaml_fence_line_ok(&trimmed[..first_end]) {
         return None;
     }
-    let after_open = trimmed[first_end..].trim_start_matches(['\r', '\n']);
+    // Keep the newline that ends the open fence. Stripping every leading
+    // newline made `---\n---\n` look like a missing close: the close search
+    // only sees a fence after `\n`.
+    let after_open = if first_end < trimmed.len() {
+        &trimmed[first_end + 1..]
+    } else {
+        ""
+    };
+    if fence_starts(after_open) {
+        let line_end = after_open.find('\n').unwrap_or(after_open.len());
+        let body = if line_end < after_open.len() {
+            after_open[line_end + 1..].trim_start_matches(['\r', '\n'])
+        } else {
+            ""
+        };
+        return Some(("", body));
+    }
     let close_nl = find_yaml_close(after_open)?;
     let yaml = &after_open[..close_nl];
     let after_close = &after_open[close_nl + 1..];
     let close_line_end = after_close.find('\n').unwrap_or(after_close.len());
     let body = after_close[close_line_end..].trim_start_matches(['\r', '\n']);
     Some((yaml, body))
+}
+
+fn fence_starts(text: &str) -> bool {
+    let line_end = text.find('\n').unwrap_or(text.len());
+    yaml_fence_line_ok(&text[..line_end])
 }
 
 fn frontmatter_yaml(content: &str) -> Option<&str> {
@@ -2117,6 +2138,29 @@ BODY
             unknown_frontmatter_keys("---\nname: demo\ndescription: d\nhost-only: x\n---\n")
                 .contains(&"host-only".to_owned())
         );
+    }
+
+    #[test]
+    fn empty_fences_are_frontmatter_without_a_name() {
+        for input in [
+            "---\n---\n# Body\n",
+            "---\n\n---\n# Body\n",
+            "---\r\n---\r\n# Body\n",
+        ] {
+            let err = parse_skill(input).expect_err(input);
+            assert!(
+                matches!(err, ParseError::MissingField(ref field) if field == "name"),
+                "{input:?} -> {err}"
+            );
+            assert!(peek_frontmatter_name(input).is_none(), "{input:?}");
+            let (yaml, body) = split_frontmatter(input).expect("fences split");
+            assert!(yaml.trim().is_empty(), "{input:?} yaml={yaml:?}");
+            assert!(body.contains("Body"), "{input:?} body={body:?}");
+        }
+        let spaced = parse_skill("---\n\nname: demo\ndescription: d\n\n---\nhello\n")
+            .expect("blank lines inside fences");
+        assert_eq!(spaced.name, "demo");
+        assert_eq!(spaced.content, "hello\n");
     }
 
     #[test]
