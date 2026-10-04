@@ -2803,6 +2803,53 @@ fn walk_cwd_to_git_root_stops_at_nested_git() {
 }
 
 #[test]
+fn walk_without_git_keeps_the_project_that_holds_agents() {
+    let proj = tempfile::tempdir().expect("proj");
+    let pkg = proj.path().join(".agents").join("skills").join("notes");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    let walked = walk_cwd_to_git_root(&pkg);
+    assert!(
+        walked.iter().any(|p| p == proj.path()),
+        "inside .agents without git must see the project: {walked:?}"
+    );
+    assert!(
+        walked.iter().all(|p| p.starts_with(proj.path())),
+        "must not climb past that project: {walked:?}"
+    );
+    let claude = proj.path().join(".claude").join("skills").join("note");
+    fs::create_dir_all(&claude).expect("claude");
+    let from_claude = walk_cwd_to_git_root(&claude);
+    assert!(
+        from_claude.iter().any(|p| p == proj.path()),
+        "inside .claude without git must see the project: {from_claude:?}"
+    );
+    assert!(
+        from_claude.iter().all(|p| p.starts_with(proj.path())),
+        "vendor walk must not climb past that project: {from_claude:?}"
+    );
+    let src = proj.path().join("src");
+    fs::create_dir_all(&src).expect("src");
+    assert_eq!(
+        walk_cwd_to_git_root(&src),
+        vec![src.clone()],
+        "a sibling folder must not climb to an unrelated parent"
+    );
+    write_skill(&pkg, "notes", "body");
+    let found = empty_home_discover(&pkg, &DiscoveryOptions::default());
+    assert!(
+        found.skills.iter().any(|s| s.name == "notes"),
+        "list from the skill dir must load notes: {:?}",
+        found.skills
+    );
+    let missed = empty_home_discover(&src, &DiscoveryOptions::default());
+    assert!(
+        missed.skills.iter().all(|s| s.name != "notes"),
+        "src must not see the project skill: {:?}",
+        missed.skills
+    );
+}
+
+#[test]
 fn watch_dirs_lists_cwd_vendor_user_and_extra() {
     let root = tempfile::tempdir().expect("root");
     fs::create_dir_all(root.path().join(".git")).expect("git");
