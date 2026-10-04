@@ -109,7 +109,7 @@ enum Cmd {
         #[arg(long, value_name = "KEY", conflicts_with = "outline")]
         section: Option<String>,
         /// Copied into the envelope as User arguments. Matches argument-hint. Example: --args --fix
-        #[arg(long = "args", default_value = "")]
+        #[arg(long = "args", default_value = "", allow_hyphen_values = true)]
         args: String,
         #[command(flatten)]
         discovery: DiscoveryArgs,

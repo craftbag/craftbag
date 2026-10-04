@@ -4676,6 +4676,28 @@ fn load_includes_argument_hint() {
 }
 
 #[test]
+fn load_args_accepts_help_example_with_leading_hyphen() {
+    let extra = tempfile::tempdir().expect("extra");
+    let hinted = extra.path().join("slash-hint");
+    fs::create_dir_all(&hinted).expect("mkdir");
+    fs::write(
+        hinted.join("SKILL.md"),
+        "---\nname: slash-hint\ndescription: hinted\nargument-hint: [name]\n---\nbody\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    cmd.arg("load")
+        .arg("slash-hint")
+        .arg("--args")
+        .arg("--fix")
+        .arg("--path")
+        .arg(extra.path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("User arguments: --fix"));
+}
+
+#[test]
 fn load_includes_allowed_tools() {
     let extra = tempfile::tempdir().expect("extra");
     let hinted = extra.path().join("tools-ok");
