@@ -18,10 +18,10 @@ use super::host_token::{
     skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
-    dir_load, finish_load_parsed_skill, finish_load_skill_file, is_skill_md_filename,
-    load_skills_from_dir, read_skill_md, skill_md_inode_exists, skill_md_is_dir,
-    skill_md_stays_in_package, skip_if_dir_escapes, skip_if_skill_md_escapes_package,
-    try_load_skill_file,
+    child_dir_counts_as_skill_package, dir_load, finish_load_parsed_skill, finish_load_skill_file,
+    is_skill_md_filename, load_skills_from_dir, read_skill_md, skill_md_inode_exists,
+    skill_md_is_dir, skill_md_stays_in_package, skip_if_dir_escapes,
+    skip_if_skill_md_escapes_package, try_load_skill_file,
 };
 use super::path::{ArgExpand, IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
 
@@ -223,10 +223,7 @@ pub(super) fn dir_has_child_skill_packages(dir: &Path) -> bool {
     };
     entries.filter_map(Result::ok).any(|entry| {
         let path = entry.path();
-        path.is_dir()
-            && ["SKILL.md", "skill.md"]
-                .into_iter()
-                .any(|name| skill_md_inode_exists(&path.join(name)))
+        path.is_dir() && child_dir_counts_as_skill_package(&path)
     })
 }
 

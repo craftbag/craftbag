@@ -176,12 +176,23 @@ pub(super) fn load_skills_from_dir(
             continue;
         }
 
-        let skill_file = ["SKILL.md", "skill.md"]
-            .into_iter()
-            .map(|name| path.join(name))
-            .find(|p| skill_md_inode_exists(p));
-        let Some(skill_file) = skill_file else {
-            continue;
+        let skill_file = match lookup_package_skill_md(&path) {
+            PackageSkillMd::Found(skill_file) => skill_file,
+            PackageSkillMd::Missing => continue,
+            // A searchable directory with no SKILL.md is not a package.
+            // Permission denied on the child name is a package we cannot
+            // read. Treating that as "no file" drops the skill with no skip.
+            PackageSkillMd::Unreadable(detail) => {
+                skips.push(SkillSkip {
+                    path,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail,
+                    winner_path: None,
+                    host_token: None,
+                });
+                continue;
+            }
         };
         if !stays_under(&path, dir) {
             skips.push(SkillSkip {
@@ -419,6 +430,48 @@ pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
         return Err("SKILL.md symlink escapes package root".to_owned());
     }
     Ok(joined)
+}
+
+enum PackageSkillMd {
+    Found(PathBuf),
+    Missing,
+    Unreadable(String),
+}
+
+/// Look up `SKILL.md` / `skill.md` inside a package directory.
+///
+/// `NotFound` is not a package. Any other stat error, including
+/// permission denied, means the directory cannot be searched.
+fn lookup_package_skill_md(dir: &Path) -> PackageSkillMd {
+    let mut denied = None;
+    for name in ["SKILL.md", "skill.md"] {
+        let candidate = dir.join(name);
+        match std::fs::symlink_metadata(&candidate) {
+            Ok(_) => return PackageSkillMd::Found(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotADirectory => {
+                return PackageSkillMd::Missing;
+            }
+            Err(e) => {
+                denied = Some(e.to_string());
+            }
+        }
+    }
+    match denied {
+        Some(detail) => PackageSkillMd::Unreadable(detail),
+        None => PackageSkillMd::Missing,
+    }
+}
+
+/// True when `dir` contains a skill file, or that file cannot be stat'd.
+///
+/// Collection detection uses this so an unreadable child is walked and
+/// recorded. A readable directory with no `SKILL.md` stays a non-package.
+pub(super) fn child_dir_counts_as_skill_package(dir: &Path) -> bool {
+    matches!(
+        lookup_package_skill_md(dir),
+        PackageSkillMd::Found(_) | PackageSkillMd::Unreadable(_)
+    )
 }
 
 /// True when `path` exists as any inode (regular, FIFO, socket, device, symlink).

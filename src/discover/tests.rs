@@ -3433,6 +3433,85 @@ fn unreadable_skills_dir_is_skip_not_silent() {
 
 #[cfg(unix)]
 #[test]
+fn unreadable_child_package_dir_is_skip_not_silent() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "shown");
+    let hidden = skills.join("hidden");
+    write_skill(&hidden, "hidden", "locked");
+    let original = fs::metadata(&hidden).expect("meta").permissions();
+    struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, self.1.clone());
+        }
+    }
+    let _restore = Restore(&hidden, original.clone());
+    let mut locked = original.clone();
+    locked.set_mode(0o000);
+    fs::set_permissions(&hidden, locked).expect("chmod");
+    if fs::symlink_metadata(hidden.join("SKILL.md")).is_ok() {
+        return;
+    }
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        find_skill_by_name(&report.skills, "visible").is_some(),
+        "readable sibling must stay: {:?}",
+        report.skills
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "hidden").is_none(),
+        "locked package must not load: {:?}",
+        report.skills
+    );
+    assert!(
+        report.skips.iter().any(|s| {
+            s.kind == SkipKind::Unreadable
+                && s.path.ends_with("hidden")
+                && s.detail.contains("Permission denied")
+        }),
+        "locked package directory must be a skip: {:?}",
+        report.skips
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("skills").join("hidden");
+    write_skill(&only, "hidden", "locked");
+    let original_only = fs::metadata(&only).expect("meta").permissions();
+    let _restore_only = Restore(&only, original_only.clone());
+    let mut locked_only = original_only;
+    locked_only.set_mode(0o000);
+    fs::set_permissions(&only, locked_only).expect("chmod");
+    if fs::symlink_metadata(only.join("SKILL.md")).is_ok() {
+        return;
+    }
+    let cwd = tempfile::tempdir().expect("cwd");
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "hidden").is_none(),
+        "locked extra child must not load: {:?}",
+        report.skills
+    );
+    assert!(
+        report.skips.iter().any(|s| {
+            s.kind == SkipKind::Unreadable
+                && s.path.ends_with("hidden")
+                && s.detail.contains("Permission denied")
+        }),
+        "extra root must skip the locked child package: {:?}",
+        report.skips
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn package_path_with_newline_component_is_unreadable_not_loaded() {
     // A path component with U+000A splits list/why TSV lines and can
     // inject a fake watch root when hosts split watch_dirs on newline.
