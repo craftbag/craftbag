@@ -280,6 +280,22 @@ pub(super) fn ascii_names_policy_detail() -> String {
     "name must be lowercase alphanumeric and hyphens only (omit --ascii-names / ascii_names to allow Unicode)".to_owned()
 }
 
+/// True when both paths name the same SKILL.md.
+///
+/// String equality covers a repeated walk. Canonicalize covers a symlink
+/// and macOS `/tmp` versus `/private/tmp`. A failed canonicalize stays
+/// false so a real second package is still a collision. Hardlinks stay
+/// distinct.
+fn same_skill_file(winner: &Path, candidate: &Path) -> bool {
+    if winner == candidate {
+        return true;
+    }
+    match (winner.canonicalize(), candidate.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
 pub(super) fn finish_load_parsed_skill(
     skill_file: &Path,
     mut skill: Skill,
@@ -335,6 +351,12 @@ pub(super) fn finish_load_parsed_skill(
             .source_path
             .clone()
             .unwrap_or_else(|| PathBuf::from("<already-loaded>"));
+        // Repeated `--path`, or `--path` over a tree the implicit walk
+        // already loaded, opens this same SKILL.md again. That is not a
+        // second package, so it must not look like a name collision.
+        if same_skill_file(&winner_path, skill_file) {
+            return;
+        }
         skips.push(SkillSkip {
             path: skill_file.to_path_buf(),
             name: Some(skill.name.clone()),

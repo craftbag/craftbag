@@ -937,6 +937,82 @@ fn first_name_wins_and_records_winner_path() {
 }
 
 #[test]
+fn same_file_seen_twice_is_not_a_name_collision() {
+    let root = tempfile::tempdir().expect("tmp");
+    let collection = root.path().join("skills");
+    write_skill(&collection.join("foo"), "foo", "once");
+    let collection_arg = collection.display().to_string();
+    let repeated = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            implicit_roots: false,
+            paths: vec![collection_arg.clone(), collection_arg],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert_eq!(repeated.skills.len(), 1, "skills={:?}", repeated.skills);
+    assert_eq!(repeated.skills[0].content.trim(), "once");
+    assert!(
+        repeated
+            .skips
+            .iter()
+            .all(|skip| skip.kind != SkipKind::NameCollision),
+        "the same --path twice must not skip foo as a collision with itself: {:?}",
+        repeated.skips
+    );
+
+    let package = collection.join("foo");
+    let package_arg = package.display().to_string();
+    let package_twice = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            implicit_roots: false,
+            paths: vec![package_arg.clone(), package_arg],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert_eq!(
+        package_twice.skills.len(),
+        1,
+        "skills={:?}",
+        package_twice.skills
+    );
+    assert!(
+        package_twice
+            .skips
+            .iter()
+            .all(|skip| skip.kind != SkipKind::NameCollision),
+        "the same package --path twice must not self-collide: {:?}",
+        package_twice.skips
+    );
+
+    let repo = tempfile::tempdir().expect("repo");
+    write_skill(
+        &repo.path().join(".agents").join("skills").join("bar"),
+        "bar",
+        "implicit",
+    );
+    let agents = repo.path().join(".agents").join("skills");
+    let overlapped = empty_home_discover(
+        repo.path(),
+        &DiscoveryOptions {
+            paths: vec![agents.display().to_string()],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert_eq!(overlapped.skills.len(), 1, "skills={:?}", overlapped.skills);
+    assert_eq!(overlapped.skills[0].name, "bar");
+    assert!(
+        overlapped
+            .skips
+            .iter()
+            .all(|skip| skip.kind != SkipKind::NameCollision),
+        "explicit --path of the implicit .agents/skills tree must not self-collide: {:?}",
+        overlapped.skips
+    );
+}
+
+#[test]
 fn extra_path_sibling_packages_list_in_name_order() {
     let extra = tempfile::tempdir().expect("extra");
     for name in ["zed", "mid", "aaa"] {
