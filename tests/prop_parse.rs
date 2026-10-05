@@ -14,6 +14,11 @@ fn valid_name() -> impl Strategy<Value = String> {
             let n = s.chars().count();
             (1..=64).contains(&n)
         })
+        // Unquoted YAML 1.1 bool words are empty names on purpose.
+        // `validate_skill_name` still accepts the charset (`no`, `on`).
+        .prop_filter("not a yaml bool word", |s| {
+            !matches!(s.as_str(), "true" | "false" | "yes" | "no" | "on" | "off")
+        })
 }
 
 /// Scalars that `parse_bool_yaml` must not accept.
