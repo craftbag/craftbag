@@ -728,10 +728,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
         if trimmed.starts_with("- ") && in_triggers {
             let item = trimmed.strip_prefix("- ").unwrap_or(trimmed);
-            let item = unquote_yaml_scalar(strip_yaml_inline_comment(item));
-            if !item.is_empty() {
-                triggers.push(item.to_owned());
-            }
+            push_wrapped_trigger_item(&mut triggers, item, &mut lines);
             continue;
         }
         if trimmed.starts_with("- ") && in_ignore_sequence {
@@ -784,6 +781,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                     "allowed-tools" | "allowed_tools" => allowed_tools = Some(block),
                     "argument-hint" | "argument_hint" => argument_hint = Some(block),
                     "when-to-use" | "when_to_use" => when_to_use = Some(block),
+                    "triggers" => push_trigger_block_lines(&mut triggers, &block),
                     "name" => {
                         return Err(ParseError::InvalidYaml(
                             "name must be a single-line scalar".to_owned(),
@@ -855,7 +853,8 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         if quoted_yaml_scalar(raw_value) {
                             triggers.push(value);
                         } else {
-                            push_inline_triggers(&mut triggers, &value)?;
+                            let folded = extend_plain_scalar(&value, field_text, &mut lines);
+                            push_inline_triggers(&mut triggers, &folded)?;
                         }
                     }
                 }
@@ -1384,6 +1383,45 @@ fn push_inline_metadata(
         }
     }
     Ok(())
+}
+
+/// One trigger per non-empty line. `>` has already joined a paragraph
+/// into one phrase, so a folded block stays a single trigger.
+fn push_trigger_block_lines(triggers: &mut Vec<String>, block: &str) {
+    for line in block.lines() {
+        let item = line.trim();
+        if !item.is_empty() {
+            triggers.push(item.to_owned());
+        }
+    }
+}
+
+/// A quoted list item is finished. A plain item folds the following
+/// indented lines into one phrase. Triggers are not paragraphs, so a
+/// blank line inside the item still joins with a space.
+fn push_wrapped_trigger_item<'a, I>(
+    triggers: &mut Vec<String>,
+    item: &str,
+    lines: &mut std::iter::Peekable<I>,
+) where
+    I: Iterator<Item = &'a str> + Clone,
+{
+    let raw_item = strip_yaml_inline_comment(item);
+    let mut text = unquote_yaml_scalar(raw_item);
+    if text.is_empty() {
+        return;
+    }
+    if quoted_yaml_scalar(raw_item) || yaml_block_scalar_style(raw_item.trim()).is_some() {
+        triggers.push(text);
+        return;
+    }
+    if let Some(folded) = pull_plain_continuations(lines) {
+        if !folded.text.is_empty() {
+            text.push(' ');
+            text.push_str(&folded.text.replace('\n', " "));
+        }
+    }
+    triggers.push(text);
 }
 
 fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
@@ -2111,6 +2149,105 @@ Use pdftotext.
         let skill = parse_skill(input).expect("comment-only line under triggers must not skip");
         assert_eq!(skill.name, "pdf-processing");
         assert_eq!(skill.triggers, vec!["pdf", "invoice"]);
+    }
+
+    #[test]
+    fn wrapped_trigger_list_item_is_one_phrase() {
+        let input = "\
+---
+name: trigwrap
+description: wrapped trigger item
+triggers:
+  - review a pull request that changes the public API
+    and needs a changelog entry
+  - code review
+---
+body
+";
+        let skill = parse_skill(input).expect("wrapped trigger item");
+        assert_eq!(
+            skill.triggers,
+            vec![
+                "review a pull request that changes the public API and needs a changelog entry"
+                    .to_owned(),
+                "code review".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn wrapped_inline_triggers_keep_the_next_line() {
+        let input = "\
+---
+name: triginline
+description: inline triggers wrapped
+triggers: pull request,
+  code review
+---
+body
+";
+        let skill = parse_skill(input).expect("wrapped inline triggers");
+        assert_eq!(
+            skill.triggers,
+            vec!["pull request".to_owned(), "code review".to_owned()]
+        );
+    }
+
+    #[test]
+    fn trigger_block_scalar_keeps_each_line() {
+        let literal = "\
+---
+name: trigblock
+description: trigger block scalar
+triggers: |
+  pull request
+  name: not-a-key
+  code review
+---
+body
+";
+        let skill = parse_skill(literal).expect("literal triggers");
+        assert_eq!(skill.name, "trigblock");
+        assert_eq!(
+            skill.triggers,
+            vec![
+                "pull request".to_owned(),
+                "name: not-a-key".to_owned(),
+                "code review".to_owned(),
+            ]
+        );
+
+        let folded = "\
+---
+name: trigfold
+description: folded triggers
+triggers: >
+  pull request
+  code review
+---
+body
+";
+        let skill = parse_skill(folded).expect("folded triggers");
+        assert_eq!(skill.triggers, vec!["pull request code review".to_owned()]);
+    }
+
+    #[test]
+    fn quoted_trigger_item_does_not_swallow_the_next_line() {
+        let input = "\
+---
+name: trigquote
+description: quoted trigger stays closed
+triggers:
+  - \"pull request\"
+    extra
+---
+body
+";
+        let err = parse_skill(input).expect_err("quoted item is finished");
+        assert!(
+            err.to_string().contains("extra"),
+            "next line must stay an error: {err}"
+        );
     }
 
     #[test]
