@@ -193,10 +193,16 @@ pub fn filter_skills<'a>(
     result
 }
 
+/// Description and when-to-use word hits share this cap.
+/// It stays under the name-words weight (40) and a trigger (100).
+const TEXT_OVERLAP_SCORE_CAP: i32 = 39;
+
 /// Relevance score for ranking skills against user text.
 ///
 /// Trigger, name, and description hits use word boundaries.
 /// A name `git` scores inside `use git`, not inside `github`.
+/// Description and when-to-use hits share one cap, so a long
+/// description cannot outrank a trigger or a hyphenated name.
 pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
     if context_lower.is_empty() {
         return 0;
@@ -215,7 +221,8 @@ pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
     if name_words != name_l && trigger_matches(context_lower, &name_words) {
         score = score.saturating_add(40);
     }
-    for text in [
+    let mut text_score: i32 = 0;
+    'texts: for text in [
         skill.description.as_str(),
         skill.when_to_use.as_deref().unwrap_or(""),
     ] {
@@ -226,11 +233,14 @@ pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
                 .collect::<String>()
                 .to_lowercase();
             if w.len() >= 4 && trigger_matches(context_lower, &w) {
-                score = score.saturating_add(1);
+                text_score = text_score.saturating_add(1);
+                if text_score >= TEXT_OVERLAP_SCORE_CAP {
+                    break 'texts;
+                }
             }
         }
     }
-    score
+    score.saturating_add(text_score)
 }
 
 /// Rank skills for catalog display: high relevance first, then name.
@@ -899,6 +909,38 @@ mod tests {
         let skills = [plain, rust_skill];
         let ranked = rank_skills_for_catalog(&skills, "trust me");
         assert_eq!(ranked[0].name, "aaa-notes");
+    }
+
+    #[test]
+    fn relevance_description_words_cannot_outrank_a_trigger() {
+        let mut alpha = make_skill("alpha", &["zzzzunique"], 40);
+        alpha.description = "brief".to_owned();
+        let blob = (0..=100)
+            .map(|i| format!("w{i:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut beta = make_skill("beta", &["nomatch"], 40);
+        beta.description = blob.clone();
+        let context = format!("zzzzunique {blob}");
+        assert_eq!(skill_relevance_score(&alpha, &context), 100);
+        assert_eq!(skill_relevance_score(&beta, &context), 39);
+        let skills = [beta, alpha];
+        let ranked = rank_skills_for_catalog(&skills, &context);
+        assert_eq!(ranked[0].name, "alpha");
+
+        let desc = (0..20)
+            .map(|i| format!("d{i:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let when = (0..30)
+            .map(|i| format!("u{i:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut both = make_skill("overlap", &["nomatch"], 40);
+        both.description = desc.clone();
+        both.when_to_use = Some(when.clone());
+        let both_ctx = format!("{desc} {when}");
+        assert_eq!(skill_relevance_score(&both, &both_ctx), 39);
     }
 
     #[test]
