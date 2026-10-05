@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/craftbag/craftbag/compare/v0.2.2...v0.2.3) (2026-10-05)
+
+
+### Bug Fixes
+
+* call context_tokens a context window in the MCP schema ([#411](https://github.com/craftbag/craftbag/issues/411)) ([9a1d675](https://github.com/craftbag/craftbag/commit/9a1d675e5fcb0520053174dd16733ec57e136156))
+* count skill body tokens in characters ([#410](https://github.com/craftbag/craftbag/issues/410)) ([60c744f](https://github.com/craftbag/craftbag/commit/60c744f22e3d9649b868948905313466d39ac1cb))
+* do not report one skill file as a name collision with itself ([#412](https://github.com/craftbag/craftbag/issues/412)) ([63b6731](https://github.com/craftbag/craftbag/commit/63b673175cd8a9a04c2891d48b40face981a1a0e))
+* keep HostTokenField compatible with 0.2.2 ([#414](https://github.com/craftbag/craftbag/issues/414)) ([acf510e](https://github.com/craftbag/craftbag/commit/acf510e76ddaf52acbf353f8ce57f9e18361ebda))
+* match multi-word triggers across hyphen and underscore ([#413](https://github.com/craftbag/craftbag/issues/413)) ([ac6ac0f](https://github.com/craftbag/craftbag/commit/ac6ac0f685d7610a6545ea7d596527bcd6fa963f))
+* rank skill names on word boundaries ([#408](https://github.com/craftbag/craftbag/issues/408)) ([6482c4e](https://github.com/craftbag/craftbag/commit/6482c4ea482d52ad2b5a89c8b75997db5867a51f))
+* reject YAML booleans and nested maps on string fields ([#406](https://github.com/craftbag/craftbag/issues/406)) ([737b963](https://github.com/craftbag/craftbag/commit/737b96324d0b0449a8a16ade3c445943188a0b91)), closes [#404](https://github.com/craftbag/craftbag/issues/404) [#405](https://github.com/craftbag/craftbag/issues/405)
+* strict unknown keys are not invalid YAML ([#409](https://github.com/craftbag/craftbag/issues/409)) ([238a208](https://github.com/craftbag/craftbag/commit/238a208c9535b352baa50c38f8696acea7937b25))
+
 ## [0.2.2](https://github.com/craftbag/craftbag/compare/v0.2.1...v0.2.2) (2026-10-04)
 
 
