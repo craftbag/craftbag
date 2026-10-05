@@ -894,6 +894,61 @@ where
     }
 }
 
+/// Split a flow-map or flow-list interior on commas outside quotes.
+///
+/// `"Doe, Jane"` and `'Doe, Jane'` are one item. An unclosed quote
+/// consumes the rest, so a comma after that quote does not split.
+fn split_yaml_flow_items(inner: &str) -> Vec<&str> {
+    let bytes = inner.as_bytes();
+    let mut items = Vec::new();
+    let mut start = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' | b'\'' => {
+                i += quoted_scalar_len(&inner[i..]);
+            }
+            b',' => {
+                items.push(inner[start..i].trim());
+                i += 1;
+                start = i;
+            }
+            _ => i += 1,
+        }
+    }
+    items.push(inner[start..].trim());
+    items
+}
+
+/// Byte length of a quoted scalar starting at `s`, including the opener.
+/// Unclosed quotes consume all of `s`.
+fn quoted_scalar_len(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        return 0;
+    }
+    let q = bytes[0];
+    if q != b'"' && q != b'\'' {
+        return 1;
+    }
+    let mut i = 1usize;
+    while i < bytes.len() {
+        if q == b'"' && bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if q == b'\'' && bytes[i] == b'\'' && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == q {
+            return i + 1;
+        }
+        i += 1;
+    }
+    s.len()
+}
+
 /// Official agentskills `metadata` as a flow map (`{k: v, k2: v2}`).
 /// A present scalar is InvalidYaml, not a silent empty map.
 fn push_inline_metadata(
@@ -910,8 +965,7 @@ fn push_inline_metadata(
             )));
         }
     };
-    for part in inner.split(',') {
-        let part = part.trim();
+    for part in split_yaml_flow_items(inner) {
         if part.is_empty() {
             continue;
         }
@@ -945,8 +999,7 @@ fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
         .strip_prefix('[')
         .and_then(|s| s.strip_suffix(']'))
         .unwrap_or(trimmed);
-    for part in inner.split(',') {
-        let raw_part = part.trim();
+    for raw_part in split_yaml_flow_items(inner) {
         if unquoted_yaml_null(raw_part) {
             continue;
         }
@@ -2474,6 +2527,47 @@ BODY
             "empty flow-list must not invent a token: {:?}",
             empty_skill.triggers
         );
+    }
+
+    #[test]
+    fn parse_skill_flow_keeps_comma_inside_quotes() {
+        let meta = parse_skill(
+            "---\nname: meta-comma\ndescription: d\nmetadata: {author: \"Doe, Jane\", version: \"1\"}\n---\nbody\n",
+        )
+        .expect("quoted comma in flow metadata must load");
+        assert_eq!(
+            meta.metadata.get("author").map(String::as_str),
+            Some("Doe, Jane")
+        );
+        assert_eq!(meta.metadata.get("version").map(String::as_str), Some("1"));
+
+        let single = parse_skill(
+            "---\nname: meta-comma\ndescription: d\nmetadata: {author: 'Doe, Jane'}\n---\nbody\n",
+        )
+        .expect("single-quoted comma in flow metadata must load");
+        assert_eq!(
+            single.metadata.get("author").map(String::as_str),
+            Some("Doe, Jane")
+        );
+
+        let escaped = parse_skill(
+            "---\nname: meta-comma\ndescription: d\nmetadata: {note: \"say \\\"hi, there\\\"\", version: \"1\"}\n---\nbody\n",
+        )
+        .expect("escaped quote and comma in flow metadata must load");
+        assert_eq!(
+            escaped.metadata.get("note").map(String::as_str),
+            Some("say \"hi, there\"")
+        );
+        assert_eq!(
+            escaped.metadata.get("version").map(String::as_str),
+            Some("1")
+        );
+
+        let triggers = parse_skill(
+            "---\nname: trig-comma\ndescription: d\ntriggers: [\"code, review\", git]\n---\nbody\n",
+        )
+        .expect("quoted comma in flow triggers must load");
+        assert_eq!(triggers.triggers, vec!["code, review", "git"]);
     }
 
     #[test]
