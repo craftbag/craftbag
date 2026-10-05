@@ -135,7 +135,9 @@ jobs:
        !startsWith(github.head_ref, 'release-please') ||
        github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Queue time counts. Fifteen minutes expired before a runner
+    # was assigned, and the smoke never started.
+    timeout-minutes: 25
     env:
       RUSTUP_TOOLCHAIN: nightly
     steps:
