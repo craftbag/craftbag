@@ -7293,6 +7293,55 @@ fn extra_path_regular_file_not_skill_md_is_unreadable() {
     assert_eq!(skip.detail.lines().count(), 1, "{}", skip.detail);
 }
 
+#[test]
+fn host_path_through_a_file_says_missing_not_unreadable() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let parent = tempfile::tempdir().expect("parent");
+    let file = parent.path().join("notdir");
+    fs::write(&file, "x").expect("write");
+    let through = file.join("skills");
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![through.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.is_empty(),
+        "a path through a file must load zero skills: {:?}",
+        report.skills
+    );
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    let shown = crate::sanitize_error_token(&through.display().to_string());
+    assert_missing_host_path_skip(&report.skips[0], &shown, "--path", "paths");
+    assert!(
+        !report.skips[0].detail.contains("unreadable")
+            && !report.skips[0].detail.contains("os error 20")
+            && !report.skips[0].detail.contains("Not a directory"),
+        "must not call a missing path unreadable: {}",
+        report.skips[0].detail
+    );
+
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            user_skills_dir: Some(through.clone()),
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert_missing_host_path_skip(&report.skips[0], &shown, "--user-dir", "user_dir");
+    assert!(
+        !report.skips[0].detail.contains("unreadable"),
+        "user_dir through a file is missing, not unreadable: {}",
+        report.skips[0].detail
+    );
+}
+
 fn assert_implicit_nondirectory_is_silent(
     report: &crate::skip::DiscoveryReport,
     kept: Option<&str>,

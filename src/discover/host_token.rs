@@ -250,7 +250,14 @@ pub(super) fn skip_unresolvable_host_path(
     let detail = match std::fs::metadata(path) {
         Ok(meta) if meta.is_dir() => return,
         Ok(_) => field.not_a_directory_detail(&shown),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => field.missing_path_detail(&shown),
+        // A missing path and a file in an earlier component are the
+        // same hole. Permission errors stay "unreadable".
+        Err(e)
+            if e.kind() == std::io::ErrorKind::NotFound
+                || e.kind() == std::io::ErrorKind::NotADirectory =>
+        {
+            field.missing_path_detail(&shown)
+        }
         Err(_) => field.unreadable_path_detail(&shown),
     };
     let detail = one_line_error(detail);
