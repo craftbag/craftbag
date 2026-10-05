@@ -49,7 +49,8 @@ pub struct DiscoveryOptions {
     /// Default is off: Unicode / NFKC names still load.
     pub ascii_names: bool,
     /// Walk cwd-to-git `.agents` / vendor trees and `$HOME/.agents` /
-    /// vendor trees. Default is true. When false,
+    /// vendor trees. Default is true. Unset or blank home omits the
+    /// home trees instead of joining a relative `.agents`. When false,
     /// extra `paths` and optional `user_skills_dir` still load
     /// (collection-only). Empty `paths` plus no user dir returns an
     /// empty report, not an error.

@@ -1515,6 +1515,52 @@ fn load_newline_extra_path_demo_is_unknown() {
 }
 
 #[test]
+fn list_empty_home_does_not_call_project_agents_a_symlink_escape() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let pkg = cwd.path().join(".agents").join("skills").join("fromrel");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: fromrel\ndescription: project skill\n---\nbody\n",
+    )
+    .expect("write");
+    let claude = cwd.path().join(".claude").join("skills").join("fromclaude");
+    fs::create_dir_all(&claude).expect("mkdir");
+    fs::write(
+        claude.join("SKILL.md"),
+        "---\nname: fromclaude\ndescription: vendor skill\n---\nbody\n",
+    )
+    .expect("write");
+    for home in ["", "   "] {
+        let (_real_home, mut cmd) = bin();
+        let out = cmd
+            .env("HOME", home)
+            .env("USERPROFILE", home)
+            .current_dir(cwd.path())
+            .arg("list")
+            .arg("--json")
+            .arg("--vendor")
+            .arg("claude")
+            .output()
+            .expect("run");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            out.status.success(),
+            "home {home:?} must still list the project: stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            stdout.contains("fromrel") && stdout.contains("fromclaude"),
+            "home {home:?} must keep project skills: {stdout}"
+        );
+        assert!(
+            !stdout.contains("symlink escapes") && !stderr.contains("symlink escapes"),
+            "home {home:?} must not call the project tree a symlink escape: stdout={stdout} stderr={stderr}"
+        );
+    }
+}
+
+#[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
     let pkg = home.path().join("myskills").join("mine");

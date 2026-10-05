@@ -33,7 +33,7 @@ use super::load::{
 };
 use super::path::{
     ArgExpand, IgnorePrefix, expand_extra_path_arg, expand_ignore_list, expand_user_skills_dir,
-    home_dir, implicit_home_already_walked, lexical_normalize, path_is_ignored, stays_under,
+    implicit_home_already_walked, lexical_normalize, nonempty_home, path_is_ignored, stays_under,
     tilde_without_home, walk_cwd_to_git_root,
 };
 
@@ -140,7 +140,7 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
     }
 
     if opts.implicit_roots {
-        if let Some(home) = home_dir() {
+        if let Some(home) = nonempty_home() {
             if !implicit_home_already_walked(&git_walk, &home) {
                 let agents = home.join(".agents").join("skills");
                 if !path_is_ignored(&agents, &ignore) {
@@ -671,7 +671,7 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
     }
 
     if opts.implicit_roots {
-        if let Some(home) = home_dir() {
+        if let Some(home) = nonempty_home() {
             if !implicit_home_already_walked(&git_walk, &home) {
                 let agents = home.join(".agents").join("skills");
                 if !skip_if_dir_escapes(&agents, &home, &mut skips) {

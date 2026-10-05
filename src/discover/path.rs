@@ -84,7 +84,7 @@ pub(super) fn home_dir() -> Option<PathBuf> {
 /// `~` and `~/...` need a non-blank home. An empty override, `HOME=""`,
 /// or whitespace-only home is the same as unset: callers must not join
 /// the token onto cwd.
-fn nonempty_home() -> Option<PathBuf> {
+pub(super) fn nonempty_home() -> Option<PathBuf> {
     let home = home_dir()?;
     let blank = match home.to_str() {
         Some(text) => text.trim().is_empty(),
