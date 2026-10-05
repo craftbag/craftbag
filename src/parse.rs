@@ -597,6 +597,31 @@ where
     }
 }
 
+/// A plain fold stops at a mapping entry. Dropping that line would
+/// keep a truncated value and still validate. A `{...}` / `[...]`
+/// flow value stays on the indent-skip path: it is not folded, and
+/// it does not fail the skill.
+fn reject_nested_key_after_value<'a, I>(
+    key: &str,
+    kind: &str,
+    lines: &mut std::iter::Peekable<I>,
+) -> Result<(), ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    let Some(nested) = peek_indented_nested_key(lines) else {
+        return Ok(());
+    };
+    if unquoted_yaml_flow_collection(&nested) {
+        return Ok(());
+    }
+    let shown_key = crate::sanitize_error_token(key);
+    let shown = crate::sanitize_error_token(&nested);
+    Err(ParseError::InvalidYaml(format!(
+        "{shown_key} must be {kind}, got: {shown}"
+    )))
+}
+
 fn optional_frontmatter_string<'a, I>(
     key: &str,
     field_text: &str,
@@ -645,7 +670,9 @@ where
         reject_optional_string_flow(key, raw_value)?;
     }
     reject_optional_string_bool(key, raw_value)?;
-    Ok(Some(extend_plain_scalar(&value, field_text, lines)))
+    let stored = extend_plain_scalar(&value, field_text, lines);
+    reject_nested_key_after_value(key, "a string", lines)?;
+    Ok(Some(stored))
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -802,6 +829,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
                         }
                     } else {
+                        reject_nested_key_after_value("name", "a string", &mut lines)?;
                         name = Some(value);
                     }
                 }
@@ -843,7 +871,9 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             }
                         }
                     } else {
-                        description = Some(extend_plain_scalar(&value, field_text, &mut lines));
+                        let stored = extend_plain_scalar(&value, field_text, &mut lines);
+                        reject_nested_key_after_value("description", "a string", &mut lines)?;
+                        description = Some(stored);
                     }
                 }
                 "triggers" => {
@@ -851,9 +881,11 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         in_triggers = true;
                     } else if !unquoted_yaml_null(raw_value) {
                         if quoted_yaml_scalar(raw_value) {
+                            reject_nested_key_after_value("triggers", "a string", &mut lines)?;
                             triggers.push(value);
                         } else {
                             let folded = extend_plain_scalar(&value, field_text, &mut lines);
+                            reject_nested_key_after_value("triggers", "a string", &mut lines)?;
                             push_inline_triggers(&mut triggers, &folded)?;
                         }
                     }
@@ -884,6 +916,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         in_metadata = true;
                     } else {
                         push_inline_metadata(&mut metadata, &value)?;
+                        reject_nested_key_after_value("metadata value", "a string", &mut lines)?;
                     }
                 }
                 "argument-hint" | "argument_hint" => {
@@ -912,6 +945,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                                 &mut user_invocable,
                                 &mut disable_model_invocation,
                             );
+                            reject_nested_key_after_value(canon, "a boolean", &mut lines)?;
                         }
                     } else if key == "author" && value.is_empty() {
                         if peek_indented_nested_key(&mut lines).is_some() {
@@ -2974,6 +3008,197 @@ body
                 .expect("unknown nested map still loads");
         assert_eq!(version.name, "n");
         assert!(version.metadata.is_empty());
+    }
+
+    #[test]
+    fn nested_key_after_nonempty_scalar_is_not_dropped() {
+        let prose = "\
+---
+name: foldreal
+description: Review a pull request
+  and check the title: it must match the issue.
+---
+body
+";
+        let err = parse_skill(prose).expect_err("colon sentence must not vanish");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(
+                "description must be a string, got: and check the title: it must match the issue."
+            ),
+            "{msg}"
+        );
+        assert_eq!(msg.lines().count(), 1, "{msg:?}");
+
+        let commented = "\
+---
+name: n
+description: hello
+  # later
+  world: not-a-key
+---
+body
+";
+        let err = parse_skill(commented).expect_err("comment before nested");
+        assert!(
+            err.to_string()
+                .contains("description must be a string, got: world: not-a-key"),
+            "{err}"
+        );
+
+        let quoted = "\
+---
+name: n
+description: \"hello\"
+  world: not-a-key
+---
+body
+";
+        let err = parse_skill(quoted).expect_err("quoted description is closed");
+        assert!(
+            err.to_string()
+                .contains("description must be a string, got: world: not-a-key"),
+            "{err}"
+        );
+
+        let named = "\
+---
+name: review-pr
+  aka: review
+description: d
+---
+body
+";
+        let err = parse_skill(named).expect_err("name does not swallow a nested key");
+        assert!(
+            err.to_string()
+                .contains("name must be a string, got: aka: review"),
+            "{err}"
+        );
+
+        for (key, nested) in [
+            ("license", "spdx: MIT"),
+            ("compatibility", "os: linux"),
+            ("allowed-tools", "bash: git"),
+            ("allowed_tools", "bash: git"),
+            ("when-to-use", "task: review"),
+            ("when_to_use", "task: review"),
+            ("argument-hint", "name: file"),
+            ("argument_hint", "name: file"),
+        ] {
+            let input =
+                format!("---\nname: n\ndescription: d\n{key}: MIT\n  {nested}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("{key} must be a string, got: {nested}")),
+                "{key}: {msg}"
+            );
+            assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        }
+
+        let triggers = "\
+---
+name: n
+description: d
+triggers: review
+  code: review
+---
+body
+";
+        let err = parse_skill(triggers).expect_err("trigger scalar is closed");
+        assert!(
+            err.to_string()
+                .contains("triggers must be a string, got: code: review"),
+            "{err}"
+        );
+        let quoted_triggers = "\
+---
+name: n
+description: d
+triggers: \"review\"
+  code: review
+---
+body
+";
+        let err = parse_skill(quoted_triggers).expect_err("quoted trigger is closed");
+        assert!(
+            err.to_string()
+                .contains("triggers must be a string, got: code: review"),
+            "{err}"
+        );
+
+        let wrapped = parse_skill(
+            "---\nname: n\ndescription: d\ntriggers: pull request,\n  code review\n---\nbody\n",
+        )
+        .expect("wrapped triggers still split");
+        assert_eq!(
+            wrapped.triggers,
+            vec!["pull request".to_owned(), "code review".to_owned()]
+        );
+
+        let url = parse_skill(
+            "---\nname: n\ndescription: See the docs at\n  https://example.com/a:b more\n---\nbody\n",
+        )
+        .expect("url colon stays text");
+        assert_eq!(
+            url.description,
+            "See the docs at https://example.com/a:b more"
+        );
+
+        let flow = parse_skill(
+            "---\nname: n\ndescription: hello\n  {a: b}\nlicense: MIT\n  {spdx: MIT}\n---\nbody\n",
+        )
+        .expect("a flow map under a scalar is not folded and still loads");
+        assert_eq!(flow.description, "hello");
+        assert_eq!(flow.license.as_deref(), Some("MIT"));
+
+        let flagged = "\
+---
+name: n
+description: d
+user-invocable: false
+  note: internal only
+---
+body
+";
+        let err = parse_skill(flagged).expect_err("bool does not swallow a nested key");
+        assert!(
+            err.to_string()
+                .contains("user_invocable must be a boolean, got: note: internal only"),
+            "{err}"
+        );
+        let flagged_next = "\
+---
+name: n
+description: d
+user-invocable: false
+  disable-model-invocation: true
+---
+body
+";
+        let err = parse_skill(flagged_next).expect_err("indented bool key must not vanish");
+        assert!(
+            err.to_string()
+                .contains("user_invocable must be a boolean, got: disable-model-invocation: true"),
+            "{err}"
+        );
+
+        let meta = "\
+---
+name: n
+description: d
+metadata: {author: ada}
+  version: 1
+---
+body
+";
+        let err = parse_skill(meta).expect_err("flow metadata does not drop the next key");
+        assert!(
+            err.to_string()
+                .contains("metadata value must be a string, got: version: 1"),
+            "{err}"
+        );
     }
 
     #[test]
