@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Write a lychee config that skips unpublished GitHub compare destinations.
+
+Release PRs add compare/vOLD...vNEW before vNEW exists. That URL 404s
+until merge, so a required link check can never go green. Skip only
+those missing destination tags. A compare URL whose destination tag
+already exists is still checked.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+COMPARE_HOST = "https://github.com/craftbag/craftbag/compare/"
+URL_RE = re.compile(r"https://github\.com/craftbag/craftbag/compare/[^\s)<>\"']+")
+TAG_RE = re.compile(r"[A-Za-z0-9._+\-]+")
+REMOTE = "https://github.com/craftbag/craftbag.git"
+SKIP_PARTS = {".git", "target"}
+
+
+def die(message: str) -> None:
+    print(f"FAIL: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def destination_tag(spec: str) -> str | None:
+    """Return the tag after ... or .., or None when this is not a range."""
+    if "..." in spec:
+        dest = spec.rsplit("...", 1)[1]
+    elif ".." in spec:
+        dest = spec.rsplit("..", 1)[1]
+    else:
+        return None
+    if TAG_RE.fullmatch(dest) is None:
+        return None
+    return dest
+
+
+def compare_urls(text: str) -> list[str]:
+    found: list[str] = []
+    for match in URL_RE.finditer(text):
+        found.append(match.group(0).rstrip(".,;:"))
+    return found
+
+
+def markdown_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in root.rglob("*.md"):
+        if not path.is_file():
+            continue
+        parts = set(path.relative_to(root).parts)
+        if parts & SKIP_PARTS:
+            continue
+        files.append(path)
+    files.sort()
+    return files
+
+
+def collect_compare_urls(root: Path) -> list[str]:
+    found: list[str] = []
+    for path in markdown_files(root):
+        text = path.read_text(encoding="utf-8")
+        found.extend(compare_urls(text))
+    return found
+
+
+def unpublished(urls: list[str], tags: set[str]) -> list[tuple[str, str]]:
+    """Pairs of (url, anchored regex) whose destination tag is absent."""
+    rows: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for url in urls:
+        if not url.startswith(COMPARE_HOST):
+            continue
+        dest = destination_tag(url[len(COMPARE_HOST) :])
+        if dest is None or dest in tags:
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        rows.append((url, "^" + re.escape(url) + "$"))
+    rows.sort()
+    return rows
+
+
+def parse_ls_remote(text: str) -> set[str]:
+    tags: set[str] = set()
+    for line in text.splitlines():
+        if "\t" not in line:
+            continue
+        ref = line.split("\t", 1)[1].strip()
+        if not ref.startswith("refs/tags/"):
+            continue
+        name = ref[len("refs/tags/") :]
+        if name.endswith("^{}"):
+            name = name[:-3]
+        if name:
+            tags.add(name)
+    return tags
+
+
+def fetch_tags(tags_file: Path | None) -> set[str]:
+    if tags_file is not None:
+        if not tags_file.is_file():
+            die(f"missing tags file {tags_file}")
+        return parse_ls_remote_file(tags_file.read_text(encoding="utf-8"))
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        proc = subprocess.run(
+            ["git", "ls-remote", "--tags", REMOTE],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        die("git ls-remote timed out")
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr)
+        die(f"git ls-remote exited {proc.returncode}")
+    return parse_ls_remote(proc.stdout)
+
+
+def parse_ls_remote_file(text: str) -> set[str]:
+    """A tags file is one tag per line. ls-remote text is also accepted."""
+    if "\trefs/tags/" in text:
+        return parse_ls_remote(text)
+    tags: set[str] = set()
+    for line in text.splitlines():
+        name = line.strip()
+        if not name or name.startswith("#"):
+            continue
+        tags.add(name)
+    return tags
+
+
+def insert_excludes(toml_text: str, patterns: list[str]) -> str:
+    marker = "exclude = ["
+    start = toml_text.find(marker)
+    if start < 0:
+        die("lychee config has no exclude array")
+    end = toml_text.find("\n]", start)
+    if end < 0:
+        die("lychee exclude array is not closed")
+    if not patterns:
+        return toml_text
+    for pattern in patterns:
+        if "'" in pattern:
+            die("exclude pattern contains a single quote")
+    block = "\n".join(f"  '{pattern}'," for pattern in patterns)
+    return toml_text[:end] + "\n" + block + toml_text[end:]
+
+
+def write_config(base: Path, dest: Path, patterns: list[str]) -> None:
+    text = base.read_text(encoding="utf-8")
+    body = insert_excludes(text, patterns)
+    header = (
+        "# Generated by factory/scripts/lychee-unpublished-compare-excludes.py.\n"
+        "# Do not edit. Do not commit.\n"
+    )
+    dest.write_text(header + body, encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--tags-file", type=Path)
+    parser.add_argument("--base-config", type=Path)
+    parser.add_argument("--write-config", type=Path)
+    args = parser.parse_args(argv)
+    if args.self_test:
+        return self_test()
+
+    root = (args.root or repo_root()).resolve()
+    base = args.base_config or (root / "lychee.toml")
+    if args.write_config is None:
+        die("pass --write-config")
+    if not base.is_file():
+        die(f"missing base config {base}")
+
+    print("PLAN: skip unpublished compare destinations")
+    urls = collect_compare_urls(root)
+    tags = fetch_tags(args.tags_file)
+    ranges = []
+    for url in urls:
+        if not url.startswith(COMPARE_HOST):
+            continue
+        if destination_tag(url[len(COMPARE_HOST) :]) is not None:
+            ranges.append(url)
+    if ranges and not tags:
+        die("tag list is empty; refusing to skip compare URLs")
+    skipped = unpublished(urls, tags)
+    print(f"DO: {len(tags)} tags, {len(ranges)} compare ranges, {len(skipped)} skipped")
+    for url, _pattern in skipped:
+        print(f"DO: skip {url}")
+    write_config(base, args.write_config, [pattern for _url, pattern in skipped])
+    print(f"DONE: wrote {args.write_config}")
+    return 0
+
+
+def self_test() -> int:
+    print("PLAN: unpublished compare exclude self-test")
+    short = COMPARE_HOST + "v0.2.2...v0.2.3"
+    longer = COMPARE_HOST + "v0.2.2...v0.2.30"
+    published = COMPARE_HOST + "v0.2.1...v0.2.2"
+    missing_source = COMPARE_HOST + "not-a-tag...v0.2.2"
+    two_dot = COMPARE_HOST + "v0.1.0..not-published"
+    other = "https://github.com/golang/go/compare/v0.0.1...v9.9.9"
+    bare = COMPARE_HOST + "v0.2.2"
+    queried = COMPARE_HOST + "v0.2.2...v0.2.3?w=1"
+    sample = "\n".join(
+        [
+            f"published {published}",
+            f"short {short}",
+            f"longer {longer}",
+            f"source {missing_source}",
+            f"two {two_dot}",
+            f"other {other}",
+            f"bare {bare}",
+            f"query {queried}",
+            "",
+        ]
+    )
+    tags = {"v0.2.1", "v0.2.2", "v0.2.30"}
+    urls = compare_urls(sample)
+    skipped = dict(unpublished(urls, tags))
+    if short not in skipped:
+        die("missing destination v0.2.3 was kept")
+    if longer in skipped or published in skipped or missing_source in skipped:
+        die("a published destination was skipped")
+    if two_dot not in skipped:
+        die("two-dot missing destination was kept")
+    if unpublished([other], set()):
+        die("another repo compare was skipped")
+    if bare in skipped or queried in skipped:
+        die("a non-range compare was skipped")
+    if re.search(skipped[short], longer) is not None:
+        die("shorter exclude hid a longer published tag")
+    if re.search(skipped[short], short) is None:
+        die("exclude did not match its own URL")
+    peeled = parse_ls_remote(
+        "abc\trefs/tags/v0.2.2\nabc\trefs/tags/v0.2.2^{}\ndef\trefs/tags/v0.2.1\n"
+    )
+    if peeled != {"v0.2.1", "v0.2.2"}:
+        die(f"peeled tags parsed wrong: {peeled}")
+    # Three dots must use the real destination. Splitting on .. first
+    # yields a leading-dot tag and skips a release that already exists.
+    three = unpublished([published], {"v0.2.2"})
+    if three:
+        die("three-dot published destination was skipped")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "lychee.toml").write_text(
+            "exclude = [\n  'https://example.test',\n]\n",
+            encoding="utf-8",
+        )
+        (root / "CHANGELOG.md").write_text(sample, encoding="utf-8")
+        tags_path = root / "tags.txt"
+        tags_path.write_text("v0.2.1\nv0.2.2\nv0.2.30\n", encoding="utf-8")
+        out = root / "lychee.ci.toml"
+        status = main(
+            [
+                "--root",
+                str(root),
+                "--tags-file",
+                str(tags_path),
+                "--base-config",
+                str(root / "lychee.toml"),
+                "--write-config",
+                str(out),
+            ]
+        )
+        if status != 0:
+            die("fixture write failed")
+        written = out.read_text(encoding="utf-8")
+        if "https://example.test" not in written:
+            die("base exclude was dropped")
+        if re.escape(short) not in written:
+            die("missing destination was not written")
+        if re.escape(longer) in written or re.escape(published) in written:
+            die("published destination was written")
+        empty = root / "empty.txt"
+        empty.write_text("", encoding="utf-8")
+        rejected = root / "should-not-write.toml"
+        try:
+            main(
+                [
+                    "--root",
+                    str(root),
+                    "--tags-file",
+                    str(empty),
+                    "--base-config",
+                    str(root / "lychee.toml"),
+                    "--write-config",
+                    str(rejected),
+                ]
+            )
+        except SystemExit as exc:
+            if exc.code == 0:
+                die("empty tag list was accepted")
+        else:
+            die("empty tag list was accepted")
+        if rejected.exists():
+            die("empty tag list still wrote a config")
+
+    print("OK: missing destination is excluded")
+    print("OK: published compare stays checked")
+    print("OK: longer tag is not hidden by a shorter exclude")
+    print("OK: empty tag list refuses to skip")
+    print("DONE: ok=true")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

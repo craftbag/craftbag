@@ -697,3 +697,58 @@ fn arm64_linux_dist_runs_on_arm() {
         "republishing the same version must not fail the release"
     );
 }
+
+/// Release-please adds compare/vOLD...vNEW before vNEW exists.
+/// The link check must skip that URL and still fetch a compare
+/// whose destination tag is already published.
+#[test]
+fn link_check_skips_only_unpublished_compare_destinations() {
+    let links = read_rel(".github/workflows/links.yml");
+    assert!(
+        links.contains("factory/scripts/lychee-unpublished-compare-excludes.py"),
+        "links.yml must build the unpublished-tag skip"
+    );
+    assert!(
+        links.contains("--write-config lychee.ci.toml"),
+        "the skip list must be a generated config"
+    );
+    assert!(
+        links.contains("--config lychee.ci.toml"),
+        "lychee must read the generated config"
+    );
+    assert!(
+        !links.contains("--config lychee.toml"),
+        "lychee must not keep using the unfiltered config"
+    );
+    let lychee = read_rel("lychee.toml");
+    assert!(
+        !lychee.contains("compare/"),
+        "lychee.toml must not exclude every compare URL"
+    );
+    let ignore = read_rel(".gitignore");
+    assert!(
+        ignore.contains("lychee.ci.toml"),
+        "the generated config must stay uncommitted"
+    );
+    let output = Command::new("python3")
+        .arg(repo_root().join("factory/scripts/lychee-unpublished-compare-excludes.py"))
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("python3 lychee exclude self-test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "compare exclude self-test failed:\n{stdout}\n{stderr}"
+    );
+    for line in [
+        "OK: missing destination is excluded",
+        "OK: published compare stays checked",
+        "OK: longer tag is not hidden by a shorter exclude",
+        "OK: empty tag list refuses to skip",
+        "DONE: ok=true",
+    ] {
+        assert!(stdout.contains(line), "self-test missing {line}: {stdout}");
+    }
+}
