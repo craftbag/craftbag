@@ -361,7 +361,8 @@ jobs:
                    "${{ needs.test-windows.result }}" "${{ needs.test-macos.result }}" \
                    "${{ needs.workflows.result }}" "${{ needs.gitleaks.result }}" \
                    "${{ needs.coverage.result }}" "${{ needs.semver-checks.result }}"; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+            # A job that never gets a runner is "abandoned", not "cancelled".
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ] || [ "$r" = "abandoned" ]; then
               echo "::error::needed job $r"
               exit 1
             fi
