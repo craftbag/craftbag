@@ -2859,6 +2859,12 @@ fn tilde_host_tokens_do_not_load_cwd_lookalikes_without_home() {
             "{label} ignore skip missing: {:?}",
             ignored.skips
         );
+        let why = crate::why(&ignored, Some("nosuch-skill"), None, None);
+        let message = why.unknown_skill_message().unwrap_or_default();
+        assert!(
+            message.contains("refused --ignore") && message.contains("HOME is unset"),
+            "{label} load/why must name the ignore flag: {message}"
+        );
         let watched = run.watch(cwd.path(), &user_opts);
         assert!(
             watched.iter().all(|dir| !dir.ends_with("myskills")),
