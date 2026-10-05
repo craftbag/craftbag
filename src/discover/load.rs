@@ -73,6 +73,18 @@ fn dangling_symlink(path: &Path) -> bool {
     }
 }
 
+/// Broken link text for a skip. `canonicalize` fails on a missing
+/// target, and a stay-under check would call that an escape.
+pub(super) fn dangling_symlink_detail(path: &Path) -> Option<String> {
+    if !dangling_symlink(path) {
+        return None;
+    }
+    Some(match std::fs::read_link(path) {
+        Ok(target) => format!("dangling symlink: {}", target.display()),
+        Err(_) => "dangling symlink".to_owned(),
+    })
+}
+
 pub(super) fn load_skills_from_dir(
     dir: &Path,
     load: &DirLoad<'_>,
@@ -113,24 +125,19 @@ pub(super) fn load_skills_from_dir(
             continue;
         }
         if !path.is_dir() {
-            if dangling_symlink(&path)
-                && !is_skill_md_filename(&path)
-                && !path_is_ignored(&path, load.ignore)
-            {
-                let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
-                let detail = match std::fs::read_link(&path) {
-                    Ok(target) => format!("dangling symlink: {}", target.display()),
-                    Err(_) => "dangling symlink".to_owned(),
-                };
-                skips.push(SkillSkip {
-                    path,
-                    name,
-                    kind: SkipKind::Unreadable,
-                    detail,
-                    winner_path: None,
-                    host_token: None,
-                });
-                continue;
+            if !is_skill_md_filename(&path) && !path_is_ignored(&path, load.ignore) {
+                if let Some(detail) = dangling_symlink_detail(&path) {
+                    let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
+                    skips.push(SkillSkip {
+                        path,
+                        name,
+                        kind: SkipKind::Unreadable,
+                        detail,
+                        winner_path: None,
+                        host_token: None,
+                    });
+                    continue;
+                }
             }
             if path
                 .file_name()
@@ -138,6 +145,17 @@ pub(super) fn load_skills_from_dir(
                 .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, load.ignore)
             {
+                if let Some(detail) = dangling_symlink_detail(&path) {
+                    skips.push(SkillSkip {
+                        path,
+                        name: None,
+                        kind: SkipKind::Unreadable,
+                        detail,
+                        winner_path: None,
+                        host_token: None,
+                    });
+                    continue;
+                }
                 if !stays_under(&path, dir) {
                     skips.push(SkillSkip {
                         path,
@@ -224,6 +242,17 @@ pub(super) fn skip_if_skill_md_escapes_package(
     skill_file: &Path,
     skips: &mut Vec<SkillSkip>,
 ) -> bool {
+    if let Some(detail) = dangling_symlink_detail(skill_file) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail,
+            winner_path: None,
+            host_token: None,
+        });
+        return true;
+    }
     if skill_md_stays_in_package(skill_file) {
         return false;
     }
@@ -426,6 +455,9 @@ pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())?;
     // Joined SKILL.md is this package unless the inode is a symlink
     // out of the directory (same as extra-path classify).
+    if let Some(detail) = dangling_symlink_detail(&joined) {
+        return Err(detail);
+    }
     if !skill_md_stays_in_package(&joined) {
         return Err("SKILL.md symlink escapes package root".to_owned());
     }

@@ -5118,6 +5118,109 @@ fn dangling_package_symlink_is_unreadable() {
 
 #[cfg(unix)]
 #[test]
+fn dangling_skill_md_symlink_is_not_an_escape() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    let broken = skills.join("broken");
+    fs::create_dir_all(&broken).expect("mkdir broken");
+    std::os::unix::fs::symlink("gone.md", broken.join("SKILL.md")).expect("dangling skill");
+    let linked = skills.join("linked");
+    fs::create_dir_all(&linked).expect("mkdir linked");
+    fs::write(
+        linked.join("body.md"),
+        "---\nname: linked\ndescription: linked skill\n---\nbody\n",
+    )
+    .expect("body");
+    std::os::unix::fs::symlink("body.md", linked.join("SKILL.md")).expect("in-package link");
+
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "linked"),
+        "in-package link must load: {:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("broken/SKILL.md"))
+        .unwrap_or_else(|| panic!("broken package must skip: {:?}", report.skips));
+    assert_eq!(skip.kind, SkipKind::Unreadable);
+    assert!(
+        skip.detail.contains("dangling symlink") && skip.detail.contains("gone.md"),
+        "{}",
+        skip.detail
+    );
+    assert!(
+        !skip.detail.contains("escapes"),
+        "a missing target is not an escape: {}",
+        skip.detail
+    );
+
+    let validated = validate_path(&broken);
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("dangling symlink") && !detail.contains("escapes"),
+        "{detail}"
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("only");
+    fs::create_dir_all(&only).expect("mkdir only");
+    std::os::unix::fs::symlink("missing.md", only.join("SKILL.md")).expect("extra link");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("dangling symlink")
+            && !report.skips[0].detail.contains("escapes"),
+        "{}",
+        report.skips[0].detail
+    );
+
+    let both = tempfile::tempdir().expect("both");
+    std::os::unix::fs::symlink("missing.md", both.path().join("SKILL.md")).expect("root link");
+    write_skill(&both.path().join("skills").join("kept"), "kept", "body");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![both.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "kept"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("SKILL.md"))
+        .unwrap_or_else(|| panic!("root link must skip: {:?}", report.skips));
+    assert!(
+        skip.detail.contains("dangling symlink") && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
     let root = tempfile::tempdir().expect("tmp");
     let outside = tempfile::tempdir().expect("out");
