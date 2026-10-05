@@ -82,10 +82,7 @@ pub fn unknown_or_skipped_skill_named<'a>(
         .or_else(|| skips.iter().find(|s| s.is_host_token_refuse()));
     match skip {
         Some(skip) if skip.is_host_token_refuse() => {
-            let flag = skip
-                .host_token
-                .map(crate::skip::HostTokenField::flag_name)
-                .unwrap_or("--path / paths");
+            let flag = skip.refused_flag_name();
             let shown = crate::sanitize_error_token(name);
             let detail = crate::sanitize_error_token(&skip.detail);
             SkillMiss {

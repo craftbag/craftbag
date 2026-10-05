@@ -217,10 +217,9 @@ pub(super) fn skip_tilde_home_unset(raw: &str, field: HostPathField, skips: &mut
 
 pub(super) fn skip_ignore_tilde_home_unset(raw: &str, skips: &mut Vec<SkillSkip>) {
     let shown = crate::sanitize_error_token(raw.trim());
-    skips.push(SkillSkip::host_token_refuse(
+    skips.push(SkillSkip::host_token_refuse_ignore(
         PathBuf::from(&shown),
         "--ignore: HOME is unset".to_owned(),
-        crate::skip::HostTokenField::Ignore,
     ));
 }
 

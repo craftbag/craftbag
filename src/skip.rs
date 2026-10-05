@@ -89,7 +89,6 @@ pub enum HostTokenField {
     ExtraPath,
     UserDir,
     Validate,
-    Ignore,
 }
 
 impl HostTokenField {
@@ -98,7 +97,6 @@ impl HostTokenField {
             Self::ExtraPath => "--path / paths",
             Self::UserDir => "--user-dir / user_dir",
             Self::Validate => "validate / skills_validate",
-            Self::Ignore => "--ignore",
         }
     }
 }
@@ -169,7 +167,19 @@ impl SkillSkip {
     /// That skip is not a package identity. Named `load` / `why`
     /// still peel it so a host sees WHAT and which flag to change.
     pub(crate) fn is_host_token_refuse(&self) -> bool {
-        self.host_token.is_some()
+        // `--ignore` stays off the public enum. A new variant is a
+        // breaking change for the 0.2.x line.
+        self.host_token.is_some() || self.detail.starts_with("--ignore:")
+    }
+
+    pub(crate) fn refused_flag_name(&self) -> &'static str {
+        if self.detail.starts_with("--ignore:") {
+            "--ignore"
+        } else {
+            self.host_token
+                .map(HostTokenField::flag_name)
+                .unwrap_or("--path / paths")
+        }
     }
 
     pub(crate) fn host_token_refuse(path: PathBuf, detail: String, field: HostTokenField) -> Self {
@@ -180,6 +190,20 @@ impl SkillSkip {
             detail,
             winner_path: None,
             host_token: Some(field),
+        }
+    }
+
+    /// Same row as [`Self::host_token_refuse`] for `--ignore`.
+    /// The detail must start with `--ignore:` so miss peel can name
+    /// the flag without a new public enum variant.
+    pub(crate) fn host_token_refuse_ignore(path: PathBuf, detail: String) -> Self {
+        Self {
+            path,
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail,
+            winner_path: None,
+            host_token: None,
         }
     }
 }
@@ -267,6 +291,30 @@ mod tests {
     use proptest::prelude::*;
 
     use super::{DiscoveryReport, HostTokenField, SkillSkip, SkipKind};
+
+    #[test]
+    fn host_token_field_stays_three_variants() {
+        let fields = [
+            HostTokenField::ExtraPath,
+            HostTokenField::UserDir,
+            HostTokenField::Validate,
+        ];
+        for field in fields {
+            let name = match field {
+                HostTokenField::ExtraPath => "--path / paths",
+                HostTokenField::UserDir => "--user-dir / user_dir",
+                HostTokenField::Validate => "validate / skills_validate",
+            };
+            assert_eq!(field.flag_name(), name);
+        }
+        let skip = SkillSkip::host_token_refuse_ignore(
+            PathBuf::from("~/secret"),
+            "--ignore: HOME is unset".to_owned(),
+        );
+        assert!(skip.host_token.is_none());
+        assert!(skip.is_host_token_refuse());
+        assert_eq!(skip.refused_flag_name(), "--ignore");
+    }
 
     #[test]
     fn as_str_is_snake_case() {
