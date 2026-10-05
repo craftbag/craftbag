@@ -726,7 +726,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         if quoted_yaml_scalar(raw_value) {
                             triggers.push(value);
                         } else {
-                            push_inline_triggers(&mut triggers, &value);
+                            push_inline_triggers(&mut triggers, &value)?;
                         }
                     }
                 }
@@ -975,8 +975,21 @@ fn push_inline_metadata(
                 "metadata pair must be `key: value`, got: {shown}"
             )));
         };
-        let k = unquote_yaml_scalar(k.trim());
+        let k_raw = k.trim();
+        if !flow_item_is_one_scalar(k_raw) {
+            let shown = crate::sanitize_error_token(part);
+            return Err(ParseError::InvalidYaml(format!(
+                "metadata pair must be `key: value`, got: {shown}"
+            )));
+        }
+        let k = unquote_yaml_scalar(k_raw);
         let raw_v = v.trim();
+        if !flow_item_is_one_scalar(raw_v) {
+            let shown = crate::sanitize_error_token(raw_v);
+            return Err(ParseError::InvalidYaml(format!(
+                "metadata value must be a string, got: {shown}"
+            )));
+        }
         if unquoted_yaml_flow_collection(raw_v) {
             let shown = crate::sanitize_error_token(raw_v);
             return Err(ParseError::InvalidYaml(format!(
@@ -993,7 +1006,7 @@ fn push_inline_metadata(
     Ok(())
 }
 
-fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
+fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
     let trimmed = raw.trim();
     let inner = trimmed
         .strip_prefix('[')
@@ -1003,11 +1016,34 @@ fn push_inline_triggers(triggers: &mut Vec<String>, raw: &str) {
         if unquoted_yaml_null(raw_part) {
             continue;
         }
+        if !flow_item_is_one_scalar(raw_part) {
+            let shown = crate::sanitize_error_token(raw_part);
+            return Err(ParseError::InvalidYaml(format!(
+                "trigger must be one scalar, got: {shown}"
+            )));
+        }
         let item = unquote_yaml_scalar(raw_part);
         if !item.is_empty() {
             triggers.push(item.to_owned());
         }
     }
+    Ok(())
+}
+
+/// One flow item is one scalar. A quoted scalar must consume the item.
+///
+/// `"Doe, Jane" version: "1"` is two scalars and no comma. An unclosed
+/// quote still consumes the rest, matching [`quoted_scalar_len`].
+fn flow_item_is_one_scalar(raw: &str) -> bool {
+    let s = raw.trim();
+    if s.is_empty() {
+        return true;
+    }
+    let bytes = s.as_bytes();
+    if bytes[0] != b'"' && bytes[0] != b'\'' {
+        return true;
+    }
+    quoted_scalar_len(s) == s.len()
 }
 
 fn assign_parsed_bool(
@@ -2568,6 +2604,39 @@ BODY
         )
         .expect("quoted comma in flow triggers must load");
         assert_eq!(triggers.triggers, vec!["code, review", "git"]);
+    }
+
+    #[test]
+    fn parse_skill_flow_rejects_junk_after_quoted_scalar() {
+        let meta = parse_skill(
+            "---\nname: misscomma\ndescription: d\nmetadata: {author: \"Doe, Jane\" version: \"1\"}\n---\nbody\n",
+        )
+        .expect_err("missing comma must not fold the next pair into author");
+        let meta_msg = meta.to_string();
+        assert!(
+            meta_msg.contains("metadata value must be a string") && meta_msg.contains("version"),
+            "{meta_msg}"
+        );
+
+        let triggers = parse_skill(
+            "---\nname: misscomma\ndescription: d\ntriggers: [\"code, review\" git]\n---\nbody\n",
+        )
+        .expect_err("missing comma must not glue two trigger scalars");
+        let trig_msg = triggers.to_string();
+        assert!(
+            trig_msg.contains("trigger must be one scalar") && trig_msg.contains("git"),
+            "{trig_msg}"
+        );
+
+        let kept = parse_skill(
+            "---\nname: obrien\ndescription: d\nmetadata: {author: 'Doe, O''Brien', version: '1'}\n---\nbody\n",
+        )
+        .expect("escaped single quote inside a quoted comma must load");
+        assert_eq!(
+            kept.metadata.get("author").map(String::as_str),
+            Some("Doe, O'Brien")
+        );
+        assert_eq!(kept.metadata.get("version").map(String::as_str), Some("1"));
     }
 
     #[test]
