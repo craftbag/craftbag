@@ -5398,6 +5398,34 @@ fn symlink_loop_package_dir_is_a_skip() {
 
 #[cfg(unix)]
 #[test]
+fn symlink_loop_extra_path_file_matches_validate() {
+    let root = tempfile::tempdir().expect("tmp");
+    let file = root.path().join("SKILL.md");
+    std::os::unix::fs::symlink("SKILL.md", &file).expect("loop");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![file.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("symbolic link loop")
+            && report.skips[0].detail.contains("SKILL.md")
+            && !report.skips[0].detail.contains("Too many levels"),
+        "{}",
+        report.skips[0].detail
+    );
+    let validated = validate_path(&file);
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert_eq!(detail, &report.skips[0].detail);
+}
+
+#[cfg(unix)]
+#[test]
 fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
     let root = tempfile::tempdir().expect("tmp");
     let outside = tempfile::tempdir().expect("out");

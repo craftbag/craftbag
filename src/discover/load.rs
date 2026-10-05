@@ -564,6 +564,11 @@ pub(super) fn skill_md_is_dir(path: &Path) -> bool {
 pub(super) fn read_skill_md(path: &Path) -> Result<String, String> {
     #[cfg(test)]
     READ_SKILL_MD_PATHS.with(|c| c.borrow_mut().push(path.to_path_buf()));
+    // A cycle fails `metadata` with a platform errno. Name it the same
+    // way validate does, and do not open the link.
+    if let Some(detail) = symlink_loop_detail(path) {
+        return Err(detail);
+    }
     // Stat before open. `File::open` on a FIFO waits for a writer, so a
     // hostile tree can hang discover / validate.
     let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
