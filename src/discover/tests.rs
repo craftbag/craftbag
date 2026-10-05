@@ -4470,6 +4470,38 @@ fn validate_missing_path_names_next_step_not_os_error() {
 }
 
 #[test]
+fn validate_path_through_file_parent_names_missing_not_os_error() {
+    let root = tempfile::tempdir().expect("tmp");
+    fs::write(root.path().join("not-a-dir"), "file").expect("write");
+    let missing = root
+        .path()
+        .join("not-a-dir")
+        .join("skills")
+        .join("foo")
+        .join("SKILL.md");
+    let report = validate_path(&missing);
+    assert!(!report.ok, "path through a file must fail: {report:?}");
+    let miss = report.miss().expect("peel");
+    assert_eq!(miss.error_kind, "unreadable");
+    assert!(
+        miss.error.contains("path does not exist:"),
+        "a file parent is a missing path: {}",
+        miss.error
+    );
+    assert!(
+        !miss.error.contains("os error") && !miss.error.contains("Not a directory"),
+        "must not leak the raw OS string: {}",
+        miss.error
+    );
+    let shown = crate::sanitize_error_token(&missing.display().to_string());
+    assert!(
+        miss.error.contains(&shown),
+        "must echo the sanitized path: {}",
+        miss.error
+    );
+}
+
+#[test]
 fn validate_path_dir_without_skill_md_is_unreadable() {
     let root = tempfile::tempdir().expect("tmp");
     let dir = root.path().join("collection");

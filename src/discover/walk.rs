@@ -366,7 +366,10 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
     };
     let path = path_buf.as_path();
     if let Err(e) = std::fs::metadata(path) {
-        if e.kind() == std::io::ErrorKind::NotFound {
+        // A missing path and a file in an earlier component are the
+        // same hole. Permission errors fall through to read_skill_md.
+        if e.kind() == std::io::ErrorKind::NotFound || e.kind() == std::io::ErrorKind::NotADirectory
+        {
             let shown = crate::sanitize_error_token(&path.display().to_string());
             let detail = format!(
                 "path does not exist: {shown} (pass a SKILL.md file or a package directory that contains SKILL.md)"
