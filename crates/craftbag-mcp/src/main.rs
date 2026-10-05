@@ -463,13 +463,18 @@ fn tools() -> Value {
         {
             "name": "skills_list",
             "description": "List discovered skills. format is json (default `{ skills, skips }`), xml (skills-ref <available_skills> inventory), catalog (omits disable_model_invocation), or watch.",
-            "inputSchema": {"type": "object", "properties": list_props}
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": list_props
+            }
         },
         {
             "name": "skills_load",
             "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). outline lists heading keys; section fetches one heading. Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
             "inputSchema": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["name"],
                 "properties": load_props
             }
@@ -477,13 +482,18 @@ fn tools() -> Value {
         {
             "name": "skills_why",
             "description": "Explain loaded, skipped, and activation decisions. format is json (default `{ loaded, skips, activation }`) or text (same rows as CLI why). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
-            "inputSchema": {"type": "object", "properties": why_props}
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": why_props
+            }
         },
         {
             "name": "skills_validate",
             "description": "Validate one SKILL.md file or package directory (joins SKILL.md / skill.md). strict rejects unknown frontmatter keys (skills-ref default; omitted is false). Success is ValidationReport (no error_kind). A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as validate --json).",
             "inputSchema": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["path"],
                 "properties": {
                     "path": {
@@ -504,6 +514,10 @@ fn tools() -> Value {
 /// mismatch against `inputSchema` is an error (not a silent default).
 /// Present `null` on a typed property is a type error, same as a
 /// wrong JSON type. Omitted properties still use the field default.
+///
+/// Unknown keys are rejected here. `#[serde(deny_unknown_fields)]`
+/// cannot see them: `DiscoveryArgs` is flattened into list, load,
+/// and why, and a flattened map consumes every extra key.
 fn tool_args<T>(value: Value) -> Result<T, String>
 where
     T: Default + serde::de::DeserializeOwned,
@@ -512,6 +526,141 @@ where
         return Ok(T::default());
     }
     serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
+const LIST_ARG_KEYS: &[&str] = &[
+    "paths",
+    "vendor",
+    "user_dir",
+    "ascii_names",
+    "implicit_roots",
+    "disabled",
+    "ignore",
+    "format",
+    "context",
+    "context_tokens",
+];
+
+const LOAD_ARG_KEYS: &[&str] = &[
+    "paths",
+    "vendor",
+    "user_dir",
+    "ascii_names",
+    "implicit_roots",
+    "disabled",
+    "ignore",
+    "name",
+    "args",
+    "outline",
+    "section",
+];
+
+const WHY_ARG_KEYS: &[&str] = &[
+    "paths",
+    "vendor",
+    "user_dir",
+    "ascii_names",
+    "implicit_roots",
+    "disabled",
+    "ignore",
+    "name",
+    "context",
+    "context_tokens",
+    "format",
+];
+
+const VALIDATE_ARG_KEYS: &[&str] = &["path", "strict"];
+
+fn decode_tool_args<T>(value: Value, allowed: &[&str]) -> Result<T, String>
+where
+    T: Default + serde::de::DeserializeOwned,
+{
+    reject_unknown_arguments(&value, allowed)?;
+    tool_args(value)
+}
+
+fn decode_required_args<T>(value: Value, allowed: &[&str]) -> Result<T, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    reject_unknown_arguments(&value, allowed)?;
+    serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
+fn reject_unknown_arguments(value: &Value, allowed: &[&str]) -> Result<(), String> {
+    let Some(obj) = value.as_object() else {
+        return Ok(());
+    };
+    for key in obj.keys() {
+        if allowed.iter().any(|name| *name == key.as_str()) {
+            continue;
+        }
+        let shown = craftbag::sanitize_error_token(key);
+        let message = match argument_suggestion(key, allowed) {
+            Some(hint) => format!("unknown argument: {shown} (did you mean {hint}?)"),
+            None => format!("unknown argument: {shown}"),
+        };
+        return Err(message);
+    }
+    Ok(())
+}
+
+fn argument_suggestion<'a>(raw: &str, allowed: &'a [&str]) -> Option<&'a str> {
+    let folded = raw.to_ascii_lowercase().replace('-', "_");
+    let mut found: Option<&str> = None;
+    for key in allowed {
+        let same = folded == key.to_ascii_lowercase();
+        if !same && !edit_distance_is_one(&folded, key) {
+            continue;
+        }
+        if let Some(prev) = found {
+            if prev != *key {
+                return None;
+            }
+        } else {
+            found = Some(*key);
+        }
+    }
+    found
+}
+
+/// One Unicode-scalar insert, delete, or substitution.
+fn edit_distance_is_one(a: &str, b: &str) -> bool {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (short, long) = if a.len() <= b.len() {
+        (&a[..], &b[..])
+    } else {
+        (&b[..], &a[..])
+    };
+    let diff = long.len() - short.len();
+    if diff > 1 {
+        return false;
+    }
+    if diff == 0 {
+        let mut mismatches = 0usize;
+        for (left, right) in short.iter().zip(long.iter()) {
+            if left != right {
+                mismatches += 1;
+                if mismatches > 1 {
+                    return false;
+                }
+            }
+        }
+        return mismatches == 1;
+    }
+    let mut i = 0usize;
+    let mut skipped = false;
+    for ch in long {
+        if i < short.len() && *ch == short[i] {
+            i += 1;
+        } else if !skipped {
+            skipped = true;
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 fn ok(id: Value, result: Value) -> Value {
@@ -545,35 +694,39 @@ fn handle(req: RpcRequest) -> Option<Value> {
                 Err(e) => return Some(err(id, -32602, &e.to_string())),
             };
             let (text, is_err, miss) = match params.name.as_str() {
-                "skills_list" => match tool_args(params.arguments) {
+                "skills_list" => match decode_tool_args(params.arguments, LIST_ARG_KEYS) {
                     Ok(args) => match list_json(args) {
                         Ok(s) => (s, false, None),
                         Err(e) => tool_fail(e.into()),
                     },
                     Err(e) => tool_fail(e.into()),
                 },
-                "skills_load" => match serde_json::from_value::<LoadArgs>(params.arguments) {
-                    Ok(args) => match load_text(args) {
-                        Ok(s) => (s, false, None),
-                        Err(e) => tool_fail(e),
-                    },
-                    Err(e) => tool_fail(e.to_string().into()),
-                },
-                "skills_why" => match tool_args(params.arguments) {
+                "skills_load" => {
+                    match decode_required_args::<LoadArgs>(params.arguments, LOAD_ARG_KEYS) {
+                        Ok(args) => match load_text(args) {
+                            Ok(s) => (s, false, None),
+                            Err(e) => tool_fail(e),
+                        },
+                        Err(e) => tool_fail(e.into()),
+                    }
+                }
+                "skills_why" => match decode_tool_args(params.arguments, WHY_ARG_KEYS) {
                     Ok(args) => match why_json(args) {
                         Ok(s) => (s, false, None),
                         Err(e) => tool_fail(e),
                     },
                     Err(e) => tool_fail(e.into()),
                 },
-                "skills_validate" => match serde_json::from_value::<ValidateArgs>(params.arguments)
-                {
-                    Ok(args) => match validate_text(args) {
-                        Ok(s) => (s, false, None),
-                        Err(e) => tool_fail(e),
-                    },
-                    Err(e) => tool_fail(e.to_string().into()),
-                },
+                "skills_validate" => {
+                    match decode_required_args::<ValidateArgs>(params.arguments, VALIDATE_ARG_KEYS)
+                    {
+                        Ok(args) => match validate_text(args) {
+                            Ok(s) => (s, false, None),
+                            Err(e) => tool_fail(e),
+                        },
+                        Err(e) => tool_fail(e.into()),
+                    }
+                }
                 other => {
                     return Some(err(id, -32601, &unknown_tool_message(other)));
                 }
@@ -3614,6 +3767,165 @@ mod tests {
             assert!(
                 !text.contains("\"activation\""),
                 "must not return why JSON for null context: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn tool_schemas_reject_additional_properties() {
+        let tools = super::tools();
+        let listed = tools.as_array().expect("tools");
+        assert_eq!(listed.len(), 4, "{tools}");
+        for tool in listed {
+            assert_eq!(
+                tool["inputSchema"]["additionalProperties"],
+                json!(false),
+                "{}",
+                tool["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_tool_arguments_do_not_drop_context() {
+        empty_home(|| {
+            let root = tempfile::tempdir().expect("root");
+            let pkg = root.path().join("review-pr");
+            fs::create_dir_all(&pkg).expect("mkdir");
+            fs::write(
+                pkg.join("SKILL.md"),
+                "---\nname: review-pr\ndescription: Review a pull request\ntriggers:\n  - pull request\n---\n# Review\nbody\n",
+            )
+            .expect("write");
+            let path = root.path().display().to_string();
+            let spelled = call(
+                80,
+                "skills_why",
+                json!({
+                    "name": "review-pr",
+                    "context": "pull request",
+                    "paths": [path.clone()],
+                    "implicit_roots": false
+                }),
+            );
+            assert_eq!(spelled["result"]["isError"], false, "{spelled}");
+            let spelled_body: serde_json::Value =
+                serde_json::from_str(call_text(&spelled)).expect("why json");
+            assert_eq!(
+                spelled_body["activation"][0]["reason"], "injected",
+                "spelled context must inject before the typo is meaningful: {spelled_body}"
+            );
+
+            let cases = [
+                (
+                    81,
+                    "skills_why",
+                    json!({
+                        "name": "review-pr",
+                        "contex": "pull request",
+                        "paths": [path.clone()],
+                        "implicit_roots": false
+                    }),
+                    "unknown argument: contex (did you mean context?)",
+                ),
+                (
+                    82,
+                    "skills_why",
+                    json!({
+                        "name": "review-pr",
+                        "context": "pull request",
+                        "paths": [path.clone()],
+                        "implicit_roots": false,
+                        "nope": 1
+                    }),
+                    "unknown argument: nope",
+                ),
+                (
+                    83,
+                    "skills_list",
+                    json!({
+                        "paths": [path.clone()],
+                        "implicit_roots": false,
+                        "formatt": "json"
+                    }),
+                    "unknown argument: formatt (did you mean format?)",
+                ),
+                (
+                    84,
+                    "skills_load",
+                    json!({
+                        "name": "review-pr",
+                        "paths": [path.clone()],
+                        "implicit_roots": false,
+                        "secton": "review"
+                    }),
+                    "unknown argument: secton (did you mean section?)",
+                ),
+                (
+                    85,
+                    "skills_validate",
+                    json!({"path": pkg.display().to_string(), "stric": true}),
+                    "unknown argument: stric (did you mean strict?)",
+                ),
+                (
+                    88,
+                    "skills_why",
+                    json!({
+                        "name": "review-pr",
+                        "context-tokens": 8000,
+                        "paths": [path.clone()],
+                        "implicit_roots": false
+                    }),
+                    "unknown argument: context-tokens (did you mean context_tokens?)",
+                ),
+                (
+                    89,
+                    "skills_why",
+                    json!({
+                        "name": "review-pr",
+                        "Context": "pull request",
+                        "paths": [path.clone()],
+                        "implicit_roots": false
+                    }),
+                    "unknown argument: Context (did you mean context?)",
+                ),
+            ];
+            for (id, tool, args, expect) in cases {
+                let resp = call(id, tool, args);
+                assert_eq!(resp["result"]["isError"], true, "{tool}: {resp}");
+                let text = call_text(&resp);
+                assert_eq!(text, expect, "{tool}");
+                assert_eq!(text.lines().count(), 1, "{text:?}");
+                assert!(
+                    !text.contains("injected") && !text.contains("\"loaded\""),
+                    "{tool} must not return a successful report: {text}"
+                );
+            }
+
+            let broken = call(
+                86,
+                "skills_why",
+                json!({
+                    "name": "review-pr",
+                    "paths": [path],
+                    "implicit_roots": false,
+                    "contex\n": "pull request"
+                }),
+            );
+            let broken_text = call_text(&broken);
+            assert_eq!(broken["result"]["isError"], true, "{broken}");
+            assert_eq!(broken_text.lines().count(), 1, "{broken_text:?}");
+            assert!(
+                broken_text.contains("unknown argument: contex?"),
+                "{broken_text}"
+            );
+
+            let array = call(87, "skills_why", json!([]));
+            let array_text = call_text(&array);
+            assert_eq!(array["result"]["isError"], true, "{array}");
+            assert!(
+                !array_text.contains("unknown argument"),
+                "a non-object stays a type error: {array_text}"
             );
         });
     }
