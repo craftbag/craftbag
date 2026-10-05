@@ -16,7 +16,7 @@ pub struct ProgressiveBudgets {
     pub catalog_max_entries: usize,
     /// Max characters for the catalog fragment (including header).
     pub catalog_max_chars: usize,
-    /// Token budget for auto-injected full skill bodies (`content.len()/4`).
+    /// Token budget for auto-injected full skill bodies ([`crate::estimate_tokens`]).
     pub body_token_budget: usize,
 }
 
@@ -148,7 +148,7 @@ pub fn filter_skills<'a>(
         } else {
             0
         };
-        let estimated_tokens = skill.content.len() / 4 + envelope_overhead;
+        let estimated_tokens = crate::estimate_tokens(&skill.content) + envelope_overhead;
         if used_tokens.saturating_add(estimated_tokens) > token_budget && !result.is_empty() {
             continue;
         }
@@ -965,6 +965,17 @@ mod tests {
         assert!(names.contains(&"a-small"), "{names:?}");
         assert!(!names.contains(&"b-huge"), "{names:?}");
         assert!(names.contains(&"c-small"), "{names:?}");
+    }
+
+    #[test]
+    fn filter_skills_budget_counts_characters_not_utf8_bytes() {
+        let small = make_skill("aaa-small", &[], 80);
+        let mut wide = make_skill("zzz-wide", &[], 0);
+        wide.content = "あ".repeat(400);
+        let skills = [small, wide];
+        let result = filter_skills(&skills, "", 150);
+        let names: Vec<&str> = result.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, vec!["aaa-small", "zzz-wide"]);
     }
 
     #[test]
