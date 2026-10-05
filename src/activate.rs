@@ -160,6 +160,9 @@ pub fn filter_skills<'a>(
 }
 
 /// Relevance score for ranking skills against user text.
+///
+/// Trigger, name, and description hits use word boundaries.
+/// A name `git` scores inside `use git`, not inside `github`.
 pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
     if context_lower.is_empty() {
         return 0;
@@ -171,11 +174,11 @@ pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
         }
     }
     let name_l = skill.name.to_lowercase();
-    if context_lower.contains(&name_l) {
+    if trigger_matches(context_lower, &name_l) {
         score = score.saturating_add(50);
     }
     let name_words = name_l.replace('-', " ");
-    if name_words != name_l && context_lower.contains(&name_words) {
+    if name_words != name_l && trigger_matches(context_lower, &name_words) {
         score = score.saturating_add(40);
     }
     for text in [
@@ -188,7 +191,7 @@ pub fn skill_relevance_score(skill: &Skill, context_lower: &str) -> i32 {
                 .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                 .collect::<String>()
                 .to_lowercase();
-            if w.len() >= 4 && context_lower.contains(&w) {
+            if w.len() >= 4 && trigger_matches(context_lower, &w) {
                 score = score.saturating_add(1);
             }
         }
@@ -786,7 +789,7 @@ mod tests {
         DEFAULT_ACTIVATE_HINT, FormatOptions, ListFormat, LoadView, ProgressiveBudgets,
         filter_skills, format_available_skills_xml, format_catalog, format_load_message,
         format_load_view, format_package_envelope, parse_list_format, progressive_budgets,
-        trigger_matches, unknown_list_format,
+        rank_skills_for_catalog, skill_relevance_score, trigger_matches, unknown_list_format,
     };
     use crate::parse::parse_skill;
     use crate::skill::Skill;
@@ -833,6 +836,58 @@ mod tests {
         assert_eq!(huge.body_token_budget, 100_000);
         assert_eq!(huge.catalog_max_entries, 1_000);
         assert_eq!(huge.catalog_max_chars, 100_000);
+    }
+
+    #[test]
+    fn relevance_name_is_a_word_not_a_substring() {
+        let git = make_skill("git", &[], 40);
+        let mut release = make_skill("release-notes", &[], 40);
+        release.description = "Ship the release".to_owned();
+        assert_eq!(skill_relevance_score(&git, "github actions"), 0);
+        assert_eq!(skill_relevance_score(&git, "use git"), 50);
+        let mut pr = make_skill("pr", &[], 40);
+        pr.description = "pull request helper".to_owned();
+        assert_eq!(skill_relevance_score(&pr, "improve the release"), 0);
+        let skills = [pr, release];
+        let ranked = rank_skills_for_catalog(&skills, "improve the release");
+        assert_eq!(ranked[0].name, "release-notes");
+    }
+
+    #[test]
+    fn relevance_description_word_is_not_a_substring() {
+        let mut rust_skill = make_skill("zzz-style", &[], 40);
+        rust_skill.description = "rust guide".to_owned();
+        let plain = make_skill("aaa-notes", &[], 40);
+        assert_eq!(skill_relevance_score(&rust_skill, "trust me"), 0);
+        assert_eq!(skill_relevance_score(&rust_skill, "use rust today"), 1);
+        let skills = [plain, rust_skill];
+        let ranked = rank_skills_for_catalog(&skills, "trust me");
+        assert_eq!(ranked[0].name, "aaa-notes");
+    }
+
+    #[test]
+    fn relevance_hyphenated_name_matches_spaced_words() {
+        let mut skill = make_skill("code-review", &[], 40);
+        skill.description = "reviews a change".to_owned();
+        assert_eq!(skill_relevance_score(&skill, "please code review this"), 40);
+        assert_eq!(skill_relevance_score(&skill, "please code-review this"), 50);
+    }
+
+    #[test]
+    fn relevance_hyphenated_name_does_not_match_inside_a_longer_word() {
+        let mut skill = make_skill("code-review", &[], 40);
+        skill.description = "reviews a change".to_owned();
+        assert_eq!(
+            skill_relevance_score(&skill, "please code reviewer this"),
+            0
+        );
+    }
+
+    #[test]
+    fn relevance_empty_name_does_not_match_every_context() {
+        let mut skill = make_skill("placeholder", &[], 40);
+        skill.name.clear();
+        assert_eq!(skill_relevance_score(&skill, "anything"), 0);
     }
 
     #[test]
