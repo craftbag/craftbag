@@ -519,14 +519,6 @@ fn reject_optional_string_flow(key: &str, raw_value: &str) -> Result<(), ParseEr
     )))
 }
 
-fn optional_string_value(raw_value: &str, value: &str) -> Option<String> {
-    if unquoted_yaml_null(raw_value) {
-        None
-    } else {
-        Some(value.to_owned())
-    }
-}
-
 /// Unquoted null in a metadata pair is omitted. Quoted `"null"` stays.
 fn metadata_scalar_or_skip(raw: &str) -> Option<String> {
     if unquoted_yaml_null(raw) {
@@ -607,15 +599,16 @@ where
 
 fn optional_frontmatter_string<'a, I>(
     key: &str,
-    raw_value: &str,
-    value: &str,
+    field_text: &str,
     lines: &mut std::iter::Peekable<I>,
     allow_argument_hint_brackets: bool,
 ) -> Result<Option<String>, ParseError>
 where
-    I: Iterator<Item = &'a str>,
+    I: Iterator<Item = &'a str> + Clone,
 {
-    if value.is_empty() || unquoted_yaml_null(raw_value) {
+    let raw_value = strip_yaml_inline_comment(field_text);
+    let value = unquote_yaml_scalar(raw_value);
+    if unquoted_yaml_null(raw_value) {
         if let Some(nested) = peek_indented_nested_key(lines) {
             let shown_key = crate::sanitize_error_token(key);
             let shown = crate::sanitize_error_token(&nested);
@@ -625,11 +618,34 @@ where
         }
         return Ok(None);
     }
+    if value.is_empty() {
+        if quoted_yaml_scalar(raw_value) {
+            if let Some(nested) = peek_indented_nested_key(lines) {
+                let shown_key = crate::sanitize_error_token(key);
+                let shown = crate::sanitize_error_token(&nested);
+                return Err(ParseError::InvalidYaml(format!(
+                    "{shown_key} must be a string, got: {shown}"
+                )));
+            }
+            return Ok(None);
+        }
+        return match read_empty_scalar_follow(key, lines)? {
+            EmptyScalarFollow::Value(text) => Ok(Some(text)),
+            EmptyScalarFollow::List | EmptyScalarFollow::Absent => Ok(None),
+            EmptyScalarFollow::Mapping(shown) | EmptyScalarFollow::Flow(shown) => {
+                let shown_key = crate::sanitize_error_token(key);
+                let shown = crate::sanitize_error_token(&shown);
+                Err(ParseError::InvalidYaml(format!(
+                    "{shown_key} must be a string, got: {shown}"
+                )))
+            }
+        };
+    }
     if !(allow_argument_hint_brackets && unquoted_argument_hint_brackets(raw_value)) {
         reject_optional_string_flow(key, raw_value)?;
     }
     reject_optional_string_bool(key, raw_value)?;
-    Ok(optional_string_value(raw_value, value))
+    Ok(Some(extend_plain_scalar(&value, field_text, lines)))
 }
 
 /// Parse YAML frontmatter into a skill (body empty until filled by [`parse_skill`]).
@@ -739,9 +755,9 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             continue;
         }
 
-        if let Some((key, value)) = trimmed.split_once(':') {
+        if let Some((key, field_text)) = trimmed.split_once(':') {
             let key = key.trim();
-            let raw_value = strip_yaml_inline_comment(value);
+            let raw_value = strip_yaml_inline_comment(field_text);
             let value = unquote_yaml_scalar(raw_value);
 
             if let Some(style) = yaml_block_scalar_style(raw_value) {
@@ -798,17 +814,38 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             "description must be a string, got: {shown}"
                         )));
                     }
-                    if value.is_empty()
-                        || unquoted_yaml_null(raw_value)
-                        || unquoted_yaml_bool_word(raw_value)
-                    {
+                    if unquoted_yaml_null(raw_value) || unquoted_yaml_bool_word(raw_value) {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml(
                                 "description value is empty".to_owned(),
                             ));
                         }
+                    } else if value.is_empty() {
+                        if quoted_yaml_scalar(raw_value) {
+                            if !peek_starts_yaml_list(&mut lines) {
+                                return Err(ParseError::InvalidYaml(
+                                    "description value is empty".to_owned(),
+                                ));
+                            }
+                        } else {
+                            match read_empty_scalar_follow("description", &mut lines)? {
+                                EmptyScalarFollow::Value(text) => description = Some(text),
+                                EmptyScalarFollow::Flow(shown) => {
+                                    let shown = crate::sanitize_error_token(&shown);
+                                    return Err(ParseError::InvalidYaml(format!(
+                                        "description must be a string, got: {shown}"
+                                    )));
+                                }
+                                EmptyScalarFollow::List => {}
+                                EmptyScalarFollow::Absent | EmptyScalarFollow::Mapping(_) => {
+                                    return Err(ParseError::InvalidYaml(
+                                        "description value is empty".to_owned(),
+                                    ));
+                                }
+                            }
+                        }
                     } else {
-                        description = Some(value);
+                        description = Some(extend_plain_scalar(&value, field_text, &mut lines));
                     }
                 }
                 "triggers" => {
@@ -824,21 +861,21 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
                 "license" => {
                     if let Some(stored) =
-                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                        optional_frontmatter_string(key, field_text, &mut lines, false)?
                     {
                         license = Some(stored);
                     }
                 }
                 "compatibility" => {
                     if let Some(stored) =
-                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                        optional_frontmatter_string(key, field_text, &mut lines, false)?
                     {
                         compatibility = Some(stored);
                     }
                 }
                 "allowed-tools" | "allowed_tools" => {
                     if let Some(stored) =
-                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                        optional_frontmatter_string(key, field_text, &mut lines, false)?
                     {
                         allowed_tools = Some(stored);
                     }
@@ -852,14 +889,14 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
                 "argument-hint" | "argument_hint" => {
                     if let Some(stored) =
-                        optional_frontmatter_string(key, raw_value, &value, &mut lines, true)?
+                        optional_frontmatter_string(key, field_text, &mut lines, true)?
                     {
                         argument_hint = Some(stored);
                     }
                 }
                 "when-to-use" | "when_to_use" => {
                     if let Some(stored) =
-                        optional_frontmatter_string(key, raw_value, &value, &mut lines, false)?
+                        optional_frontmatter_string(key, field_text, &mut lines, false)?
                     {
                         when_to_use = Some(stored);
                     }
@@ -983,6 +1020,257 @@ where
             out.push_str(&para.join(" "));
         }
         out
+    }
+}
+
+enum EmptyScalarFollow {
+    Absent,
+    List,
+    Mapping(String),
+    Flow(String),
+    Value(String),
+}
+
+struct FoldedPlain {
+    text: String,
+    broke_before: bool,
+}
+
+/// `key:` with nothing on the same line. A following indented plain
+/// line or block scalar is the value. A list item stays in the
+/// iterator so the list error can name it. A nested `key:` stays too.
+fn read_empty_scalar_follow<'a, I>(
+    key: &str,
+    lines: &mut std::iter::Peekable<I>,
+) -> Result<EmptyScalarFollow, ParseError>
+where
+    I: Iterator<Item = &'a str> + Clone,
+{
+    loop {
+        let Some(line) = lines.peek().copied() else {
+            return Ok(EmptyScalarFollow::Absent);
+        };
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            lines.next();
+            continue;
+        }
+        if !line_is_yaml_indented(line) {
+            return Ok(EmptyScalarFollow::Absent);
+        }
+        if trimmed.starts_with("- ") || trimmed == "-" {
+            return Ok(EmptyScalarFollow::List);
+        }
+        let stripped = strip_yaml_inline_comment(trimmed);
+        if unquoted_yaml_flow_collection(stripped) {
+            return Ok(EmptyScalarFollow::Flow(stripped.to_owned()));
+        }
+        if let Some(style) = yaml_block_scalar_style(stripped) {
+            lines.next();
+            let block = take_yaml_block_scalar(lines, style);
+            if block.is_empty() {
+                let shown_key = crate::sanitize_error_token(key);
+                return Err(ParseError::InvalidYaml(format!(
+                    "{shown_key} block scalar is empty"
+                )));
+            }
+            return Ok(EmptyScalarFollow::Value(block));
+        }
+        if plain_line_is_mapping_entry(stripped) {
+            return Ok(EmptyScalarFollow::Mapping(stripped.to_owned()));
+        }
+        let Some(folded) = pull_plain_continuations(lines) else {
+            return Ok(EmptyScalarFollow::Absent);
+        };
+        return Ok(EmptyScalarFollow::Value(folded.text));
+    }
+}
+
+/// Fold indented plain lines into an unquoted scalar. Quoted text,
+/// an inline comment, and `|` / `>` heads stay a single token.
+fn extend_plain_scalar<'a, I>(
+    head: &str,
+    field_text: &str,
+    lines: &mut std::iter::Peekable<I>,
+) -> String
+where
+    I: Iterator<Item = &'a str> + Clone,
+{
+    if !plain_scalar_head_continues(field_text) {
+        return head.to_owned();
+    }
+    match pull_plain_continuations(lines) {
+        Some(folded) => join_plain_head(head, &folded),
+        None => head.to_owned(),
+    }
+}
+
+fn plain_scalar_head_continues(field_text: &str) -> bool {
+    if yaml_field_has_inline_comment(field_text) {
+        return false;
+    }
+    let raw_value = strip_yaml_inline_comment(field_text);
+    let trimmed = raw_value.trim();
+    if trimmed.is_empty()
+        || quoted_yaml_scalar(raw_value)
+        || unquoted_yaml_null(raw_value)
+        || unquoted_yaml_bool_word(raw_value)
+        || unquoted_yaml_flow_collection(raw_value)
+    {
+        return false;
+    }
+    !matches!(trimmed.chars().next(), Some('|' | '>'))
+}
+
+fn yaml_field_has_inline_comment(field_text: &str) -> bool {
+    let trimmed = field_text.trim();
+    strip_yaml_inline_comment(field_text).len() != trimmed.len()
+}
+
+/// A mapping entry is `key:` or `key:` plus space or tab. `foo:bar`
+/// and `https://example.com/a:b` stay plain text. Quotes hide a colon.
+fn plain_line_is_mapping_entry(trimmed: &str) -> bool {
+    let bytes = trimmed.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\'' {
+                        if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                            i += 2;
+                            continue;
+                        }
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'"' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                        i += 2;
+                        continue;
+                    }
+                    if bytes[i] == b'"' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b':' => {
+                let next = bytes.get(i + 1).copied();
+                if next.is_none() || next == Some(b' ') || next == Some(b'\t') {
+                    return true;
+                }
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
+fn is_plain_continuation_line(line: &str) -> bool {
+    if !line_is_yaml_indented(line) {
+        return false;
+    }
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return false;
+    }
+    if trimmed.starts_with("- ") || trimmed == "-" {
+        return false;
+    }
+    let stripped = strip_yaml_inline_comment(trimmed);
+    if yaml_block_scalar_style(stripped).is_some() || plain_line_is_mapping_entry(stripped) {
+        return false;
+    }
+    true
+}
+
+fn pull_plain_continuations<'a, I>(lines: &mut std::iter::Peekable<I>) -> Option<FoldedPlain>
+where
+    I: Iterator<Item = &'a str> + Clone,
+{
+    let mut paragraphs: Vec<String> = Vec::new();
+    let mut current: Vec<String> = Vec::new();
+    let mut broke_before = false;
+    let mut seen = false;
+    loop {
+        let Some(peeked) = lines.peek().copied() else {
+            break;
+        };
+        if peeked.trim().is_empty() {
+            if !blank_then_plain_continuation(lines) {
+                break;
+            }
+            lines.next();
+            if seen && !current.is_empty() {
+                paragraphs.push(current.join(" "));
+                current.clear();
+            } else if !seen {
+                broke_before = true;
+            }
+            continue;
+        }
+        if peeked.trim().starts_with('#') {
+            lines.next();
+            continue;
+        }
+        if !is_plain_continuation_line(peeked) {
+            break;
+        }
+        let Some(raw) = lines.next() else {
+            break;
+        };
+        let piece = unquote_yaml_scalar(strip_yaml_inline_comment(raw));
+        if !piece.is_empty() {
+            current.push(piece);
+            seen = true;
+        }
+    }
+    if !current.is_empty() {
+        paragraphs.push(current.join(" "));
+    }
+    if paragraphs.is_empty() {
+        None
+    } else {
+        Some(FoldedPlain {
+            text: paragraphs.join("\n"),
+            broke_before,
+        })
+    }
+}
+
+fn blank_then_plain_continuation<'a, I>(lines: &std::iter::Peekable<I>) -> bool
+where
+    I: Iterator<Item = &'a str> + Clone,
+{
+    let mut look = lines.clone();
+    look.next();
+    loop {
+        let Some(line) = look.peek().copied() else {
+            return false;
+        };
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            look.next();
+            continue;
+        }
+        return is_plain_continuation_line(line);
+    }
+}
+
+fn join_plain_head(head: &str, folded: &FoldedPlain) -> String {
+    if folded.broke_before {
+        format!("{head}\n{}", folded.text)
+    } else {
+        format!("{head} {}", folded.text)
     }
 }
 
@@ -1457,6 +1745,288 @@ Body.
 ";
         let skill = parse_skill(input).expect("literal description should parse");
         assert_eq!(skill.description, "line one\nline two");
+    }
+
+    #[test]
+    fn plain_wrapped_description_folds_and_keeps_the_body() {
+        let input = "\
+---
+name: api
+description: REST API conventions for this codebase, route structure,
+  error handling, and auth checks before adding a new endpoint.
+triggers:
+  - api
+---
+# Body
+Keep the body.
+";
+        let skill = parse_skill(input).expect("wrapped description should parse");
+        assert_eq!(
+            skill.description,
+            "REST API conventions for this codebase, route structure, error handling, and auth checks before adding a new endpoint."
+        );
+        assert_eq!(skill.triggers, vec!["api".to_owned()]);
+        assert!(skill.content.contains("Keep the body."));
+        assert_eq!(skill.name, "api");
+    }
+
+    #[test]
+    fn next_line_frontmatter_strings_are_the_value() {
+        let description = parse_skill(
+            "\
+---
+name: api
+description:
+  A long description on the next line.
+---
+body
+",
+        )
+        .expect("next-line description");
+        assert_eq!(
+            description.description,
+            "A long description on the next line."
+        );
+
+        let input = "\
+---
+name: api
+description: d
+license:
+  Apache-2.0
+  WITH LLVM-exception
+compatibility:
+  Requires git.
+allowed-tools:
+  Bash Read
+when-to-use:
+  Reviewing a pull request
+argument-hint:
+  file path
+---
+body
+";
+        let skill = parse_skill(input).expect("next-line optional strings");
+        assert_eq!(
+            skill.license.as_deref(),
+            Some("Apache-2.0 WITH LLVM-exception")
+        );
+        assert_eq!(skill.compatibility.as_deref(), Some("Requires git."));
+        assert_eq!(skill.allowed_tools.as_deref(), Some("Bash Read"));
+        assert_eq!(
+            skill.when_to_use.as_deref(),
+            Some("Reviewing a pull request")
+        );
+        assert_eq!(skill.argument_hint.as_deref(), Some("file path"));
+    }
+
+    #[test]
+    fn plain_description_blank_line_starts_a_paragraph() {
+        let skill = parse_skill(
+            "\
+---
+name: api
+description: hello
+
+  more text
+---
+body
+",
+        )
+        .expect("paragraph break");
+        assert_eq!(skill.description, "hello\nmore text");
+
+        let stopped = parse_skill(
+            "\
+---
+description: hello
+
+name: api
+---
+body
+",
+        )
+        .expect("blank line does not eat the next key");
+        assert_eq!(stopped.description, "hello");
+        assert_eq!(stopped.name, "api");
+
+        let later = parse_skill(
+            "\
+---
+name: api
+description: hello
+  line two
+
+  line three
+---
+body
+",
+        )
+        .expect("later paragraph");
+        assert_eq!(later.description, "hello line two\nline three");
+
+        let noted = parse_skill(
+            "\
+---
+name: api
+description: hello
+  # note
+  world # comment
+---
+body
+",
+        )
+        .expect("comments inside a continuation");
+        assert_eq!(noted.description, "hello world");
+    }
+
+    #[test]
+    fn plain_continuation_keeps_a_colon_that_is_not_a_key() {
+        let skill = parse_skill(
+            "\
+---
+name: api
+description: See the docs at
+  https://example.com/a:b and foo:bar today.
+---
+body
+",
+        )
+        .expect("colon inside a continuation is text");
+        assert_eq!(
+            skill.description,
+            "See the docs at https://example.com/a:b and foo:bar today."
+        );
+
+        let flow = parse_skill(
+            "\
+---
+name: api
+description: hello
+  [a, b]
+---
+body
+",
+        )
+        .expect("indented flow text after a scalar");
+        assert_eq!(flow.description, "hello [a, b]");
+
+        let mapping = parse_skill(
+            "\
+---
+name: api
+description: hello
+  {a: b}
+---
+body
+",
+        )
+        .expect("indented mapping is not folded into the description");
+        assert_eq!(mapping.description, "hello");
+    }
+
+    #[test]
+    fn next_line_block_scalar_matches_the_same_line_form() {
+        let literal = parse_skill(
+            "\
+---
+name: api
+description:
+  |
+  line one
+  line two
+---
+body
+",
+        )
+        .expect("next-line literal");
+        assert_eq!(literal.description, "line one\nline two");
+
+        let folded = parse_skill(
+            "\
+---
+name: api
+description: d
+compatibility:
+  >
+  Requires
+  git.
+---
+body
+",
+        )
+        .expect("next-line folded compatibility");
+        assert_eq!(folded.compatibility.as_deref(), Some("Requires git."));
+    }
+
+    #[test]
+    fn quoted_or_commented_description_does_not_swallow_the_next_line() {
+        let quoted = "\
+---
+name: api
+description: \"hello\"
+  more text
+---
+body
+";
+        let err = parse_skill(quoted).expect_err("quoted head");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("expected `key: value`") && msg.contains("more text"),
+            "{msg}"
+        );
+
+        let commented = "\
+---
+name: api
+description: hello # c
+  more text
+---
+body
+";
+        let err = parse_skill(commented).expect_err("commented head");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("expected `key: value`") && msg.contains("more text"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn empty_description_flow_on_the_next_line_is_not_a_string() {
+        let err = parse_skill(
+            "\
+---
+name: api
+description:
+  [a, b]
+---
+body
+",
+        )
+        .expect_err("flow sequence");
+        assert!(
+            err.to_string()
+                .contains("description must be a string, got: [a, b]"),
+            "{err}"
+        );
+        let err = parse_skill(
+            "\
+---
+name: api
+description: d
+license:
+  {spdx: MIT}
+---
+body
+",
+        )
+        .expect_err("flow map");
+        assert!(
+            err.to_string()
+                .contains("license must be a string, got: {spdx: MIT}"),
+            "{err}"
+        );
     }
 
     #[test]
