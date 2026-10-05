@@ -383,6 +383,20 @@ pub(super) fn is_skill_md_filename(path: &Path) -> bool {
 /// is an error so validate does not walk children.
 pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
     if !skill_md_is_dir(path) {
+        // Discover loads SKILL.md only. An existing README.md whose
+        // frontmatter name matches the directory must not validate as
+        // a package. A missing path stays missing so the caller can
+        // say it does not exist.
+        if skill_md_inode_exists(path) && !is_skill_md_filename(path) {
+            let shown = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("file");
+            let shown = crate::sanitize_error_token(shown);
+            return Err(format!(
+                "file must be named SKILL.md (got {shown}). Pass a SKILL.md file or a package directory that contains SKILL.md"
+            ));
+        }
         return Ok(path.to_path_buf());
     }
     let joined = ["SKILL.md", "skill.md"]

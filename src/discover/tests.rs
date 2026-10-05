@@ -4298,6 +4298,33 @@ fn validate_path_dir_without_skill_md_is_unreadable() {
 }
 
 #[test]
+fn validate_non_skill_filename_is_not_a_package_file() {
+    let root = tempfile::tempdir().expect("tmp");
+    let pkg = root.path().join("falseok");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    let readme = pkg.join("README.md");
+    fs::write(&readme, "---\nname: falseok\ndescription: d\n---\nbody\n").expect("write");
+    let report = validate_path(&readme);
+    assert!(
+        !report.ok,
+        "a matching name in README.md must not validate: {report:?}"
+    );
+    let err = report.errors.join(" ");
+    assert!(
+        err.contains("SKILL.md") && err.contains("README.md"),
+        "must name the required filename and the file we got: {err}"
+    );
+    assert_eq!(err.lines().count(), 1, "{err}");
+
+    write_skill(&pkg, "falseok", "body");
+    let ok = validate_path(&pkg.join("SKILL.md"));
+    assert!(
+        ok.ok,
+        "SKILL.md in the same directory still validates: {ok:?}"
+    );
+}
+
+#[test]
 fn validate_path_rejects_oversized_skill_md() {
     let root = tempfile::tempdir().expect("tmp");
     let pkg = root.path().join("huge");
