@@ -119,6 +119,12 @@ proptest! {
     ) {
         let name = chunks.join("-");
         prop_assume!(validate_skill_name(&name).is_ok());
+        // Unquoted YAML 1.1 bool words are empty names on purpose.
+        // `validate_skill_name` still accepts the charset (`no`, `on`).
+        prop_assume!(!matches!(
+            name.as_str(),
+            "true" | "false" | "yes" | "no" | "on" | "off"
+        ));
         let md = format!("---\nname: {name}\ndescription: d\n---\nbody\n");
         let skill = parse_skill(&md).expect("valid unicode name");
         prop_assert_eq!(skill.name, normalize_skill_name(&name));
