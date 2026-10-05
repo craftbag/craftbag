@@ -10,6 +10,8 @@
 __pycache__/
 *.pyc
 .pr-preflight-passed
+# Per-run link-check config. The links workflow regenerates it.
+lychee.ci.toml
 # Isolated HOME fixtures. rustup/cargo write here if HOME is the fixture.
 tests/corpus/**/.cargo/
 tests/corpus/**/.rustup/

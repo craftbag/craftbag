@@ -89,6 +89,7 @@ pub enum HostTokenField {
     ExtraPath,
     UserDir,
     Validate,
+    Ignore,
 }
 
 impl HostTokenField {
@@ -97,6 +98,7 @@ impl HostTokenField {
             Self::ExtraPath => "--path / paths",
             Self::UserDir => "--user-dir / user_dir",
             Self::Validate => "validate / skills_validate",
+            Self::Ignore => "--ignore",
         }
     }
 }
@@ -159,9 +161,10 @@ impl SkillSkip {
         skill_md_package_name(&self.path).is_some_and(|n| crate::parse::skill_names_equal(n, want))
     }
 
-    /// True when discover refused a host `--path` / `paths` or
-    /// `--user-dir` / `user_dir` token (collapse, line separator,
-    /// missing, or not a directory).
+    /// True when discover refused a host `--path` / `paths`,
+    /// `--user-dir` / `user_dir`, `--ignore`, or validate token
+    /// (collapse, line separator, missing, not a directory, or
+    /// `~` with HOME unset).
     ///
     /// That skip is not a package identity. Named `load` / `why`
     /// still peel it so a host sees WHAT and which flag to change.

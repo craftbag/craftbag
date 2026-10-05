@@ -1,3 +1,4 @@
+use super::path::with_home_unset;
 use super::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
     extra_path_is_loose_collection, find_skill_by_name, host_token_collapses_after_whitespace,
@@ -2758,6 +2759,208 @@ fn user_skills_dir_expands_tilde_like_extra_path() {
 }
 
 #[test]
+fn tilde_host_tokens_do_not_load_cwd_lookalikes_without_home() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join("myskills").join("fromcwd"),
+        "fromcwd",
+        "from-cwd",
+    );
+    write_skill(
+        &cwd.path().join("~").join("myskills").join("fromlitjoin"),
+        "fromlitjoin",
+        "from-lit",
+    );
+    write_skill(
+        &cwd.path().join("~").join("frombare"),
+        "frombare",
+        "from-bare",
+    );
+    write_skill(
+        &cwd.path().join("secret").join("hidden"),
+        "hidden",
+        "cwd-secret",
+    );
+    write_skill(
+        &cwd.path().join("~").join("secret").join("litsecret"),
+        "litsecret",
+        "lit-secret",
+    );
+    let secret = cwd.path().join("secret");
+    let lit_secret = cwd.path().join("~").join("secret");
+
+    let user_opts = DiscoveryOptions {
+        user_skills_dir: Some(PathBuf::from("~/myskills")),
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let bare_opts = DiscoveryOptions {
+        user_skills_dir: Some(PathBuf::from("~")),
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let path_opts = DiscoveryOptions {
+        paths: vec!["~/myskills".to_owned()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let ignore_opts = DiscoveryOptions {
+        paths: vec![
+            secret.display().to_string(),
+            lit_secret.display().to_string(),
+        ],
+        ignore: vec!["~/secret".to_owned()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+
+    let assert_refused = |report: &crate::skip::DiscoveryReport, flag: &str, raw: &str| {
+        let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !names.contains(&"fromcwd")
+                && !names.contains(&"fromlitjoin")
+                && !names.contains(&"frombare"),
+            "tilde must not load a cwd lookalike ({flag}): {names:?} {report:?}"
+        );
+        assert!(
+            report.skips.iter().any(|skip| {
+                skip.detail.contains("HOME is unset")
+                    && skip.detail.contains(flag)
+                    && skip.path == PathBuf::from(raw)
+            }),
+            "skip must name {flag} and keep raw {raw}: {:?}",
+            report.skips
+        );
+    };
+
+    for (label, run) in [
+        ("unset", RunHome::Unset),
+        ("empty", RunHome::Empty),
+        ("blank", RunHome::Blank),
+    ] {
+        let user = run.discover(cwd.path(), &user_opts);
+        assert_refused(&user, "user-dir", "~/myskills");
+        let bare = run.discover(cwd.path(), &bare_opts);
+        assert_refused(&bare, "user-dir", "~");
+        let extra = run.discover(cwd.path(), &path_opts);
+        assert_refused(&extra, "--path", "~/myskills");
+        let ignored = run.discover(cwd.path(), &ignore_opts);
+        let ignored_names: Vec<&str> = ignored.skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            ignored_names.contains(&"hidden") && ignored_names.contains(&"litsecret"),
+            "{label} ignore must not hide cwd lookalikes: {ignored_names:?} {ignored:?}"
+        );
+        assert!(
+            ignored.skips.iter().any(|skip| {
+                skip.detail.contains("HOME is unset")
+                    && skip.detail.contains("--ignore")
+                    && skip.path == PathBuf::from("~/secret")
+            }),
+            "{label} ignore skip missing: {:?}",
+            ignored.skips
+        );
+        let watched = run.watch(cwd.path(), &user_opts);
+        assert!(
+            watched.iter().all(|dir| !dir.ends_with("myskills")),
+            "{label} watch must omit the tilde user dir: {watched:?}"
+        );
+        let watched_path = run.watch(cwd.path(), &path_opts);
+        assert!(
+            watched_path.iter().all(|dir| !dir.ends_with("myskills")),
+            "{label} watch must omit the tilde extra path: {watched_path:?}"
+        );
+    }
+
+    let home = tempfile::tempdir().expect("home");
+    write_skill(
+        &home.path().join("myskills").join("fromhome"),
+        "fromhome",
+        "from-home",
+    );
+    write_skill(
+        &home.path().join("secret").join("homesecret"),
+        "homesecret",
+        "from-home-secret",
+    );
+    let loaded = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &user_opts)
+    });
+    assert_eq!(
+        loaded
+            .skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["fromhome"]
+    );
+    assert!(loaded.skips.is_empty(), "{loaded:?}");
+    let ignored_home = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![
+                    "~/secret".to_owned(),
+                    secret.display().to_string(),
+                    lit_secret.display().to_string(),
+                ],
+                ignore: vec!["~/secret".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    let ignored_home_names: Vec<&str> = ignored_home
+        .skills
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(
+        ignored_home_names.contains(&"hidden") && ignored_home_names.contains(&"litsecret"),
+        "real HOME ignore must not hide cwd packages: {ignored_home_names:?}"
+    );
+    assert!(
+        !ignored_home_names.contains(&"homesecret"),
+        "real HOME ~/secret must still ignore the home tree: {ignored_home_names:?} {ignored_home:?}"
+    );
+    assert!(
+        ignored_home
+            .skips
+            .iter()
+            .all(|skip| !skip.detail.contains("HOME is unset")),
+        "{ignored_home:?}"
+    );
+}
+
+#[derive(Clone, Copy)]
+enum RunHome {
+    Unset,
+    Empty,
+    Blank,
+}
+
+impl RunHome {
+    fn discover(
+        self,
+        cwd: &std::path::Path,
+        opts: &DiscoveryOptions,
+    ) -> crate::skip::DiscoveryReport {
+        match self {
+            Self::Unset => with_home_unset(|| discover(cwd, opts)),
+            Self::Empty => with_home_override(Some(PathBuf::new()), || discover(cwd, opts)),
+            Self::Blank => with_home_override(Some(PathBuf::from("   ")), || discover(cwd, opts)),
+        }
+    }
+
+    fn watch(self, cwd: &std::path::Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
+        match self {
+            Self::Unset => with_home_unset(|| watch_dirs(cwd, opts)),
+            Self::Empty => with_home_override(Some(PathBuf::new()), || watch_dirs(cwd, opts)),
+            Self::Blank => with_home_override(Some(PathBuf::from("   ")), || watch_dirs(cwd, opts)),
+        }
+    }
+}
+
+#[test]
 fn find_skill_by_name_is_case_insensitive() {
     let mut skill = crate::skill::Skill::new("Demo", "d", "");
     skill.name = "Demo".to_owned();
@@ -3226,6 +3429,85 @@ fn unreadable_skills_dir_is_skip_not_silent() {
         report.skips
     );
     assert!(report.skills.iter().all(|s| s.name != "hidden"));
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_child_package_dir_is_skip_not_silent() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "shown");
+    let hidden = skills.join("hidden");
+    write_skill(&hidden, "hidden", "locked");
+    let original = fs::metadata(&hidden).expect("meta").permissions();
+    struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, self.1.clone());
+        }
+    }
+    let _restore = Restore(&hidden, original.clone());
+    let mut locked = original.clone();
+    locked.set_mode(0o000);
+    fs::set_permissions(&hidden, locked).expect("chmod");
+    if fs::symlink_metadata(hidden.join("SKILL.md")).is_ok() {
+        return;
+    }
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        find_skill_by_name(&report.skills, "visible").is_some(),
+        "readable sibling must stay: {:?}",
+        report.skills
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "hidden").is_none(),
+        "locked package must not load: {:?}",
+        report.skills
+    );
+    assert!(
+        report.skips.iter().any(|s| {
+            s.kind == SkipKind::Unreadable
+                && s.path.ends_with("hidden")
+                && s.detail.contains("Permission denied")
+        }),
+        "locked package directory must be a skip: {:?}",
+        report.skips
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("skills").join("hidden");
+    write_skill(&only, "hidden", "locked");
+    let original_only = fs::metadata(&only).expect("meta").permissions();
+    let _restore_only = Restore(&only, original_only.clone());
+    let mut locked_only = original_only;
+    locked_only.set_mode(0o000);
+    fs::set_permissions(&only, locked_only).expect("chmod");
+    if fs::symlink_metadata(only.join("SKILL.md")).is_ok() {
+        return;
+    }
+    let cwd = tempfile::tempdir().expect("cwd");
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "hidden").is_none(),
+        "locked extra child must not load: {:?}",
+        report.skills
+    );
+    assert!(
+        report.skips.iter().any(|s| {
+            s.kind == SkipKind::Unreadable
+                && s.path.ends_with("hidden")
+                && s.detail.contains("Permission denied")
+        }),
+        "extra root must skip the locked child package: {:?}",
+        report.skips
+    );
 }
 
 #[cfg(unix)]
@@ -4267,6 +4549,38 @@ fn validate_missing_path_names_next_step_not_os_error() {
 }
 
 #[test]
+fn validate_path_through_file_parent_names_missing_not_os_error() {
+    let root = tempfile::tempdir().expect("tmp");
+    fs::write(root.path().join("not-a-dir"), "file").expect("write");
+    let missing = root
+        .path()
+        .join("not-a-dir")
+        .join("skills")
+        .join("foo")
+        .join("SKILL.md");
+    let report = validate_path(&missing);
+    assert!(!report.ok, "path through a file must fail: {report:?}");
+    let miss = report.miss().expect("peel");
+    assert_eq!(miss.error_kind, "unreadable");
+    assert!(
+        miss.error.contains("path does not exist:"),
+        "a file parent is a missing path: {}",
+        miss.error
+    );
+    assert!(
+        !miss.error.contains("os error") && !miss.error.contains("Not a directory"),
+        "must not leak the raw OS string: {}",
+        miss.error
+    );
+    let shown = crate::sanitize_error_token(&missing.display().to_string());
+    assert!(
+        miss.error.contains(&shown),
+        "must echo the sanitized path: {}",
+        miss.error
+    );
+}
+
+#[test]
 fn validate_path_dir_without_skill_md_is_unreadable() {
     let root = tempfile::tempdir().expect("tmp");
     let dir = root.path().join("collection");
@@ -4294,6 +4608,33 @@ fn validate_path_dir_without_skill_md_is_unreadable() {
         !skip.detail.contains("regular file"),
         "directory miss must name the package hole: {}",
         skip.detail
+    );
+}
+
+#[test]
+fn validate_non_skill_filename_is_not_a_package_file() {
+    let root = tempfile::tempdir().expect("tmp");
+    let pkg = root.path().join("falseok");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    let readme = pkg.join("README.md");
+    fs::write(&readme, "---\nname: falseok\ndescription: d\n---\nbody\n").expect("write");
+    let report = validate_path(&readme);
+    assert!(
+        !report.ok,
+        "a matching name in README.md must not validate: {report:?}"
+    );
+    let err = report.errors.join(" ");
+    assert!(
+        err.contains("SKILL.md") && err.contains("README.md"),
+        "must name the required filename and the file we got: {err}"
+    );
+    assert_eq!(err.lines().count(), 1, "{err}");
+
+    write_skill(&pkg, "falseok", "body");
+    let ok = validate_path(&pkg.join("SKILL.md"));
+    assert!(
+        ok.ok,
+        "SKILL.md in the same directory still validates: {ok:?}"
     );
 }
 
@@ -4773,6 +5114,314 @@ fn dangling_package_symlink_is_unreadable() {
         "load must name the broken package: {msg}"
     );
     assert!(!msg.contains("unknown skill"), "msg={msg}");
+}
+
+#[cfg(unix)]
+#[test]
+fn dangling_skill_md_symlink_is_not_an_escape() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    let broken = skills.join("broken");
+    fs::create_dir_all(&broken).expect("mkdir broken");
+    std::os::unix::fs::symlink("gone.md", broken.join("SKILL.md")).expect("dangling skill");
+    let linked = skills.join("linked");
+    fs::create_dir_all(&linked).expect("mkdir linked");
+    fs::write(
+        linked.join("body.md"),
+        "---\nname: linked\ndescription: linked skill\n---\nbody\n",
+    )
+    .expect("body");
+    std::os::unix::fs::symlink("body.md", linked.join("SKILL.md")).expect("in-package link");
+
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "linked"),
+        "in-package link must load: {:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("broken/SKILL.md"))
+        .unwrap_or_else(|| panic!("broken package must skip: {:?}", report.skips));
+    assert_eq!(skip.kind, SkipKind::Unreadable);
+    assert!(
+        skip.detail.contains("dangling symlink") && skip.detail.contains("gone.md"),
+        "{}",
+        skip.detail
+    );
+    assert!(
+        !skip.detail.contains("escapes"),
+        "a missing target is not an escape: {}",
+        skip.detail
+    );
+
+    let validated = validate_path(&broken);
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("dangling symlink") && !detail.contains("escapes"),
+        "{detail}"
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("only");
+    fs::create_dir_all(&only).expect("mkdir only");
+    std::os::unix::fs::symlink("missing.md", only.join("SKILL.md")).expect("extra link");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("dangling symlink")
+            && !report.skips[0].detail.contains("escapes"),
+        "{}",
+        report.skips[0].detail
+    );
+
+    let both = tempfile::tempdir().expect("both");
+    std::os::unix::fs::symlink("missing.md", both.path().join("SKILL.md")).expect("root link");
+    write_skill(&both.path().join("skills").join("kept"), "kept", "body");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![both.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "kept"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("SKILL.md"))
+        .unwrap_or_else(|| panic!("root link must skip: {:?}", report.skips));
+    assert!(
+        skip.detail.contains("dangling symlink") && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_loop_skill_md_is_not_an_escape() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    let self_loop = skills.join("selfloop");
+    fs::create_dir_all(&self_loop).expect("mkdir self");
+    std::os::unix::fs::symlink("SKILL.md", self_loop.join("SKILL.md")).expect("self loop");
+    let pair = skills.join("pair");
+    fs::create_dir_all(&pair).expect("mkdir pair");
+    std::os::unix::fs::symlink("b.md", pair.join("a.md")).expect("pair a");
+    std::os::unix::fs::symlink("a.md", pair.join("b.md")).expect("pair b");
+    std::os::unix::fs::symlink("a.md", pair.join("SKILL.md")).expect("pair skill");
+    let outside = tempfile::tempdir().expect("out");
+    fs::write(outside.path().join("secret.md"), "SECRET_BODY").expect("secret");
+    let leak = skills.join("leak");
+    fs::create_dir_all(&leak).expect("mkdir leak");
+    std::os::unix::fs::symlink(outside.path().join("secret.md"), leak.join("SKILL.md"))
+        .expect("outside link");
+
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    assert!(
+        report
+            .skills
+            .iter()
+            .all(|s| !s.content.contains("SECRET_BODY")),
+        "outside link must not load: {:?}",
+        report.skills
+    );
+    let self_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("selfloop/SKILL.md"))
+        .unwrap_or_else(|| panic!("self loop must skip: {:?}", report.skips));
+    assert_eq!(self_skip.kind, SkipKind::Unreadable);
+    assert!(
+        self_skip.detail.contains("symbolic link loop")
+            && self_skip.detail.contains("SKILL.md")
+            && !self_skip.detail.contains("escapes"),
+        "{}",
+        self_skip.detail
+    );
+    let pair_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("pair/SKILL.md"))
+        .unwrap_or_else(|| panic!("pair loop must skip: {:?}", report.skips));
+    assert!(
+        pair_skip.detail.contains("symbolic link loop")
+            && pair_skip.detail.contains("a.md")
+            && !pair_skip.detail.contains("escapes"),
+        "{}",
+        pair_skip.detail
+    );
+    let leak_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("leak/SKILL.md"))
+        .unwrap_or_else(|| panic!("outside link must skip: {:?}", report.skips));
+    assert!(
+        leak_skip.detail.contains("escapes") && !leak_skip.detail.contains("symbolic link loop"),
+        "{}",
+        leak_skip.detail
+    );
+
+    let validated = validate_path(&self_loop);
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("symbolic link loop") && !detail.contains("escapes"),
+        "{detail}"
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("only");
+    fs::create_dir_all(&only).expect("mkdir only");
+    std::os::unix::fs::symlink("SKILL.md", only.join("SKILL.md")).expect("extra loop");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("symbolic link loop")
+            && !report.skips[0].detail.contains("escapes"),
+        "{}",
+        report.skips[0].detail
+    );
+
+    let both = tempfile::tempdir().expect("both");
+    std::os::unix::fs::symlink("SKILL.md", both.path().join("SKILL.md")).expect("root loop");
+    write_skill(&both.path().join("skills").join("kept"), "kept", "body");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![both.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "kept"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("SKILL.md"))
+        .unwrap_or_else(|| panic!("root loop must skip: {:?}", report.skips));
+    assert!(
+        skip.detail.contains("symbolic link loop") && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_loop_package_dir_is_a_skip() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    std::os::unix::fs::symlink("looppkg", skills.join("looppkg")).expect("package loop");
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("looppkg"))
+        .unwrap_or_else(|| panic!("package loop must skip: {:?}", report.skips));
+    assert_eq!(skip.kind, SkipKind::Unreadable);
+    assert_eq!(skip.name.as_deref(), Some("looppkg"));
+    assert!(
+        skip.detail.contains("symbolic link loop")
+            && skip.detail.contains("looppkg")
+            && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+    let validated = validate_path(&skills.join("looppkg"));
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("symbolic link loop") && !detail.contains("must be named"),
+        "{detail}"
+    );
+
+    let loop_file = skills.join("selfmd");
+    fs::create_dir_all(&loop_file).expect("mkdir selfmd");
+    std::os::unix::fs::symlink("SKILL.md", loop_file.join("SKILL.md")).expect("file loop");
+    let validated = validate_path(&loop_file.join("SKILL.md"));
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("file skip").detail;
+    assert!(
+        detail.contains("symbolic link loop")
+            && detail.contains("SKILL.md")
+            && !detail.contains("escapes"),
+        "{detail}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_loop_extra_path_file_matches_validate() {
+    let root = tempfile::tempdir().expect("tmp");
+    let file = root.path().join("SKILL.md");
+    std::os::unix::fs::symlink("SKILL.md", &file).expect("loop");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![file.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("symbolic link loop")
+            && report.skips[0].detail.contains("SKILL.md")
+            && !report.skips[0].detail.contains("Too many levels"),
+        "{}",
+        report.skips[0].detail
+    );
+    let validated = validate_path(&file);
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert_eq!(detail, &report.skips[0].detail);
 }
 
 #[cfg(unix)]
@@ -6950,6 +7599,147 @@ fn extra_path_regular_file_not_skill_md_is_unreadable() {
         skip.detail
     );
     assert_eq!(skip.detail.lines().count(), 1, "{}", skip.detail);
+}
+
+#[test]
+fn host_path_through_a_file_says_missing_not_unreadable() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let parent = tempfile::tempdir().expect("parent");
+    let file = parent.path().join("notdir");
+    fs::write(&file, "x").expect("write");
+    let through = file.join("skills");
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![through.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.is_empty(),
+        "a path through a file must load zero skills: {:?}",
+        report.skills
+    );
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    let shown = crate::sanitize_error_token(&through.display().to_string());
+    assert_missing_host_path_skip(&report.skips[0], &shown, "--path", "paths");
+    assert!(
+        !report.skips[0].detail.contains("unreadable")
+            && !report.skips[0].detail.contains("os error 20")
+            && !report.skips[0].detail.contains("Not a directory"),
+        "must not call a missing path unreadable: {}",
+        report.skips[0].detail
+    );
+
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            user_skills_dir: Some(through.clone()),
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert_missing_host_path_skip(&report.skips[0], &shown, "--user-dir", "user_dir");
+    assert!(
+        !report.skips[0].detail.contains("unreadable"),
+        "user_dir through a file is missing, not unreadable: {}",
+        report.skips[0].detail
+    );
+}
+
+fn assert_implicit_nondirectory_is_silent(
+    report: &crate::skip::DiscoveryReport,
+    kept: Option<&str>,
+) {
+    if let Some(name) = kept {
+        assert!(
+            report.skills.iter().any(|s| s.name == name),
+            "project skill must stay: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+    }
+    assert!(
+        report.skips.is_empty(),
+        "a file where an implicit skills directory belongs is not a tree: {:?}",
+        report.skips
+    );
+}
+
+#[test]
+fn implicit_nondirectory_skill_roots_stay_silent() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::write(cwd.path().join(".agents"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &DiscoveryOptions::default()),
+        None,
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::create_dir_all(cwd.path().join(".agents")).expect("mkdir");
+    fs::write(cwd.path().join(".agents").join("skills"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &DiscoveryOptions::default()),
+        None,
+    );
+
+    let claude = DiscoveryOptions {
+        vendor_roots: vec!["claude".to_owned()],
+        ..DiscoveryOptions::default()
+    };
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    fs::write(cwd.path().join(".claude"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &claude),
+        Some("fromrel"),
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    fs::create_dir_all(cwd.path().join(".claude")).expect("mkdir");
+    fs::write(cwd.path().join(".claude").join("skills"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &claude),
+        Some("fromrel"),
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    let home = tempfile::tempdir().expect("home");
+    fs::write(home.path().join(".agents"), "not a directory").expect("write");
+    let report = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &DiscoveryOptions::default())
+    });
+    assert_implicit_nondirectory_is_silent(&report, Some("fromrel"));
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    let home = tempfile::tempdir().expect("home");
+    fs::write(home.path().join(".claude"), "not a directory").expect("write");
+    let report = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &claude)
+    });
+    assert_implicit_nondirectory_is_silent(&report, Some("fromrel"));
 }
 
 #[test]

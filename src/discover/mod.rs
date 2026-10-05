@@ -18,11 +18,15 @@ pub const CURSOR_VENDOR_DENYLIST: &[&str] = &["shell", "canvas", "statusline"];
 /// Options for multi-root skill discovery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryOptions {
-    /// Extra paths (`~` expanded). Relative paths join the discover `cwd`.
-    /// Empty or whitespace-only items are ignored (not cwd).
+    /// Extra paths (`~` / `~/` expanded when home is set). Relative paths
+    /// join the discover `cwd`. Empty or whitespace-only items are ignored
+    /// (not cwd). A `~` or `~/` token with unset or blank home is an
+    /// unreadable skip, not a cwd join.
     pub paths: Vec<String>,
-    /// Path prefixes to ignore (`~` expanded). Relative prefixes join `cwd`.
-    /// Empty or whitespace-only items are ignored (not cwd).
+    /// Path prefixes to ignore (`~` / `~/` expanded when home is set).
+    /// Relative prefixes join `cwd`. Empty or whitespace-only items are
+    /// ignored (not cwd). A `~` or `~/` token with unset or blank home
+    /// is an unreadable skip and is not installed as a prefix.
     /// A prefix whose component contains a line separator is dropped
     /// (same refuse as extra-path / user_dir). Lexical `evil\n/..`
     /// must not collapse to cwd and hide the walk. A token that
@@ -34,17 +38,19 @@ pub struct DiscoveryOptions {
     pub disabled: Vec<String>,
     /// Host names: `bline`, `claude`, `cursor`, `grok`.
     pub vendor_roots: Vec<String>,
-    /// Host-supplied user skills dir (`~` / `~/` expanded, relative
-    /// paths join the discover `cwd`, same as `paths`). Empty or
-    /// whitespace-only is ignored. A token that collapses after
-    /// whitespace trim (` /..`, `/ ..`) is an unreadable skip (same
-    /// refuse as extra-path).
+    /// Host-supplied user skills dir (`~` / `~/` expanded when home is
+    /// set, relative paths join the discover `cwd`, same as `paths`).
+    /// Empty or whitespace-only is ignored. A `~` or `~/` token with
+    /// unset or blank home is an unreadable skip, not a cwd join. A
+    /// token that collapses after whitespace trim (` /..`, `/ ..`) is
+    /// an unreadable skip (same refuse as extra-path).
     pub user_skills_dir: Option<PathBuf>,
     /// When true, names outside `a-z0-9-` are a `parse_error` skip.
     /// Default is off: Unicode / NFKC names still load.
     pub ascii_names: bool,
     /// Walk cwd-to-git `.agents` / vendor trees and `$HOME/.agents` /
-    /// vendor trees. Default is true. When false,
+    /// vendor trees. Default is true. Unset or blank home omits the
+    /// home trees instead of joining a relative `.agents`. When false,
     /// extra `paths` and optional `user_skills_dir` still load
     /// (collection-only). Empty `paths` plus no user dir returns an
     /// empty report, not an error.

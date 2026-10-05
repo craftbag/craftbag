@@ -14,16 +14,16 @@ use crate::source::SkillSource;
 use super::DiscoveryOptions;
 use super::host_token::{
     HostPathField, host_token_collapses_after_whitespace, path_has_line_separator,
-    skip_line_separator_root, skip_unresolvable_host_path, skip_whitespace_collapse_token,
-    str_has_line_separator,
+    skip_line_separator_root, skip_tilde_home_unset, skip_unresolvable_host_path,
+    skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
-    dir_load, finish_load_parsed_skill, finish_load_skill_file, is_skill_md_filename,
-    load_skills_from_dir, read_skill_md, skill_md_inode_exists, skill_md_is_dir,
-    skill_md_stays_in_package, skip_if_dir_escapes, skip_if_skill_md_escapes_package,
-    try_load_skill_file,
+    child_dir_counts_as_skill_package, dir_load, finish_load_parsed_skill, finish_load_skill_file,
+    is_skill_md_filename, load_skills_from_dir, read_skill_md, skill_md_inode_exists,
+    skill_md_is_dir, skill_md_stays_in_package, skip_if_dir_escapes,
+    skip_if_skill_md_escapes_package, try_load_skill_file, unresolved_symlink_detail,
 };
-use super::path::{IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
+use super::path::{ArgExpand, IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
 
 pub(super) fn load_extra_path(
     raw: &str,
@@ -45,8 +45,13 @@ pub(super) fn load_extra_path(
         skip_whitespace_collapse_token(raw, HostPathField::ExtraPath, skips);
         return;
     }
-    let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
-        return;
+    let expanded = match expand_extra_path_arg(raw, cwd) {
+        ArgExpand::Empty => return,
+        ArgExpand::HomeUnset => {
+            skip_tilde_home_unset(raw, HostPathField::ExtraPath, skips);
+            return;
+        }
+        ArgExpand::Ready(path) => path,
     };
     if path_has_line_separator(&expanded) {
         skip_line_separator_root(&expanded, HostPathField::ExtraPath, skips);
@@ -218,10 +223,7 @@ pub(super) fn dir_has_child_skill_packages(dir: &Path) -> bool {
     };
     entries.filter_map(Result::ok).any(|entry| {
         let path = entry.path();
-        path.is_dir()
-            && ["SKILL.md", "skill.md"]
-                .into_iter()
-                .any(|name| skill_md_inode_exists(&path.join(name)))
+        path.is_dir() && child_dir_counts_as_skill_package(&path)
     })
 }
 
@@ -492,6 +494,15 @@ pub(super) fn classify_extra_path_md(
     ascii_names: bool,
 ) -> ExtraPathMd {
     if !skill_md_stays_in_package(skill_file) {
+        if let Some(detail) = unresolved_symlink_detail(skill_file) {
+            if extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir) {
+                return ExtraPathMd::Collection {
+                    peeked_name: None,
+                    read_err: Some(detail),
+                };
+            }
+            return ExtraPathMd::Unreadable(detail);
+        }
         if extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir) {
             return ExtraPathMd::Collection {
                 peeked_name: None,
@@ -671,6 +682,17 @@ pub(super) fn skip_loose_extra_path_root_skill_md(
     skips: &mut Vec<SkillSkip>,
 ) {
     if path_is_ignored(skill_file, ignore) {
+        return;
+    }
+    if let Some(detail) = unresolved_symlink_detail(skill_file) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail,
+            winner_path: None,
+            host_token: None,
+        });
         return;
     }
     if !stays_under(skill_file, confine) {

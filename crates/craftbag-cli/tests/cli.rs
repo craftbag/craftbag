@@ -1515,6 +1515,52 @@ fn load_newline_extra_path_demo_is_unknown() {
 }
 
 #[test]
+fn list_empty_home_does_not_call_project_agents_a_symlink_escape() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let pkg = cwd.path().join(".agents").join("skills").join("fromrel");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: fromrel\ndescription: project skill\n---\nbody\n",
+    )
+    .expect("write");
+    let claude = cwd.path().join(".claude").join("skills").join("fromclaude");
+    fs::create_dir_all(&claude).expect("mkdir");
+    fs::write(
+        claude.join("SKILL.md"),
+        "---\nname: fromclaude\ndescription: vendor skill\n---\nbody\n",
+    )
+    .expect("write");
+    for home in ["", "   "] {
+        let (_real_home, mut cmd) = bin();
+        let out = cmd
+            .env("HOME", home)
+            .env("USERPROFILE", home)
+            .current_dir(cwd.path())
+            .arg("list")
+            .arg("--json")
+            .arg("--vendor")
+            .arg("claude")
+            .output()
+            .expect("run");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            out.status.success(),
+            "home {home:?} must still list the project: stdout={stdout} stderr={stderr}"
+        );
+        assert!(
+            stdout.contains("fromrel") && stdout.contains("fromclaude"),
+            "home {home:?} must keep project skills: {stdout}"
+        );
+        assert!(
+            !stdout.contains("symlink escapes") && !stderr.contains("symlink escapes"),
+            "home {home:?} must not call the project tree a symlink escape: stdout={stdout} stderr={stderr}"
+        );
+    }
+}
+
+#[test]
 fn list_user_dir_expands_tilde() {
     let (home, mut cmd) = bin();
     let pkg = home.path().join("myskills").join("mine");
@@ -6954,6 +7000,58 @@ fn list_catalog_context_ranks_matching_trigger_first() {
         .stdout(predicates::function::function(|s: &str| {
             catalog_name_order(s) == ["zzz-debug", "aaa-other"]
         }));
+}
+
+#[test]
+fn context_leading_hyphen_is_text_not_a_flag() {
+    // A diff line starts with `-`. Without allow_hyphen_values, clap
+    // exits 2 and never ranks or activates.
+    let extra = two_trigger_skills();
+    let (_home, mut why_cmd) = bin();
+    let why_out = why_cmd
+        .arg("why")
+        .arg("zzz-debug")
+        .arg("--json")
+        .arg("--context")
+        .arg("- debug this")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        why_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&why_out.stderr)
+    );
+    let why_json: serde_json::Value = serde_json::from_slice(&why_out.stdout).expect("why json");
+    assert_eq!(
+        why_json["activation"][0]["reason"], "injected",
+        "why --context must keep a leading hyphen: {why_json}"
+    );
+
+    let (_home, mut listed) = bin();
+    let listed_out = listed
+        .arg("list")
+        .arg("--catalog")
+        .arg("--context")
+        .arg("- debug")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        listed_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&listed_out.stderr)
+    );
+    let listed_stdout = String::from_utf8_lossy(&listed_out.stdout);
+    assert_eq!(
+        catalog_name_order(&listed_stdout),
+        ["zzz-debug", "aaa-other"],
+        "list --catalog --context must accept a leading hyphen: {listed_stdout}"
+    );
 }
 
 #[test]

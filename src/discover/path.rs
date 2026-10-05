@@ -10,8 +10,17 @@ use super::host_token::{
     str_has_line_separator,
 };
 
+#[derive(Clone)]
+enum HomeLock {
+    /// Read `HOME`, then `USERPROFILE`.
+    Env,
+    /// `Some` is that directory, including a blank path.
+    /// `None` is unset, even when the process has `HOME`.
+    Forced(Option<PathBuf>),
+}
+
 thread_local! {
-    static HOME_OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    static HOME_OVERRIDE: RefCell<HomeLock> = const { RefCell::new(HomeLock::Env) };
 }
 
 /// Ancestors of `cwd` through the nearest `.git` (cwd first).
@@ -64,34 +73,64 @@ fn enclosing_skill_root(dir: &Path) -> bool {
 }
 
 pub(super) fn home_dir() -> Option<PathBuf> {
-    let override_home = HOME_OVERRIDE.with(|o| o.borrow().clone());
-    if override_home.is_some() {
-        return override_home;
+    match HOME_OVERRIDE.with(|o| o.borrow().clone()) {
+        HomeLock::Forced(home) => home,
+        HomeLock::Env => std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(PathBuf::from),
     }
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
 }
 
-pub(super) fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Option<PathBuf> {
+/// `~` and `~/...` need a non-blank home. An empty override, `HOME=""`,
+/// or whitespace-only home is the same as unset: callers must not join
+/// the token onto cwd.
+pub(super) fn nonempty_home() -> Option<PathBuf> {
+    let home = home_dir()?;
+    let blank = match home.to_str() {
+        Some(text) => text.trim().is_empty(),
+        None => home.as_os_str().is_empty(),
+    };
+    if blank { None } else { Some(home) }
+}
+
+/// Result of expanding one host path token.
+#[derive(Debug)]
+pub(super) enum ArgExpand {
+    /// Absolute, or relative and safe to join onto the discover cwd.
+    Ready(PathBuf),
+    /// Token is `~` or `~/...` and home is unset or blank.
+    /// Callers must not join it onto cwd.
+    HomeUnset,
+    /// No token, or empty / whitespace-only. Not cwd.
+    Empty,
+}
+
+pub(super) fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> ArgExpand {
     // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
     // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
     // Relative user_dir joins discover cwd, same as extra-path.
     // Empty or whitespace-only is not a directory (not cwd).
-    let user_dir = user_dir?;
+    // `~` / `~/` with unset or blank home is [`ArgExpand::HomeUnset`],
+    // not a cwd join onto a lookalike directory.
+    let Some(user_dir) = user_dir else {
+        return ArgExpand::Empty;
+    };
     if user_dir
         .to_str()
         .is_some_and(host_token_collapses_after_whitespace)
     {
-        return None;
+        return ArgExpand::Empty;
     }
     let expanded = match user_dir.to_str() {
         Some(raw) => {
             let raw = raw.trim();
             if raw.is_empty() {
-                return None;
+                return ArgExpand::Empty;
             }
-            expand_tilde(raw)
+            match expand_tilde(raw) {
+                TildeExpand::HomeUnset => return ArgExpand::HomeUnset,
+                TildeExpand::Ready(path) => path,
+            }
         }
         None => user_dir.to_path_buf(),
     };
@@ -102,33 +141,58 @@ pub(super) fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> Opt
     };
     // Same NFKC `.` / `..` rewrite as extra-path and ignore, so
     // `wanted/evil/‥` is the `wanted` user root, not a missing dir.
-    Some(nfkc_dot_path_components(&expanded))
+    ArgExpand::Ready(nfkc_dot_path_components(&expanded))
 }
 
-pub(super) fn expand_extra_path_arg(raw: &str, cwd: &Path) -> Option<PathBuf> {
+pub(super) fn expand_extra_path_arg(raw: &str, cwd: &Path) -> ArgExpand {
     let raw = raw.trim();
     if raw.is_empty() {
-        return None;
+        return ArgExpand::Empty;
     }
-    let expanded = expand_tilde(raw);
+    let expanded = match expand_tilde(raw) {
+        TildeExpand::HomeUnset => return ArgExpand::HomeUnset,
+        TildeExpand::Ready(path) => path,
+    };
     let expanded = if expanded.is_absolute() {
         expanded
     } else {
         cwd.join(expanded)
     };
-    Some(nfkc_dot_path_components(&expanded))
+    ArgExpand::Ready(nfkc_dot_path_components(&expanded))
 }
 
-pub(super) fn expand_tilde(raw: &str) -> PathBuf {
+enum TildeExpand {
+    Ready(PathBuf),
+    HomeUnset,
+}
+
+fn expand_tilde(raw: &str) -> TildeExpand {
     if raw == "~" {
-        return home_dir().unwrap_or_else(|| PathBuf::from("~"));
+        return match nonempty_home() {
+            Some(home) => TildeExpand::Ready(home),
+            None => TildeExpand::HomeUnset,
+        };
     }
     if let Some(rest) = raw.strip_prefix("~/") {
-        if let Some(home) = home_dir() {
-            return home.join(rest);
-        }
+        return match nonempty_home() {
+            Some(home) => TildeExpand::Ready(home.join(rest)),
+            None => TildeExpand::HomeUnset,
+        };
     }
-    PathBuf::from(raw)
+    TildeExpand::Ready(PathBuf::from(raw))
+}
+
+/// True when this ignore token is `~` or `~/...` and home is unset or blank.
+/// Line-separator and trim-collapse tokens stay on their existing drop path.
+pub(super) fn tilde_without_home(raw: &str) -> bool {
+    if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
+        return false;
+    }
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return false;
+    }
+    matches!(expand_tilde(raw), TildeExpand::HomeUnset)
 }
 
 pub(super) struct IgnorePrefix {
@@ -153,7 +217,10 @@ pub(super) fn expand_ignore_list(cwd: &Path, paths: &[String]) -> Vec<IgnorePref
             if raw.is_empty() {
                 return None;
             }
-            let expanded = expand_tilde(raw);
+            let expanded = match expand_tilde(raw) {
+                TildeExpand::HomeUnset => return None,
+                TildeExpand::Ready(path) => path,
+            };
             let joined = if expanded.is_absolute() {
                 expanded
             } else {
@@ -251,13 +318,29 @@ pub(super) fn implicit_home_already_walked(cwd_walk: &[PathBuf], home: &Path) ->
 /// restore the outer value, not always `None`.
 #[doc(hidden)]
 pub fn with_home_override<T>(home: Option<PathBuf>, f: impl FnOnce() -> T) -> T {
-    struct Restore(Option<PathBuf>);
+    let locked = match home {
+        Some(path) => HomeLock::Forced(Some(path)),
+        None => HomeLock::Env,
+    };
+    with_home_lock(locked, f)
+}
+
+/// In-process tests: [`home_dir`] stays unset even when the process has `HOME`.
+#[cfg(test)]
+pub(super) fn with_home_unset<T>(f: impl FnOnce() -> T) -> T {
+    with_home_lock(HomeLock::Forced(None), f)
+}
+
+fn with_home_lock<T>(locked: HomeLock, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<HomeLock>);
     impl Drop for Restore {
         fn drop(&mut self) {
-            HOME_OVERRIDE.with(|o| *o.borrow_mut() = self.0.take());
+            if let Some(previous) = self.0.take() {
+                HOME_OVERRIDE.with(|o| *o.borrow_mut() = previous);
+            }
         }
     }
-    let previous = HOME_OVERRIDE.with(|o| o.replace(home));
-    let _restore = Restore(previous);
+    let previous = HOME_OVERRIDE.with(|o| o.replace(locked));
+    let _restore = Restore(Some(previous));
     f()
 }

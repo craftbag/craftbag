@@ -88,8 +88,8 @@ enum Cmd {
         format: Option<String>,
         #[command(flatten)]
         discovery: DiscoveryArgs,
-        /// Catalog ranking text (`--catalog` / `--format catalog`). JSON, XML, TSV, and watch ignore this. Example: --context rebase
-        #[arg(long)]
+        /// Catalog ranking text (`--catalog` / `--format catalog`). JSON, XML, TSV, and watch ignore this. A leading hyphen is text. Example: --context rebase
+        #[arg(long, allow_hyphen_values = true)]
         context: Option<String>,
         /// Model context window size for catalog listing (default 8000). Used by `--catalog` / `--format catalog`.
         #[arg(long, default_value_t = 8_000)]
@@ -121,8 +121,8 @@ enum Cmd {
         /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Exit 2 on a name miss. Exit 1 on a tool error.
         #[arg(long)]
         json: bool,
-        /// Activation context text. Example: --context rebase
-        #[arg(long)]
+        /// Activation context text. A leading hyphen is text (a diff line). Example: --context rebase
+        #[arg(long, allow_hyphen_values = true)]
         context: Option<String>,
         /// Model context window size (default 8000).
         #[arg(long, default_value_t = 8_000)]

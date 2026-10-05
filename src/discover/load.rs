@@ -73,6 +73,52 @@ fn dangling_symlink(path: &Path) -> bool {
     }
 }
 
+/// Broken link text for a skip. `canonicalize` fails on a missing
+/// target, and a stay-under check would call that an escape.
+pub(super) fn dangling_symlink_detail(path: &Path) -> Option<String> {
+    if !dangling_symlink(path) {
+        return None;
+    }
+    Some(match std::fs::read_link(path) {
+        Ok(target) => format!("dangling symlink: {}", target.display()),
+        Err(_) => "dangling symlink".to_owned(),
+    })
+}
+
+/// Link cycle. `canonicalize` fails, and a stay-under check would call
+/// that an escape. The target never resolves, so nothing is read.
+fn symlink_loop_detail(path: &Path) -> Option<String> {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return None;
+    };
+    if !meta.file_type().is_symlink() {
+        return None;
+    }
+    match std::fs::metadata(path) {
+        Err(err) if is_symlink_loop(&err) => Some(loop_detail(path)),
+        _ => None,
+    }
+}
+
+/// `ErrorKind::FilesystemLoop` needs `io_error_more`, unstable on the
+/// 1.85 MSRV. The running kind still debugs as that name.
+fn is_symlink_loop(err: &std::io::Error) -> bool {
+    format!("{:?}", err.kind()) == "FilesystemLoop"
+}
+
+fn loop_detail(path: &Path) -> String {
+    match std::fs::read_link(path) {
+        Ok(target) => format!("symbolic link loop: {}", target.display()),
+        Err(_) => "symbolic link loop".to_owned(),
+    }
+}
+
+/// Missing target or a link cycle. Both fail `canonicalize`. Neither is
+/// an outside file.
+pub(super) fn unresolved_symlink_detail(path: &Path) -> Option<String> {
+    dangling_symlink_detail(path).or_else(|| symlink_loop_detail(path))
+}
+
 pub(super) fn load_skills_from_dir(
     dir: &Path,
     load: &DirLoad<'_>,
@@ -82,7 +128,16 @@ pub(super) fn load_skills_from_dir(
 ) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        // Implicit `.agents` / vendor joins call this for a path they
+        // did not stat. A missing directory and a file in its place are
+        // both "no skills tree". Host-asked paths report those earlier.
+        // Permission denied and other read errors still skip below.
+        Err(e)
+            if e.kind() == std::io::ErrorKind::NotFound
+                || e.kind() == std::io::ErrorKind::NotADirectory =>
+        {
+            return;
+        }
         Err(e) => {
             skips.push(SkillSkip {
                 path: dir.to_path_buf(),
@@ -104,24 +159,21 @@ pub(super) fn load_skills_from_dir(
             continue;
         }
         if !path.is_dir() {
-            if dangling_symlink(&path)
-                && !is_skill_md_filename(&path)
-                && !path_is_ignored(&path, load.ignore)
-            {
-                let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
-                let detail = match std::fs::read_link(&path) {
-                    Ok(target) => format!("dangling symlink: {}", target.display()),
-                    Err(_) => "dangling symlink".to_owned(),
-                };
-                skips.push(SkillSkip {
-                    path,
-                    name,
-                    kind: SkipKind::Unreadable,
-                    detail,
-                    winner_path: None,
-                    host_token: None,
-                });
-                continue;
+            if !is_skill_md_filename(&path) && !path_is_ignored(&path, load.ignore) {
+                // A directory symlink cycle is not a directory, so it
+                // would otherwise be ignored like a stray file.
+                if let Some(detail) = unresolved_symlink_detail(&path) {
+                    let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
+                    skips.push(SkillSkip {
+                        path,
+                        name,
+                        kind: SkipKind::Unreadable,
+                        detail,
+                        winner_path: None,
+                        host_token: None,
+                    });
+                    continue;
+                }
             }
             if path
                 .file_name()
@@ -129,6 +181,17 @@ pub(super) fn load_skills_from_dir(
                 .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, load.ignore)
             {
+                if let Some(detail) = unresolved_symlink_detail(&path) {
+                    skips.push(SkillSkip {
+                        path,
+                        name: None,
+                        kind: SkipKind::Unreadable,
+                        detail,
+                        winner_path: None,
+                        host_token: None,
+                    });
+                    continue;
+                }
                 if !stays_under(&path, dir) {
                     skips.push(SkillSkip {
                         path,
@@ -167,12 +230,23 @@ pub(super) fn load_skills_from_dir(
             continue;
         }
 
-        let skill_file = ["SKILL.md", "skill.md"]
-            .into_iter()
-            .map(|name| path.join(name))
-            .find(|p| skill_md_inode_exists(p));
-        let Some(skill_file) = skill_file else {
-            continue;
+        let skill_file = match lookup_package_skill_md(&path) {
+            PackageSkillMd::Found(skill_file) => skill_file,
+            PackageSkillMd::Missing => continue,
+            // A searchable directory with no SKILL.md is not a package.
+            // Permission denied on the child name is a package we cannot
+            // read. Treating that as "no file" drops the skill with no skip.
+            PackageSkillMd::Unreadable(detail) => {
+                skips.push(SkillSkip {
+                    path,
+                    name: None,
+                    kind: SkipKind::Unreadable,
+                    detail,
+                    winner_path: None,
+                    host_token: None,
+                });
+                continue;
+            }
         };
         if !stays_under(&path, dir) {
             skips.push(SkillSkip {
@@ -204,6 +278,17 @@ pub(super) fn skip_if_skill_md_escapes_package(
     skill_file: &Path,
     skips: &mut Vec<SkillSkip>,
 ) -> bool {
+    if let Some(detail) = unresolved_symlink_detail(skill_file) {
+        skips.push(SkillSkip {
+            path: skill_file.to_path_buf(),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail,
+            winner_path: None,
+            host_token: None,
+        });
+        return true;
+    }
     if skill_md_stays_in_package(skill_file) {
         return false;
     }
@@ -383,6 +468,26 @@ pub(super) fn is_skill_md_filename(path: &Path) -> bool {
 /// is an error so validate does not walk children.
 pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
     if !skill_md_is_dir(path) {
+        // A cycle never resolves. Do not call it a misnamed file.
+        // A dangling SKILL.md still falls through so the caller can
+        // say the path does not exist.
+        if let Some(detail) = symlink_loop_detail(path) {
+            return Err(detail);
+        }
+        // Discover loads SKILL.md only. An existing README.md whose
+        // frontmatter name matches the directory must not validate as
+        // a package. A missing path stays missing so the caller can
+        // say it does not exist.
+        if skill_md_inode_exists(path) && !is_skill_md_filename(path) {
+            let shown = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("file");
+            let shown = crate::sanitize_error_token(shown);
+            return Err(format!(
+                "file must be named SKILL.md (got {shown}). Pass a SKILL.md file or a package directory that contains SKILL.md"
+            ));
+        }
         return Ok(path.to_path_buf());
     }
     let joined = ["SKILL.md", "skill.md"]
@@ -392,10 +497,55 @@ pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())?;
     // Joined SKILL.md is this package unless the inode is a symlink
     // out of the directory (same as extra-path classify).
+    if let Some(detail) = unresolved_symlink_detail(&joined) {
+        return Err(detail);
+    }
     if !skill_md_stays_in_package(&joined) {
         return Err("SKILL.md symlink escapes package root".to_owned());
     }
     Ok(joined)
+}
+
+enum PackageSkillMd {
+    Found(PathBuf),
+    Missing,
+    Unreadable(String),
+}
+
+/// Look up `SKILL.md` / `skill.md` inside a package directory.
+///
+/// `NotFound` is not a package. Any other stat error, including
+/// permission denied, means the directory cannot be searched.
+fn lookup_package_skill_md(dir: &Path) -> PackageSkillMd {
+    let mut denied = None;
+    for name in ["SKILL.md", "skill.md"] {
+        let candidate = dir.join(name);
+        match std::fs::symlink_metadata(&candidate) {
+            Ok(_) => return PackageSkillMd::Found(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotADirectory => {
+                return PackageSkillMd::Missing;
+            }
+            Err(e) => {
+                denied = Some(e.to_string());
+            }
+        }
+    }
+    match denied {
+        Some(detail) => PackageSkillMd::Unreadable(detail),
+        None => PackageSkillMd::Missing,
+    }
+}
+
+/// True when `dir` contains a skill file, or that file cannot be stat'd.
+///
+/// Collection detection uses this so an unreadable child is walked and
+/// recorded. A readable directory with no `SKILL.md` stays a non-package.
+pub(super) fn child_dir_counts_as_skill_package(dir: &Path) -> bool {
+    matches!(
+        lookup_package_skill_md(dir),
+        PackageSkillMd::Found(_) | PackageSkillMd::Unreadable(_)
+    )
 }
 
 /// True when `path` exists as any inode (regular, FIFO, socket, device, symlink).
@@ -414,6 +564,11 @@ pub(super) fn skill_md_is_dir(path: &Path) -> bool {
 pub(super) fn read_skill_md(path: &Path) -> Result<String, String> {
     #[cfg(test)]
     READ_SKILL_MD_PATHS.with(|c| c.borrow_mut().push(path.to_path_buf()));
+    // A cycle fails `metadata` with a platform errno. Name it the same
+    // way validate does, and do not open the link.
+    if let Some(detail) = symlink_loop_detail(path) {
+        return Err(detail);
+    }
     // Stat before open. `File::open` on a FIFO waits for a writer, so a
     // hostile tree can hang discover / validate.
     let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;

@@ -1,3 +1,7 @@
+# Missing release tags are skipped by
+# factory/scripts/lychee-unpublished-compare-excludes.py
+# which writes lychee.ci.toml. Do not skip every GitHub compare
+# link here. A tag that already exists still has to answer.
 exclude = [
   'https://img.shields.io',
   'https://app.fossa.com',
