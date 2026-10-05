@@ -373,6 +373,9 @@ pub(crate) fn take_parse_skill_contents() -> Vec<String> {
 }
 
 fn scan_frontmatter_name(yaml: &str) -> Option<String> {
+    // `parse_frontmatter` keeps the last name it assigned. This scan
+    // runs only after that parse fails, so it must use the same name.
+    let mut found = None;
     for line in yaml.lines() {
         if line_is_yaml_indented(line) {
             continue;
@@ -389,12 +392,12 @@ fn scan_frontmatter_name(yaml: &str) -> Option<String> {
         }
         let raw_value = strip_yaml_inline_comment(value);
         let value = unquote_yaml_scalar(raw_value);
-        if value.is_empty() {
-            return None;
+        if value.is_empty() || unquoted_yaml_null(raw_value) || unquoted_yaml_bool_word(raw_value) {
+            return found;
         }
-        return Some(value);
+        found = Some(value);
     }
-    None
+    found
 }
 
 /// Parent directory name of a `SKILL.md` path after stripping `.` / `..`.
@@ -3486,6 +3489,28 @@ Should fail parse.
             peek_frontmatter_name(missing_desc).as_deref(),
             Some("only-name")
         );
+    }
+
+    #[test]
+    fn peek_frontmatter_name_keeps_last_assigned_name() {
+        let later = "\
+---
+name: first
+name: second
+description:
+---
+body
+";
+        assert_eq!(peek_frontmatter_name(later).as_deref(), Some("second"));
+        let empty_after = "\
+---
+name: first
+name:
+description: kept
+---
+body
+";
+        assert_eq!(peek_frontmatter_name(empty_after).as_deref(), Some("first"));
     }
 
     #[test]
