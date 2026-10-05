@@ -82,7 +82,16 @@ pub(super) fn load_skills_from_dir(
 ) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        // Implicit `.agents` / vendor joins call this for a path they
+        // did not stat. A missing directory and a file in its place are
+        // both "no skills tree". Host-asked paths report those earlier.
+        // Permission denied and other read errors still skip below.
+        Err(e)
+            if e.kind() == std::io::ErrorKind::NotFound
+                || e.kind() == std::io::ErrorKind::NotADirectory =>
+        {
+            return;
+        }
         Err(e) => {
             skips.push(SkillSkip {
                 path: dir.to_path_buf(),

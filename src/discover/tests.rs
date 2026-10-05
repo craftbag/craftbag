@@ -7182,6 +7182,98 @@ fn extra_path_regular_file_not_skill_md_is_unreadable() {
     assert_eq!(skip.detail.lines().count(), 1, "{}", skip.detail);
 }
 
+fn assert_implicit_nondirectory_is_silent(
+    report: &crate::skip::DiscoveryReport,
+    kept: Option<&str>,
+) {
+    if let Some(name) = kept {
+        assert!(
+            report.skills.iter().any(|s| s.name == name),
+            "project skill must stay: skills={:?} skips={:?}",
+            report.skills,
+            report.skips
+        );
+    }
+    assert!(
+        report.skips.is_empty(),
+        "a file where an implicit skills directory belongs is not a tree: {:?}",
+        report.skips
+    );
+}
+
+#[test]
+fn implicit_nondirectory_skill_roots_stay_silent() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::write(cwd.path().join(".agents"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &DiscoveryOptions::default()),
+        None,
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    fs::create_dir_all(cwd.path().join(".agents")).expect("mkdir");
+    fs::write(cwd.path().join(".agents").join("skills"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &DiscoveryOptions::default()),
+        None,
+    );
+
+    let claude = DiscoveryOptions {
+        vendor_roots: vec!["claude".to_owned()],
+        ..DiscoveryOptions::default()
+    };
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    fs::write(cwd.path().join(".claude"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &claude),
+        Some("fromrel"),
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    fs::create_dir_all(cwd.path().join(".claude")).expect("mkdir");
+    fs::write(cwd.path().join(".claude").join("skills"), "not a directory").expect("write");
+    assert_implicit_nondirectory_is_silent(
+        &empty_home_discover(cwd.path(), &claude),
+        Some("fromrel"),
+    );
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    let home = tempfile::tempdir().expect("home");
+    fs::write(home.path().join(".agents"), "not a directory").expect("write");
+    let report = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &DiscoveryOptions::default())
+    });
+    assert_implicit_nondirectory_is_silent(&report, Some("fromrel"));
+
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("fromrel"),
+        "fromrel",
+        "body",
+    );
+    let home = tempfile::tempdir().expect("home");
+    fs::write(home.path().join(".claude"), "not a directory").expect("write");
+    let report = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &claude)
+    });
+    assert_implicit_nondirectory_is_silent(&report, Some("fromrel"));
+}
+
 #[test]
 fn extra_path_missing_dir_named_load_why_peels_unreadable() {
     let cwd = tempfile::tempdir().expect("cwd");
