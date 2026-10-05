@@ -6957,6 +6957,58 @@ fn list_catalog_context_ranks_matching_trigger_first() {
 }
 
 #[test]
+fn context_leading_hyphen_is_text_not_a_flag() {
+    // A diff line starts with `-`. Without allow_hyphen_values, clap
+    // exits 2 and never ranks or activates.
+    let extra = two_trigger_skills();
+    let (_home, mut why_cmd) = bin();
+    let why_out = why_cmd
+        .arg("why")
+        .arg("zzz-debug")
+        .arg("--json")
+        .arg("--context")
+        .arg("- debug this")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        why_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&why_out.stderr)
+    );
+    let why_json: serde_json::Value = serde_json::from_slice(&why_out.stdout).expect("why json");
+    assert_eq!(
+        why_json["activation"][0]["reason"], "injected",
+        "why --context must keep a leading hyphen: {why_json}"
+    );
+
+    let (_home, mut listed) = bin();
+    let listed_out = listed
+        .arg("list")
+        .arg("--catalog")
+        .arg("--context")
+        .arg("- debug")
+        .arg("--path")
+        .arg(extra.path())
+        .output()
+        .expect("run");
+    assert_eq!(
+        listed_out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&listed_out.stderr)
+    );
+    let listed_stdout = String::from_utf8_lossy(&listed_out.stdout);
+    assert_eq!(
+        catalog_name_order(&listed_stdout),
+        ["zzz-debug", "aaa-other"],
+        "list --catalog --context must accept a leading hyphen: {listed_stdout}"
+    );
+}
+
+#[test]
 fn list_json_context_does_not_reorder() {
     let extra = two_trigger_skills();
     let names = |args: &[&str]| {
