@@ -18,10 +18,10 @@ use super::host_token::{
     skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
-    child_dir_counts_as_skill_package, dangling_symlink_detail, dir_load, finish_load_parsed_skill,
-    finish_load_skill_file, is_skill_md_filename, load_skills_from_dir, read_skill_md,
-    skill_md_inode_exists, skill_md_is_dir, skill_md_stays_in_package, skip_if_dir_escapes,
-    skip_if_skill_md_escapes_package, try_load_skill_file,
+    child_dir_counts_as_skill_package, dir_load, finish_load_parsed_skill, finish_load_skill_file,
+    is_skill_md_filename, load_skills_from_dir, read_skill_md, skill_md_inode_exists,
+    skill_md_is_dir, skill_md_stays_in_package, skip_if_dir_escapes,
+    skip_if_skill_md_escapes_package, try_load_skill_file, unresolved_symlink_detail,
 };
 use super::path::{ArgExpand, IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
 
@@ -494,7 +494,7 @@ pub(super) fn classify_extra_path_md(
     ascii_names: bool,
 ) -> ExtraPathMd {
     if !skill_md_stays_in_package(skill_file) {
-        if let Some(detail) = dangling_symlink_detail(skill_file) {
+        if let Some(detail) = unresolved_symlink_detail(skill_file) {
             if extra_path_has_skills_subdir(dir) || dir_has_child_skill_packages(dir) {
                 return ExtraPathMd::Collection {
                     peeked_name: None,
@@ -684,7 +684,7 @@ pub(super) fn skip_loose_extra_path_root_skill_md(
     if path_is_ignored(skill_file, ignore) {
         return;
     }
-    if let Some(detail) = dangling_symlink_detail(skill_file) {
+    if let Some(detail) = unresolved_symlink_detail(skill_file) {
         skips.push(SkillSkip {
             path: skill_file.to_path_buf(),
             name: None,

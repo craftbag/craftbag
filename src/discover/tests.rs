@@ -5221,6 +5221,134 @@ fn dangling_skill_md_symlink_is_not_an_escape() {
 
 #[cfg(unix)]
 #[test]
+fn symlink_loop_skill_md_is_not_an_escape() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    let self_loop = skills.join("selfloop");
+    fs::create_dir_all(&self_loop).expect("mkdir self");
+    std::os::unix::fs::symlink("SKILL.md", self_loop.join("SKILL.md")).expect("self loop");
+    let pair = skills.join("pair");
+    fs::create_dir_all(&pair).expect("mkdir pair");
+    std::os::unix::fs::symlink("b.md", pair.join("a.md")).expect("pair a");
+    std::os::unix::fs::symlink("a.md", pair.join("b.md")).expect("pair b");
+    std::os::unix::fs::symlink("a.md", pair.join("SKILL.md")).expect("pair skill");
+    let outside = tempfile::tempdir().expect("out");
+    fs::write(outside.path().join("secret.md"), "SECRET_BODY").expect("secret");
+    let leak = skills.join("leak");
+    fs::create_dir_all(&leak).expect("mkdir leak");
+    std::os::unix::fs::symlink(outside.path().join("secret.md"), leak.join("SKILL.md"))
+        .expect("outside link");
+
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    assert!(
+        report
+            .skills
+            .iter()
+            .all(|s| !s.content.contains("SECRET_BODY")),
+        "outside link must not load: {:?}",
+        report.skills
+    );
+    let self_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("selfloop/SKILL.md"))
+        .unwrap_or_else(|| panic!("self loop must skip: {:?}", report.skips));
+    assert_eq!(self_skip.kind, SkipKind::Unreadable);
+    assert!(
+        self_skip.detail.contains("symbolic link loop")
+            && self_skip.detail.contains("SKILL.md")
+            && !self_skip.detail.contains("escapes"),
+        "{}",
+        self_skip.detail
+    );
+    let pair_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("pair/SKILL.md"))
+        .unwrap_or_else(|| panic!("pair loop must skip: {:?}", report.skips));
+    assert!(
+        pair_skip.detail.contains("symbolic link loop")
+            && pair_skip.detail.contains("a.md")
+            && !pair_skip.detail.contains("escapes"),
+        "{}",
+        pair_skip.detail
+    );
+    let leak_skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("leak/SKILL.md"))
+        .unwrap_or_else(|| panic!("outside link must skip: {:?}", report.skips));
+    assert!(
+        leak_skip.detail.contains("escapes") && !leak_skip.detail.contains("symbolic link loop"),
+        "{}",
+        leak_skip.detail
+    );
+
+    let validated = validate_path(&self_loop);
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("symbolic link loop") && !detail.contains("escapes"),
+        "{detail}"
+    );
+
+    let extra = tempfile::tempdir().expect("extra");
+    let only = extra.path().join("only");
+    fs::create_dir_all(&only).expect("mkdir only");
+    std::os::unix::fs::symlink("SKILL.md", only.join("SKILL.md")).expect("extra loop");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![extra.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(report.skills.is_empty(), "{:?}", report.skills);
+    assert_eq!(report.skips.len(), 1, "{:?}", report.skips);
+    assert!(
+        report.skips[0].detail.contains("symbolic link loop")
+            && !report.skips[0].detail.contains("escapes"),
+        "{}",
+        report.skips[0].detail
+    );
+
+    let both = tempfile::tempdir().expect("both");
+    std::os::unix::fs::symlink("SKILL.md", both.path().join("SKILL.md")).expect("root loop");
+    write_skill(&both.path().join("skills").join("kept"), "kept", "body");
+    let report = empty_home_discover(
+        root.path(),
+        &DiscoveryOptions {
+            paths: vec![both.path().display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        report.skills.iter().any(|s| s.name == "kept"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("SKILL.md"))
+        .unwrap_or_else(|| panic!("root loop must skip: {:?}", report.skips));
+    assert!(
+        skip.detail.contains("symbolic link loop") && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
     let root = tempfile::tempdir().expect("tmp");
     let outside = tempfile::tempdir().expect("out");

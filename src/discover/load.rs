@@ -85,6 +85,40 @@ pub(super) fn dangling_symlink_detail(path: &Path) -> Option<String> {
     })
 }
 
+/// Link cycle. `canonicalize` fails, and a stay-under check would call
+/// that an escape. The target never resolves, so nothing is read.
+fn symlink_loop_detail(path: &Path) -> Option<String> {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return None;
+    };
+    if !meta.file_type().is_symlink() {
+        return None;
+    }
+    match std::fs::metadata(path) {
+        Err(err) if is_symlink_loop(&err) => Some(loop_detail(path)),
+        _ => None,
+    }
+}
+
+/// `ErrorKind::FilesystemLoop` needs `io_error_more`, unstable on the
+/// 1.85 MSRV. The running kind still debugs as that name.
+fn is_symlink_loop(err: &std::io::Error) -> bool {
+    format!("{:?}", err.kind()) == "FilesystemLoop"
+}
+
+fn loop_detail(path: &Path) -> String {
+    match std::fs::read_link(path) {
+        Ok(target) => format!("symbolic link loop: {}", target.display()),
+        Err(_) => "symbolic link loop".to_owned(),
+    }
+}
+
+/// Missing target or a link cycle. Both fail `canonicalize`. Neither is
+/// an outside file.
+pub(super) fn unresolved_symlink_detail(path: &Path) -> Option<String> {
+    dangling_symlink_detail(path).or_else(|| symlink_loop_detail(path))
+}
+
 pub(super) fn load_skills_from_dir(
     dir: &Path,
     load: &DirLoad<'_>,
@@ -145,7 +179,7 @@ pub(super) fn load_skills_from_dir(
                 .is_some_and(|n| n == "SKILL.md" || n == "skill.md")
                 && !path_is_ignored(&path, load.ignore)
             {
-                if let Some(detail) = dangling_symlink_detail(&path) {
+                if let Some(detail) = unresolved_symlink_detail(&path) {
                     skips.push(SkillSkip {
                         path,
                         name: None,
@@ -242,7 +276,7 @@ pub(super) fn skip_if_skill_md_escapes_package(
     skill_file: &Path,
     skips: &mut Vec<SkillSkip>,
 ) -> bool {
-    if let Some(detail) = dangling_symlink_detail(skill_file) {
+    if let Some(detail) = unresolved_symlink_detail(skill_file) {
         skips.push(SkillSkip {
             path: skill_file.to_path_buf(),
             name: None,
@@ -455,7 +489,7 @@ pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())?;
     // Joined SKILL.md is this package unless the inode is a symlink
     // out of the directory (same as extra-path classify).
-    if let Some(detail) = dangling_symlink_detail(&joined) {
+    if let Some(detail) = unresolved_symlink_detail(&joined) {
         return Err(detail);
     }
     if !skill_md_stays_in_package(&joined) {
