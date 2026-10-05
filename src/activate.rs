@@ -57,15 +57,31 @@ pub fn progressive_budgets(context_tokens: usize) -> ProgressiveBudgets {
 /// Case-insensitive trigger match on word/token boundaries, not substrings.
 ///
 /// `context_lower` must already be lowercased. Empty triggers never match.
+/// A single token keeps `_` as a word character, so `git` matches `git-hub`
+/// and does not match `github` or `git_hub`. A needle of two or more words
+/// also matches when `-` or `_` separates those same words.
 pub fn trigger_matches(context_lower: &str, trigger: &str) -> bool {
     let needle = trigger.trim().to_lowercase();
     if needle.is_empty() {
         return false;
     }
-    let hay = context_lower;
+    if boundary_contains(context_lower, &needle) {
+        return true;
+    }
+    let folded = fold_phrase_separators(&needle);
+    if !folded.contains(' ') {
+        return false;
+    }
+    boundary_contains(&fold_phrase_separators(context_lower), &folded)
+}
+
+fn boundary_contains(hay: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
     let mut search_from = 0;
     while search_from <= hay.len() {
-        let Some(rel) = hay[search_from..].find(&needle) else {
+        let Some(rel) = hay[search_from..].find(needle) else {
             return false;
         };
         let start = search_from + rel;
@@ -92,6 +108,24 @@ pub fn trigger_matches(context_lower: &str, trigger: &str) -> bool {
         search_from = start + ch.len_utf8();
     }
     false
+}
+
+/// Collapse runs of whitespace, `-`, and `_` into one space.
+fn fold_phrase_separators(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut pending_space = false;
+    for c in s.chars() {
+        if c.is_whitespace() || c == '-' || c == '_' {
+            pending_space = true;
+            continue;
+        }
+        if pending_space && !out.is_empty() {
+            out.push(' ');
+        }
+        pending_space = false;
+        out.push(c);
+    }
+    out
 }
 
 fn is_trigger_word_char(c: char) -> bool {
@@ -844,6 +878,8 @@ mod tests {
         let mut release = make_skill("release-notes", &[], 40);
         release.description = "Ship the release".to_owned();
         assert_eq!(skill_relevance_score(&git, "github actions"), 0);
+        assert_eq!(skill_relevance_score(&git, "git_hub"), 0);
+        assert_eq!(skill_relevance_score(&git, "git-hub"), 50);
         assert_eq!(skill_relevance_score(&git, "use git"), 50);
         let mut pr = make_skill("pr", &[], 40);
         pr.description = "pull request helper".to_owned();
@@ -869,8 +905,9 @@ mod tests {
     fn relevance_hyphenated_name_matches_spaced_words() {
         let mut skill = make_skill("code-review", &[], 40);
         skill.description = "reviews a change".to_owned();
-        assert_eq!(skill_relevance_score(&skill, "please code review this"), 40);
-        assert_eq!(skill_relevance_score(&skill, "please code-review this"), 50);
+        assert_eq!(skill_relevance_score(&skill, "please code review this"), 90);
+        assert_eq!(skill_relevance_score(&skill, "please code-review this"), 90);
+        assert_eq!(skill_relevance_score(&skill, "please code_review this"), 90);
     }
 
     #[test]
@@ -1008,6 +1045,43 @@ mod tests {
     #[test]
     fn trigger_matches_empty_is_false() {
         assert!(!trigger_matches("hello", "  "));
+    }
+
+    #[test]
+    fn trigger_matches_phrase_folds_hyphen_and_underscore() {
+        assert!(trigger_matches("pull-request", "pull request"));
+        assert!(trigger_matches("pull_request", "pull request"));
+        assert!(trigger_matches("pull request", "pull-request"));
+        assert!(trigger_matches("pull request", "pull_request"));
+        assert!(trigger_matches("see pull--request now", "pull request"));
+        assert!(trigger_matches("see pull__request now", "Pull Request"));
+        assert!(!trigger_matches("pullrequest", "pull request"));
+        assert!(!trigger_matches("pull-requests", "pull request"));
+        assert!(!trigger_matches("repull-request", "pull request"));
+        assert!(!trigger_matches("pull-request", "pull-"));
+        assert!(!trigger_matches("hello", "---"));
+        assert!(trigger_matches("git_hub", "git-hub"));
+        assert!(trigger_matches("git hub", "git-hub"));
+        assert!(!trigger_matches("github", "git-hub"));
+    }
+
+    #[test]
+    fn trigger_matches_single_token_keeps_underscore_boundary() {
+        assert!(!trigger_matches("github", "git"));
+        assert!(!trigger_matches("git_hub", "git"));
+        assert!(trigger_matches("git-hub", "git"));
+        assert!(trigger_matches("use git", "git"));
+        assert!(!trigger_matches("reviewing", "review"));
+    }
+
+    #[test]
+    fn filter_skills_phrase_trigger_matches_hyphen_and_underscore() {
+        let skills = vec![make_skill("review-pr", &["review", "pull request"], 100)];
+        assert_eq!(filter_skills(&skills, "pull-request", 10_000).len(), 1);
+        assert_eq!(filter_skills(&skills, "pull_request", 10_000).len(), 1);
+        assert_eq!(filter_skills(&skills, "pull request", 10_000).len(), 1);
+        assert!(filter_skills(&skills, "pullrequest", 10_000).is_empty());
+        assert!(filter_skills(&skills, "reviewing the diff", 10_000).is_empty());
     }
 
     #[test]
