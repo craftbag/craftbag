@@ -160,7 +160,9 @@ pub(super) fn load_skills_from_dir(
         }
         if !path.is_dir() {
             if !is_skill_md_filename(&path) && !path_is_ignored(&path, load.ignore) {
-                if let Some(detail) = dangling_symlink_detail(&path) {
+                // A directory symlink cycle is not a directory, so it
+                // would otherwise be ignored like a stray file.
+                if let Some(detail) = unresolved_symlink_detail(&path) {
                     let name = path.file_name().and_then(|n| n.to_str()).map(str::to_owned);
                     skips.push(SkillSkip {
                         path,
@@ -466,6 +468,12 @@ pub(super) fn is_skill_md_filename(path: &Path) -> bool {
 /// is an error so validate does not walk children.
 pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
     if !skill_md_is_dir(path) {
+        // A cycle never resolves. Do not call it a misnamed file.
+        // A dangling SKILL.md still falls through so the caller can
+        // say the path does not exist.
+        if let Some(detail) = symlink_loop_detail(path) {
+            return Err(detail);
+        }
         // Discover loads SKILL.md only. An existing README.md whose
         // frontmatter name matches the directory must not validate as
         // a package. A missing path stays missing so the caller can

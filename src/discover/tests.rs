@@ -5349,6 +5349,55 @@ fn symlink_loop_skill_md_is_not_an_escape() {
 
 #[cfg(unix)]
 #[test]
+fn symlink_loop_package_dir_is_a_skip() {
+    let root = tempfile::tempdir().expect("tmp");
+    let skills = root.path().join(".agents").join("skills");
+    write_skill(&skills.join("visible"), "visible", "body");
+    std::os::unix::fs::symlink("looppkg", skills.join("looppkg")).expect("package loop");
+    let report = empty_home_discover(root.path(), &DiscoveryOptions::default());
+    assert!(
+        report.skills.iter().any(|s| s.name == "visible"),
+        "{:?}",
+        report.skills
+    );
+    let skip = report
+        .skips
+        .iter()
+        .find(|s| s.path.ends_with("looppkg"))
+        .unwrap_or_else(|| panic!("package loop must skip: {:?}", report.skips));
+    assert_eq!(skip.kind, SkipKind::Unreadable);
+    assert_eq!(skip.name.as_deref(), Some("looppkg"));
+    assert!(
+        skip.detail.contains("symbolic link loop")
+            && skip.detail.contains("looppkg")
+            && !skip.detail.contains("escapes"),
+        "{}",
+        skip.detail
+    );
+    let validated = validate_path(&skills.join("looppkg"));
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("validate skip").detail;
+    assert!(
+        detail.contains("symbolic link loop") && !detail.contains("must be named"),
+        "{detail}"
+    );
+
+    let loop_file = skills.join("selfmd");
+    fs::create_dir_all(&loop_file).expect("mkdir selfmd");
+    std::os::unix::fs::symlink("SKILL.md", loop_file.join("SKILL.md")).expect("file loop");
+    let validated = validate_path(&loop_file.join("SKILL.md"));
+    assert!(!validated.ok, "{validated:?}");
+    let detail = &validated.skip.expect("file skip").detail;
+    assert!(
+        detail.contains("symbolic link loop")
+            && detail.contains("SKILL.md")
+            && !detail.contains("escapes"),
+        "{detail}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn skills_root_skill_md_symlink_escape_is_unreadable_not_root_file() {
     let root = tempfile::tempdir().expect("tmp");
     let outside = tempfile::tempdir().expect("out");
