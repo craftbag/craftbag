@@ -4294,6 +4294,27 @@ fn validate_path_strict_rejects_unknown_frontmatter_key() {
         "errors={:?}",
         report.errors
     );
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|e| e.contains("unknown frontmatter key: made_up_field")),
+        "errors={:?}",
+        report.errors
+    );
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|e| e.contains("omit --strict / strict")),
+        "errors={:?}",
+        report.errors
+    );
+    assert!(
+        report.errors.iter().all(|e| !e.contains("invalid YAML")),
+        "errors={:?}",
+        report.errors
+    );
     let skip = report.skip.as_ref().expect("skip");
     assert_eq!(skip.kind, SkipKind::ParseError);
     assert_eq!(skip.code(), "parse_error");
@@ -4309,6 +4330,48 @@ fn validate_path_strict_rejects_unknown_frontmatter_key() {
         v.get("errorKind").is_none(),
         "error_kind must stay snake_case: {json}"
     );
+}
+
+#[test]
+fn validate_path_strict_rejects_two_unknown_frontmatter_keys() {
+    let root = tempfile::tempdir().expect("tmp");
+    let pkg = root.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\nmade_up_field: x\nalso_extra: y\n---\nbody\n",
+    )
+    .expect("write");
+    let report = validate_path_with_options(&pkg.join("SKILL.md"), true);
+    assert!(!report.ok, "strict must reject two unknown keys");
+    assert!(
+        report.errors.iter().any(|e| {
+            e.contains("unknown frontmatter keys: made_up_field, also_extra")
+                && e.contains("made_up_field")
+                && e.contains("also_extra")
+        }),
+        "errors={:?}",
+        report.errors
+    );
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|e| e.contains("omit --strict / strict")),
+        "errors={:?}",
+        report.errors
+    );
+    assert!(
+        report.errors.iter().all(|e| !e.contains("invalid YAML")),
+        "errors={:?}",
+        report.errors
+    );
+    let skip = report.skip.as_ref().expect("skip");
+    assert_eq!(skip.kind, SkipKind::ParseError);
+    assert_eq!(skip.code(), "parse_error");
+    let miss = report.miss().expect("failed validate has a peel");
+    assert_eq!(miss.error_kind, "parse_error");
+    assert_eq!(miss.error, report.errors[0]);
 }
 
 #[test]

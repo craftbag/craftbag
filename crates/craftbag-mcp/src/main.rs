@@ -1069,6 +1069,18 @@ mod tests {
                 text.contains("made_up_field"),
                 "strict must name the unknown key: {text}"
             );
+            assert!(
+                text.contains("unknown frontmatter key: made_up_field"),
+                "strict must name the unknown key: {text}"
+            );
+            assert!(
+                text.contains("omit --strict / strict"),
+                "strict must name the flag: {text}"
+            );
+            assert!(
+                !text.contains("invalid YAML"),
+                "parsed extra key is not invalid YAML: {text}"
+            );
             assert_eq!(
                 strict["result"]["error"], text,
                 "strict must peel SkillMiss.error like load/why: {strict}"

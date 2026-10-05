@@ -4,7 +4,6 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::ParseError;
 use crate::miss::SkillMiss;
 use crate::parse::{
     parse_skill, peek_frontmatter_name, skill_md_package_dir_name, skill_name_matches_directory,
@@ -416,11 +415,18 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
                         .map(|k| crate::sanitize_error_token(k))
                         .collect();
                     let detail = if shown.len() == 1 {
-                        format!("unknown frontmatter key: {}", shown[0])
+                        format!(
+                            "unknown frontmatter key: {} (strict mode; drop the key or omit --strict / strict)",
+                            shown[0]
+                        )
                     } else {
-                        format!("unknown frontmatter keys: {}", shown.join(", "))
+                        format!(
+                            "unknown frontmatter keys: {} (strict mode; drop the keys or omit --strict / strict)",
+                            shown.join(", ")
+                        )
                     };
-                    let err = one_line_error(ParseError::InvalidYaml(detail));
+                    // Parsed already. Strict mode rejects the key. Not invalid YAML.
+                    let err = one_line_error(detail);
                     return ValidationReport {
                         path: path_buf.clone(),
                         ok: false,

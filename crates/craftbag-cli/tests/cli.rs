@@ -321,6 +321,18 @@ fn validate_unknown_key_passes_default_and_fails_strict() {
         stderr.contains("made_up_field"),
         "strict must name the unknown key: {stderr}"
     );
+    assert!(
+        stderr.contains("unknown frontmatter key: made_up_field"),
+        "strict must name the unknown key: {stderr}"
+    );
+    assert!(
+        stderr.contains("omit --strict / strict"),
+        "strict must name the flag: {stderr}"
+    );
+    assert!(
+        !stderr.contains("invalid YAML"),
+        "parsed extra key is not invalid YAML: {stderr}"
+    );
 }
 
 #[test]
