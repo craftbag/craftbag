@@ -66,7 +66,7 @@ struct DiscoverArgs {
     /// Catalog ranking text (`format=catalog`). JSON, XML, and watch ignore this.
     #[serde(default, deserialize_with = "present_non_null")]
     context: Option<String>,
-    /// Token budget for catalog listing (`format=catalog`). Omitted is 8000.
+    /// Model context window size for catalog listing (`format=catalog`). Omitted is 8000.
     #[serde(default, deserialize_with = "present_non_null")]
     context_tokens: Option<usize>,
 }
@@ -428,7 +428,7 @@ fn tools() -> Value {
     });
     list_props["context_tokens"] = json!({
         "type": "integer",
-        "description": "Token budget for catalog listing (format=catalog; default 8000). JSON, XML, and watch ignore this."
+        "description": "Model context window size for catalog listing (format=catalog; default 8000). JSON, XML, and watch ignore this."
     });
     let mut load_props = discover_properties();
     load_props["name"] = json!({
@@ -453,8 +453,7 @@ fn tools() -> Value {
         "description": "Optional frontmatter skill name filter (not a package path)."
     });
     why_props["context"] = json!({"type": "string", "description": "Activation context text."});
-    why_props["context_tokens"] =
-        json!({"type": "integer", "description": "Token budget for activation (default 8000)."});
+    why_props["context_tokens"] = json!({"type": "integer", "description": "Model context window size for activation (default 8000)."});
     why_props["format"] = json!({
         "type": "string",
         "enum": ["json", "text"],
@@ -4580,7 +4579,33 @@ mod tests {
         let tokens_desc = tokens["description"].as_str().unwrap_or("");
         assert!(
             tokens_desc.contains("catalog") && tokens_desc.contains("8000"),
-            "skills_list context_tokens must name catalog budget like why: {tokens_desc}"
+            "skills_list context_tokens must name catalog use and the default: {tokens_desc}"
+        );
+        // The integer is the model window passed to progressive_budgets.
+        // Default 8000 becomes a 300-token body budget and a 250-token
+        // catalog budget, not an 8000-token budget.
+        assert!(
+            tokens_desc.contains("context window"),
+            "context_tokens is the model window, not the catalog budget: {tokens_desc}"
+        );
+        assert!(
+            !tokens_desc.to_ascii_lowercase().contains("token budget"),
+            "do not call the window a token budget: {tokens_desc}"
+        );
+        let why = tools
+            .iter()
+            .find(|t| t["name"] == "skills_why")
+            .expect("skills_why");
+        let why_tokens = why["inputSchema"]["properties"]["context_tokens"]["description"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            why_tokens.contains("context window") && why_tokens.contains("8000"),
+            "skills_why context_tokens is the same window: {why_tokens}"
+        );
+        assert!(
+            !why_tokens.to_ascii_lowercase().contains("token budget"),
+            "do not call the why window a token budget: {why_tokens}"
         );
         let load = tools
             .iter()
