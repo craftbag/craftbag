@@ -23,7 +23,8 @@ use super::extra_path::{
 };
 use super::host_token::{
     HostPathField, component_is_whitespace_padded_dot, host_token_collapses_after_whitespace,
-    nfkc_dot_path_components, one_line_error, path_has_line_separator, skip_line_separator_root,
+    nfkc_dot_path_components, one_line_error, path_has_line_separator,
+    skip_ignore_tilde_home_unset, skip_line_separator_root, skip_tilde_home_unset,
     skip_unresolvable_host_path, skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
@@ -31,9 +32,9 @@ use super::load::{
     skill_md_inode_exists, skip_if_dir_escapes,
 };
 use super::path::{
-    IgnorePrefix, expand_extra_path_arg, expand_ignore_list, expand_user_skills_dir, home_dir,
-    implicit_home_already_walked, lexical_normalize, path_is_ignored, stays_under,
-    walk_cwd_to_git_root,
+    ArgExpand, IgnorePrefix, expand_extra_path_arg, expand_ignore_list, expand_user_skills_dir,
+    home_dir, implicit_home_already_walked, lexical_normalize, path_is_ignored, stays_under,
+    tilde_without_home, walk_cwd_to_git_root,
 };
 
 /// Discover skills for `cwd` using the host-neutral root matrix.
@@ -118,7 +119,9 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         .and_then(|p| p.to_str())
         .is_some_and(str_has_line_separator)
     {
-        if let Some(user_dir) = expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref()) {
+        if let ArgExpand::Ready(user_dir) =
+            expand_user_skills_dir(&cwd, opts.user_skills_dir.as_deref())
+        {
             if !path_has_line_separator(&user_dir) {
                 if !path_is_ignored(&user_dir, &ignore) {
                     push_watch_dir(&mut out, user_dir.clone());
@@ -161,7 +164,7 @@ pub fn watch_dirs(cwd: &Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
         if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
             continue;
         }
-        let Some(expanded) = expand_extra_path_arg(raw, &cwd) else {
+        let ArgExpand::Ready(expanded) = expand_extra_path_arg(raw, &cwd) else {
             continue;
         };
         if path_has_line_separator(&expanded) {
@@ -500,6 +503,11 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
     let ignore = expand_ignore_list(&cwd, &opts.ignore);
     let mut skills = Vec::new();
     let mut skips = Vec::new();
+    for raw in &opts.ignore {
+        if tilde_without_home(raw) {
+            skip_ignore_tilde_home_unset(raw, &mut skips);
+        }
+    }
     let git_walk = if opts.implicit_roots {
         walk_cwd_to_git_root(&cwd)
     } else {
@@ -532,7 +540,11 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
             if let Some(raw) = raw_path.to_str() {
                 skip_whitespace_collapse_token(raw, HostPathField::UserDir, &mut skips);
             }
-        } else if let Some(user_dir) = expand_user_skills_dir(&cwd, Some(raw_path)) {
+        } else if let ArgExpand::HomeUnset = expand_user_skills_dir(&cwd, Some(raw_path)) {
+            if let Some(raw) = raw_path.to_str() {
+                skip_tilde_home_unset(raw, HostPathField::UserDir, &mut skips);
+            }
+        } else if let ArgExpand::Ready(user_dir) = expand_user_skills_dir(&cwd, Some(raw_path)) {
             if path_has_line_separator(&user_dir) {
                 // Same refuse as extra-path: do not load or echo a user_dir
                 // whose component would split list/why TSV or watch_dirs.

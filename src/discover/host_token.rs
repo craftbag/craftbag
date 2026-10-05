@@ -181,6 +181,14 @@ impl HostPathField {
             Self::Validate => crate::skip::HostTokenField::Validate,
         }
     }
+
+    pub(super) fn home_unset_detail(self) -> &'static str {
+        match self {
+            Self::ExtraPath => "--path / paths: HOME is unset",
+            Self::UserDir => "--user-dir / user_dir: HOME is unset",
+            Self::Validate => "validate / skills_validate: HOME is unset",
+        }
+    }
 }
 
 pub(super) fn skip_line_separator_root(
@@ -195,6 +203,24 @@ pub(super) fn skip_line_separator_root(
         PathBuf::from(crate::sanitize_error_token(&skill_md.display().to_string())),
         field.line_sep_detail().to_owned(),
         field.token_field(),
+    ));
+}
+
+pub(super) fn skip_tilde_home_unset(raw: &str, field: HostPathField, skips: &mut Vec<SkillSkip>) {
+    let shown = crate::sanitize_error_token(raw.trim());
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(&shown),
+        field.home_unset_detail().to_owned(),
+        field.token_field(),
+    ));
+}
+
+pub(super) fn skip_ignore_tilde_home_unset(raw: &str, skips: &mut Vec<SkillSkip>) {
+    let shown = crate::sanitize_error_token(raw.trim());
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(&shown),
+        "--ignore: HOME is unset".to_owned(),
+        crate::skip::HostTokenField::Ignore,
     ));
 }
 

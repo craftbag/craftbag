@@ -14,8 +14,8 @@ use crate::source::SkillSource;
 use super::DiscoveryOptions;
 use super::host_token::{
     HostPathField, host_token_collapses_after_whitespace, path_has_line_separator,
-    skip_line_separator_root, skip_unresolvable_host_path, skip_whitespace_collapse_token,
-    str_has_line_separator,
+    skip_line_separator_root, skip_tilde_home_unset, skip_unresolvable_host_path,
+    skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
     dir_load, finish_load_parsed_skill, finish_load_skill_file, is_skill_md_filename,
@@ -23,7 +23,7 @@ use super::load::{
     skill_md_stays_in_package, skip_if_dir_escapes, skip_if_skill_md_escapes_package,
     try_load_skill_file,
 };
-use super::path::{IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
+use super::path::{ArgExpand, IgnorePrefix, expand_extra_path_arg, path_is_ignored, stays_under};
 
 pub(super) fn load_extra_path(
     raw: &str,
@@ -45,8 +45,13 @@ pub(super) fn load_extra_path(
         skip_whitespace_collapse_token(raw, HostPathField::ExtraPath, skips);
         return;
     }
-    let Some(expanded) = expand_extra_path_arg(raw, cwd) else {
-        return;
+    let expanded = match expand_extra_path_arg(raw, cwd) {
+        ArgExpand::Empty => return,
+        ArgExpand::HomeUnset => {
+            skip_tilde_home_unset(raw, HostPathField::ExtraPath, skips);
+            return;
+        }
+        ArgExpand::Ready(path) => path,
     };
     if path_has_line_separator(&expanded) {
         skip_line_separator_root(&expanded, HostPathField::ExtraPath, skips);

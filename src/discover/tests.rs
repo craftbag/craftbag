@@ -1,3 +1,4 @@
+use super::path::with_home_unset;
 use super::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ExtraPathMd, classify_extra_path_md, discover,
     extra_path_is_loose_collection, find_skill_by_name, host_token_collapses_after_whitespace,
@@ -2755,6 +2756,208 @@ fn user_skills_dir_expands_tilde_like_extra_path() {
     );
     assert_eq!(report.skills[0].source, SkillSource::User);
     assert_eq!(report.skills[0].content.trim(), "from-home");
+}
+
+#[test]
+fn tilde_host_tokens_do_not_load_cwd_lookalikes_without_home() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join("myskills").join("fromcwd"),
+        "fromcwd",
+        "from-cwd",
+    );
+    write_skill(
+        &cwd.path().join("~").join("myskills").join("fromlitjoin"),
+        "fromlitjoin",
+        "from-lit",
+    );
+    write_skill(
+        &cwd.path().join("~").join("frombare"),
+        "frombare",
+        "from-bare",
+    );
+    write_skill(
+        &cwd.path().join("secret").join("hidden"),
+        "hidden",
+        "cwd-secret",
+    );
+    write_skill(
+        &cwd.path().join("~").join("secret").join("litsecret"),
+        "litsecret",
+        "lit-secret",
+    );
+    let secret = cwd.path().join("secret");
+    let lit_secret = cwd.path().join("~").join("secret");
+
+    let user_opts = DiscoveryOptions {
+        user_skills_dir: Some(PathBuf::from("~/myskills")),
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let bare_opts = DiscoveryOptions {
+        user_skills_dir: Some(PathBuf::from("~")),
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let path_opts = DiscoveryOptions {
+        paths: vec!["~/myskills".to_owned()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let ignore_opts = DiscoveryOptions {
+        paths: vec![
+            secret.display().to_string(),
+            lit_secret.display().to_string(),
+        ],
+        ignore: vec!["~/secret".to_owned()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+
+    let assert_refused = |report: &crate::skip::DiscoveryReport, flag: &str, raw: &str| {
+        let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !names.contains(&"fromcwd")
+                && !names.contains(&"fromlitjoin")
+                && !names.contains(&"frombare"),
+            "tilde must not load a cwd lookalike ({flag}): {names:?} {report:?}"
+        );
+        assert!(
+            report.skips.iter().any(|skip| {
+                skip.detail.contains("HOME is unset")
+                    && skip.detail.contains(flag)
+                    && skip.path == PathBuf::from(raw)
+            }),
+            "skip must name {flag} and keep raw {raw}: {:?}",
+            report.skips
+        );
+    };
+
+    for (label, run) in [
+        ("unset", RunHome::Unset),
+        ("empty", RunHome::Empty),
+        ("blank", RunHome::Blank),
+    ] {
+        let user = run.discover(cwd.path(), &user_opts);
+        assert_refused(&user, "user-dir", "~/myskills");
+        let bare = run.discover(cwd.path(), &bare_opts);
+        assert_refused(&bare, "user-dir", "~");
+        let extra = run.discover(cwd.path(), &path_opts);
+        assert_refused(&extra, "--path", "~/myskills");
+        let ignored = run.discover(cwd.path(), &ignore_opts);
+        let ignored_names: Vec<&str> = ignored.skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            ignored_names.contains(&"hidden") && ignored_names.contains(&"litsecret"),
+            "{label} ignore must not hide cwd lookalikes: {ignored_names:?} {ignored:?}"
+        );
+        assert!(
+            ignored.skips.iter().any(|skip| {
+                skip.detail.contains("HOME is unset")
+                    && skip.detail.contains("--ignore")
+                    && skip.path == PathBuf::from("~/secret")
+            }),
+            "{label} ignore skip missing: {:?}",
+            ignored.skips
+        );
+        let watched = run.watch(cwd.path(), &user_opts);
+        assert!(
+            watched.iter().all(|dir| !dir.ends_with("myskills")),
+            "{label} watch must omit the tilde user dir: {watched:?}"
+        );
+        let watched_path = run.watch(cwd.path(), &path_opts);
+        assert!(
+            watched_path.iter().all(|dir| !dir.ends_with("myskills")),
+            "{label} watch must omit the tilde extra path: {watched_path:?}"
+        );
+    }
+
+    let home = tempfile::tempdir().expect("home");
+    write_skill(
+        &home.path().join("myskills").join("fromhome"),
+        "fromhome",
+        "from-home",
+    );
+    write_skill(
+        &home.path().join("secret").join("homesecret"),
+        "homesecret",
+        "from-home-secret",
+    );
+    let loaded = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(cwd.path(), &user_opts)
+    });
+    assert_eq!(
+        loaded
+            .skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["fromhome"]
+    );
+    assert!(loaded.skips.is_empty(), "{loaded:?}");
+    let ignored_home = with_home_override(Some(home.path().to_path_buf()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![
+                    "~/secret".to_owned(),
+                    secret.display().to_string(),
+                    lit_secret.display().to_string(),
+                ],
+                ignore: vec!["~/secret".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    let ignored_home_names: Vec<&str> = ignored_home
+        .skills
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(
+        ignored_home_names.contains(&"hidden") && ignored_home_names.contains(&"litsecret"),
+        "real HOME ignore must not hide cwd packages: {ignored_home_names:?}"
+    );
+    assert!(
+        !ignored_home_names.contains(&"homesecret"),
+        "real HOME ~/secret must still ignore the home tree: {ignored_home_names:?} {ignored_home:?}"
+    );
+    assert!(
+        ignored_home
+            .skips
+            .iter()
+            .all(|skip| !skip.detail.contains("HOME is unset")),
+        "{ignored_home:?}"
+    );
+}
+
+#[derive(Clone, Copy)]
+enum RunHome {
+    Unset,
+    Empty,
+    Blank,
+}
+
+impl RunHome {
+    fn discover(
+        self,
+        cwd: &std::path::Path,
+        opts: &DiscoveryOptions,
+    ) -> crate::skip::DiscoveryReport {
+        match self {
+            Self::Unset => with_home_unset(|| discover(cwd, opts)),
+            Self::Empty => with_home_override(Some(PathBuf::new()), || discover(cwd, opts)),
+            Self::Blank => with_home_override(Some(PathBuf::from("   ")), || discover(cwd, opts)),
+        }
+    }
+
+    fn watch(self, cwd: &std::path::Path, opts: &DiscoveryOptions) -> Vec<PathBuf> {
+        match self {
+            Self::Unset => with_home_unset(|| watch_dirs(cwd, opts)),
+            Self::Empty => with_home_override(Some(PathBuf::new()), || watch_dirs(cwd, opts)),
+            Self::Blank => with_home_override(Some(PathBuf::from("   ")), || watch_dirs(cwd, opts)),
+        }
+    }
 }
 
 #[test]
