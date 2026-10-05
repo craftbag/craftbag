@@ -46,6 +46,98 @@ fn canonical_bool_yaml_key(key: &str) -> Option<&'static str> {
     None
 }
 
+/// Missing `name` or `description`, naming one unknown key that is a
+/// one-edit, ASCII-case, or underscore miss of that field.
+///
+/// Two close keys stay the plain missing-field error.
+fn missing_field_near_unknown_key(yaml: &str, field: &'static str) -> ParseError {
+    let mut close: Option<String> = None;
+    let mut ambiguous = false;
+    for line in yaml.lines() {
+        if line_is_yaml_indented(line) {
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("- ") {
+            continue;
+        }
+        let Some((key, _)) = trimmed.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() || is_known_frontmatter_key(key) || !frontmatter_key_is_close(key, field)
+        {
+            continue;
+        }
+        match &close {
+            None => close = Some(key.to_owned()),
+            Some(prev) if prev == key => {}
+            Some(_) => ambiguous = true,
+        }
+    }
+    match close {
+        Some(key) if !ambiguous => {
+            let shown = crate::sanitize_error_token(&key);
+            ParseError::MissingField(format!(
+                "{field} (unknown key: {shown}; did you mean {field}?)"
+            ))
+        }
+        _ => ParseError::MissingField(field.to_owned()),
+    }
+}
+
+fn frontmatter_key_is_close(unknown: &str, field: &str) -> bool {
+    let fold = |s: &str| s.trim().to_lowercase().replace('_', "-");
+    let unknown_folded = fold(unknown);
+    let field_folded = fold(field);
+    if unknown_folded.is_empty() || field_folded.is_empty() {
+        return false;
+    }
+    if unknown_folded == field_folded {
+        return unknown != field;
+    }
+    frontmatter_keys_one_edit(&unknown_folded, &field_folded)
+}
+
+/// Unicode-scalar Levenshtein distance of exactly one.
+fn frontmatter_keys_one_edit(a: &str, b: &str) -> bool {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (short, long) = if a.len() <= b.len() {
+        (&a[..], &b[..])
+    } else {
+        (&b[..], &a[..])
+    };
+    let diff = long.len() - short.len();
+    if diff > 1 {
+        return false;
+    }
+    if diff == 0 {
+        let mut mismatches = 0usize;
+        for (x, y) in short.iter().zip(long.iter()) {
+            if x != y {
+                mismatches += 1;
+                if mismatches > 1 {
+                    return false;
+                }
+            }
+        }
+        return mismatches == 1;
+    }
+    let mut i = 0usize;
+    let mut skipped = false;
+    for ch in long {
+        if i < short.len() && *ch == short[i] {
+            i += 1;
+        } else if !skipped {
+            skipped = true;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
 /// Top-level frontmatter keys that parse ignores (not known or host extensions).
 pub(crate) fn unknown_frontmatter_keys(content: &str) -> Vec<String> {
     let Some(yaml) = frontmatter_yaml(content) else {
@@ -168,7 +260,7 @@ pub fn parse_skill(content: &str) -> Result<Skill, ParseError> {
 
     validate_skill_name(&skill.name)?;
     if skill.description.is_empty() {
-        return Err(ParseError::MissingField("description".to_owned()));
+        return Err(missing_field_near_unknown_key(yaml_block, "description"));
     }
     if skill.description.chars().count() > SKILL_DESCRIPTION_MAX_CHARS {
         return Err(ParseError::InvalidYaml(format!(
@@ -813,9 +905,9 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
         }
     }
 
-    let name = name.ok_or_else(|| ParseError::MissingField("name".to_owned()))?;
+    let name = name.ok_or_else(|| missing_field_near_unknown_key(yaml, "name"))?;
     let description =
-        description.ok_or_else(|| ParseError::MissingField("description".to_owned()))?;
+        description.ok_or_else(|| missing_field_near_unknown_key(yaml, "description"))?;
 
     let mut skill = Skill::new(name, description, "");
     skill.triggers = triggers;
@@ -1228,6 +1320,97 @@ Body.
 ";
         let err = parse_skill(input).unwrap_err();
         assert!(matches!(err, ParseError::MissingField(ref f) if f == "description"));
+    }
+
+    #[test]
+    fn missing_description_names_a_one_edit_key() {
+        let input = "\
+---
+name: demo
+descripton: hello from the skill
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "missing required field: description (unknown key: descripton; did you mean description?)"
+        );
+    }
+
+    #[test]
+    fn missing_description_names_an_underscore_key() {
+        let input = "\
+---
+name: demo
+descript_on: hello from the skill
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "missing required field: description (unknown key: descript_on; did you mean description?)"
+        );
+    }
+
+    #[test]
+    fn missing_description_names_an_ascii_case_key() {
+        let input = "\
+---
+name: demo
+Description: hello from the skill
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "missing required field: description (unknown key: Description; did you mean description?)"
+        );
+    }
+
+    #[test]
+    fn missing_description_ignores_an_unrelated_unknown_key() {
+        let input = "\
+---
+name: demo
+made_up_field: x
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert!(matches!(err, ParseError::MissingField(ref f) if f == "description"));
+    }
+
+    #[test]
+    fn missing_description_two_close_keys_stay_plain() {
+        let input = "\
+---
+name: demo
+descripton: one
+descriptio: two
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert!(matches!(err, ParseError::MissingField(ref f) if f == "description"));
+    }
+
+    #[test]
+    fn missing_name_names_a_one_edit_key() {
+        let input = "\
+---
+nme: demo
+description: hello
+---
+body
+";
+        let err = parse_skill(input).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "missing required field: name (unknown key: nme; did you mean name?)"
+        );
     }
 
     #[test]
