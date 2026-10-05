@@ -355,15 +355,22 @@ jobs:
           egress-policy: audit
       - name: Check job results
         run: |
-          for r in "${{ needs.changes.result }}" "${{ needs.lint.result }}" \
-                   "${{ needs.test.result }}" \
-                   "${{ needs.fuzz-smoke.result }}" \
-                   "${{ needs.test-windows.result }}" "${{ needs.test-macos.result }}" \
-                   "${{ needs.workflows.result }}" "${{ needs.gitleaks.result }}" \
-                   "${{ needs.coverage.result }}" "${{ needs.semver-checks.result }}"; do
-            # A job that never gets a runner is "abandoned", not "cancelled".
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ] || [ "$r" = "abandoned" ]; then
-              echo "::error::needed job $r"
-              exit 1
-            fi
-          done
+          # A job that never gets a runner is "abandoned", not "cancelled".
+          check() {
+            case "$2" in
+              failure|cancelled|abandoned)
+                echo "::error::needed job $1 $2"
+                exit 1
+                ;;
+            esac
+          }
+          check changes "${{ needs.changes.result }}"
+          check lint "${{ needs.lint.result }}"
+          check test "${{ needs.test.result }}"
+          check fuzz-smoke "${{ needs.fuzz-smoke.result }}"
+          check test-windows "${{ needs.test-windows.result }}"
+          check test-macos "${{ needs.test-macos.result }}"
+          check workflows "${{ needs.workflows.result }}"
+          check gitleaks "${{ needs.gitleaks.result }}"
+          check coverage "${{ needs.coverage.result }}"
+          check semver-checks "${{ needs.semver-checks.result }}"
