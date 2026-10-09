@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2
         with:
           egress-policy: audit
       - name: Resolve tag
@@ -70,7 +70,7 @@ jobs:
       - name: Publish
         if: steps.gate.outputs.present == 'true'
         continue-on-error: true
-        uses: vedantmgoyal9/winget-releaser@a8fff44b123f115ce4c21543edf8b677376fc7e0 # v2
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: Craftbag.Craftbag
           version: ${{ steps.meta.outputs.version }}
