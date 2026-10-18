@@ -7569,6 +7569,57 @@ fn user_dir_missing_is_unreadable_not_silent() {
 }
 
 #[test]
+fn watch_host_skips_missing_extra_path_and_user_dir() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("no-such-extra");
+    let opts = DiscoveryOptions {
+        paths: vec![missing.display().to_string()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let report = empty_home_discover(cwd.path(), &opts);
+    let skips = crate::watch_host_skips(cwd.path(), &opts);
+    assert_eq!(
+        skips, report.skips,
+        "watch must report the same missing --path skip as discover"
+    );
+    assert!(
+        crate::watch_dirs(cwd.path(), &opts).is_empty(),
+        "a missing path is not a notify root"
+    );
+
+    let missing_user = root.path().join("no-such-user");
+    let user_opts = DiscoveryOptions {
+        user_skills_dir: Some(missing_user),
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let user_report = empty_home_discover(cwd.path(), &user_opts);
+    assert_eq!(
+        crate::watch_host_skips(cwd.path(), &user_opts),
+        user_report.skips,
+        "watch must report the same missing --user-dir skip as discover"
+    );
+
+    let pkg = root.path().join("demo");
+    write_skill(&pkg, "demo", "body");
+    let present = DiscoveryOptions {
+        paths: vec![pkg.display().to_string()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    assert!(
+        crate::watch_host_skips(cwd.path(), &present).is_empty(),
+        "an existing package directory is a watch root, not a host skip"
+    );
+    assert!(
+        !crate::watch_dirs(cwd.path(), &present).is_empty(),
+        "an existing package directory must stay on the watch list"
+    );
+}
+
+#[test]
 fn extra_path_regular_file_not_skill_md_is_unreadable() {
     let cwd = tempfile::tempdir().expect("cwd");
     let root = tempfile::tempdir().expect("root");

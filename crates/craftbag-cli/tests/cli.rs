@@ -1071,6 +1071,11 @@ fn list_watch_dirs_whitespace_extra_path_omits_root() {
             stdout.trim().is_empty(),
             "collapsed extra-path {raw:?} must not add a watch root: {stdout:?}"
         );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("skip\tunreadable") && stderr.contains("collapses"),
+            "collapsed extra-path {raw:?} must say why it is not a watch root: {stderr:?}"
+        );
     }
 }
 
@@ -1167,6 +1172,11 @@ fn list_watch_dirs_whitespace_user_dir_omits_root() {
         assert!(
             stdout.trim().is_empty(),
             "collapsed user_dir {raw:?} must not add a watch root: {stdout:?}"
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("skip\tunreadable") && stderr.contains("collapses"),
+            "collapsed user_dir {raw:?} must say why it is not a watch root: {stderr:?}"
         );
     }
 }
@@ -1432,6 +1442,54 @@ fn list_missing_path_emits_unreadable_skip() {
         combined.contains("path does not exist:"),
         "list skip must name the hole: stdout={stdout:?} stderr={stderr:?}"
     );
+}
+
+#[test]
+fn list_watch_dirs_missing_path_emits_unreadable_skip() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("no-such-extra");
+    let pkg = root.path().join("demo");
+    fs::create_dir_all(&pkg).expect("mkdir");
+    fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nbody\n",
+    )
+    .expect("write");
+    for args in [vec!["--watch-dirs"], vec!["--format", "watch"]] {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(cwd.path())
+            .arg("list")
+            .args(args)
+            .arg("--no-implicit-roots")
+            .arg("--path")
+            .arg(&pkg)
+            .arg("--path")
+            .arg(&missing)
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "missing extra-path is a skip, not a new exit: stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stdout.lines().any(|l| Path::new(l) == pkg.as_path()),
+            "watch must still list the real package: {stdout:?}"
+        );
+        assert!(
+            stdout.lines().all(|l| Path::new(l) != missing.as_path()),
+            "watch must not list the missing path: {stdout:?}"
+        );
+        assert!(
+            stderr.contains("skip\tunreadable") && stderr.contains("path does not exist:"),
+            "watch must name the missing path: stdout={stdout:?} stderr={stderr:?}"
+        );
+    }
 }
 
 #[test]

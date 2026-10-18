@@ -12,7 +12,7 @@ use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillMiss, SkillSource, SkillSummary,
     discover, find_skill_by_name, format_available_skills_xml, format_catalog, format_load_view,
     format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format, progressive_budgets,
-    unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs, why,
+    unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs, watch_host_skips, why,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -149,7 +149,10 @@ fn list_json(args: DiscoverArgs) -> Result<String, String> {
     let format = args.format.as_deref().unwrap_or("json");
     let format = parse_list_format(format)?;
     if format == ListFormat::Watch {
-        return Ok(format_watch_dirs(&watch_dirs(&cwd, &opts)));
+        return Ok(with_skip_tsv(
+            format_watch_dirs(&watch_dirs(&cwd, &opts)),
+            &watch_host_skips(&cwd, &opts),
+        ));
     }
     let report = discover(&cwd, &opts);
     if format == ListFormat::Xml {
@@ -418,7 +421,7 @@ fn tools() -> Value {
         "type": "string",
         "enum": ListFormat::CANONICAL_TOKENS,
         "description": format!(
-            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills> inventory; includes disable_model_invocation), catalog (markdown name + description; omits disable_model_invocation), or watch (notify-watch roots; does not load SKILL.md). xml and catalog also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
+            "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills> inventory; includes disable_model_invocation), catalog (markdown name + description; omits disable_model_invocation), or watch (notify-watch roots; does not load SKILL.md). xml, catalog, and watch also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
             ListFormat::ALIAS_TOKENS.join(" and ")
         )
     });
