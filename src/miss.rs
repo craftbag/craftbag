@@ -51,8 +51,9 @@ impl std::fmt::Display for SkillMiss {
 /// Classify a `load` miss so hosts can branch without scraping Display.
 ///
 /// A matching skip row (parse error, name/dir mismatch, unreadable
-/// package) is not "unknown". Blank peeked names and the `SKILL.md`
-/// parent directory (except root-file skips) are identities too.
+/// package) is not "unknown". Blank peeked names, the `SKILL.md`
+/// parent directory, and an unreadable package directory path
+/// (except root-file skips) are identities too.
 /// Peeked `.` / `..` are path components, not skill names. The
 /// message includes skip kind, package identity, and the SKILL.md
 /// path so extra-path `.` / `..` (joined to discover cwd) stay

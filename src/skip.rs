@@ -221,13 +221,33 @@ impl Default for SkillSkip {
     }
 }
 
-/// Parent directory of a `SKILL.md` / `skill.md` path, when that is the file name.
+/// Package identity for a skip path.
+///
+/// A `SKILL.md` / `skill.md` path uses its parent directory. Discover
+/// records an unreadable package as the directory itself, because the
+/// file could not be stat'd, so that directory name is the identity.
+/// Dot names and `.` / `..` are not.
 pub(crate) fn skill_md_package_name(path: &Path) -> Option<&str> {
     let file = path.file_name().and_then(|n| n.to_str())?;
-    if !file.eq_ignore_ascii_case("SKILL.md") {
+    if file.eq_ignore_ascii_case("SKILL.md") {
+        return crate::parse::skill_md_package_dir_name(path);
+    }
+    if file.starts_with('.') || crate::parse::is_path_component_skill_name(file) {
         return None;
     }
-    crate::parse::skill_md_package_dir_name(path)
+    // `.agents/skills` (and other dot-root `skills` dirs) is a
+    // collection, not a skill named skills. A child package
+    // `.agents/skills/demo` still uses `demo`.
+    if file.eq_ignore_ascii_case("skills") {
+        let parent = path
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .and_then(|name| name.to_str());
+        if parent.is_some_and(|name| name.starts_with('.')) {
+            return None;
+        }
+    }
+    Some(file)
 }
 
 /// Result of multi-root skill discovery, including skips for `why`.
@@ -536,6 +556,40 @@ mod tests {
         };
         assert!(parse.matches_requested_name("DEMO"));
         assert!(!parse.matches_requested_name("other"));
+        let locked_dir = SkillSkip {
+            path: PathBuf::from("/tmp/demo"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+            host_token: None,
+        };
+        assert!(
+            locked_dir.matches_requested_name("demo"),
+            "an unreadable package directory is that package"
+        );
+        assert!(!locked_dir.matches_requested_name("tmp"));
+        let dot_dir = SkillSkip {
+            path: PathBuf::from("/tmp/.agents"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+            host_token: None,
+        };
+        assert!(!dot_dir.matches_requested_name(".agents"));
+        let skills_root = SkillSkip {
+            path: PathBuf::from("/tmp/.agents/skills"),
+            name: None,
+            kind: SkipKind::Unreadable,
+            detail: "Permission denied (os error 13)".to_owned(),
+            winner_path: None,
+            host_token: None,
+        };
+        assert!(
+            !skills_root.matches_requested_name("skills"),
+            "a dot-root skills directory is a collection, not a skill"
+        );
         let root = SkillSkip {
             path: PathBuf::from("/tmp/.agents/skills/SKILL.md"),
             name: None,

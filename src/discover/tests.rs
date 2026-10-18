@@ -3480,6 +3480,20 @@ fn unreadable_child_package_dir_is_skip_not_silent() {
         "locked package directory must be a skip: {:?}",
         report.skips
     );
+    let named = crate::why(&report, Some("hidden"), None, None);
+    assert!(
+        named.unknown_skill_message().is_none(),
+        "locked package must not look unknown: {:?}",
+        named.unknown_skill_message()
+    );
+    assert!(
+        named
+            .skips
+            .iter()
+            .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("Permission denied") }),
+        "why must keep the locked package skip: {:?}",
+        named.skips
+    );
 
     let extra = tempfile::tempdir().expect("extra");
     let only = extra.path().join("skills").join("hidden");
