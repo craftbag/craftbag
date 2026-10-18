@@ -169,7 +169,9 @@ list XML `<location>`, and CLI `list --watch-dirs` / MCP
 `watch_dirs` PathBufs stay raw for notify. File names still fold Unicode
 whitespace so a newline cannot inject a header field. A `scripts/`,
 `references/`, or `assets/` directory that exists but cannot be listed
-says `(unreadable: …)` and is not called `(empty)`. The skill body after `---` keeps
+says `(unreadable: …)` and is not called `(empty)`. A path that is a
+file, a dangling symbolic link, or a symbolic link loop is not called
+`(not present)`. The skill body after `---` keeps
 its newlines. Catalog markdown is one list item per skill:
 newlines in a literal `|` or folded `>` description or
 `when-to-use` become spaces (JSON and XML keep the raw frontmatter; location is sanitized). When `when-to-use` is set, the catalog line appends
