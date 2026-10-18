@@ -10,12 +10,25 @@ straight to a pull request.
 
 ## Local gate
 
-The commands in `AGENTS.md` must pass on your workspace before you
-open a pull request. In short:
+Rust 1.85 (`rust-toolchain.toml`). That toolchain installs rustfmt
+and clippy.
+
+`make check` also needs cargo-nextest, cargo-deny, and `gh`. Install
+those from prebuilt binaries. Do not `cargo install` cargo-nextest
+or cargo-deny with rustc 1.85. Those crates need a newer compiler
+than this project's minimum.
+
+- nextest: https://nexte.st/docs/installation/pre-built-binaries/
+- cargo-deny: https://embarkstudios.github.io/cargo-deny/cli/index.html#install-from-binaries/
+- gh: https://cli.github.com/
 
 ```bash
 make check
 ```
+
+That runs `cargo fmt --check`, clippy with `-D warnings`, nextest,
+doctests, `factory/scripts/deny-check.sh`, and
+`factory/scripts/write-ledger.sh --self-test`.
 
 Every commit needs a Developer Certificate of Origin trailer:
 
