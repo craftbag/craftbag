@@ -212,6 +212,97 @@ pub fn format_watch_dirs(dirs: &[PathBuf]) -> String {
     out
 }
 
+/// Host paths [`watch_dirs`] does not list, using the same skips
+/// [`discover`] records before it reads a `SKILL.md` body.
+///
+/// A notify watch on a missing path fails, so the root stays off the
+/// list. The host still named that path. Implicit missing
+/// `.agents/skills` stays silent. A missing `--path` or `--user-dir`,
+/// a collapsed token, a line separator, or `~` with `HOME` unset is a
+/// skip. An existing directory or `SKILL.md` file is a watch root, not
+/// a skip here, even when a later load would skip a file inside it.
+pub fn watch_host_skips(cwd: &Path, opts: &DiscoveryOptions) -> Vec<SkillSkip> {
+    let cwd = cwd
+        .canonicalize()
+        .unwrap_or_else(|_| lexical_normalize(cwd));
+    let mut skips = Vec::new();
+    for raw in &opts.ignore {
+        if tilde_without_home(raw) {
+            skip_ignore_tilde_home_unset(raw, &mut skips);
+        }
+    }
+    push_user_dir_host_skips(&cwd, opts, &mut skips);
+    for raw in &opts.paths {
+        push_extra_path_host_skip(raw, &cwd, &mut skips);
+    }
+    skips
+}
+
+fn push_extra_path_host_skip(raw: &str, cwd: &Path, skips: &mut Vec<SkillSkip>) {
+    if str_has_line_separator(raw) {
+        skip_line_separator_root(
+            Path::new(&crate::sanitize_error_token(raw)),
+            HostPathField::ExtraPath,
+            skips,
+        );
+        return;
+    }
+    if host_token_collapses_after_whitespace(raw) {
+        skip_whitespace_collapse_token(raw, HostPathField::ExtraPath, skips);
+        return;
+    }
+    let expanded = match expand_extra_path_arg(raw, cwd) {
+        ArgExpand::Empty => return,
+        ArgExpand::HomeUnset => {
+            skip_tilde_home_unset(raw, HostPathField::ExtraPath, skips);
+            return;
+        }
+        ArgExpand::Ready(path) => path,
+    };
+    if path_has_line_separator(&expanded) {
+        skip_line_separator_root(&expanded, HostPathField::ExtraPath, skips);
+        return;
+    }
+    if is_skill_md_filename(&expanded) && skill_md_inode_exists(&expanded) && !expanded.is_dir() {
+        return;
+    }
+    if !expanded.is_dir() {
+        skip_unresolvable_host_path(&expanded, HostPathField::ExtraPath, skips);
+    }
+}
+
+fn push_user_dir_host_skips(cwd: &Path, opts: &DiscoveryOptions, skips: &mut Vec<SkillSkip>) {
+    let Some(raw_path) = opts.user_skills_dir.as_deref() else {
+        return;
+    };
+    if raw_path.to_str().is_some_and(str_has_line_separator) {
+        skip_line_separator_root(raw_path, HostPathField::UserDir, skips);
+        return;
+    }
+    if raw_path
+        .to_str()
+        .is_some_and(host_token_collapses_after_whitespace)
+    {
+        if let Some(raw) = raw_path.to_str() {
+            skip_whitespace_collapse_token(raw, HostPathField::UserDir, skips);
+        }
+        return;
+    }
+    if let ArgExpand::HomeUnset = expand_user_skills_dir(cwd, Some(raw_path)) {
+        if let Some(raw) = raw_path.to_str() {
+            skip_tilde_home_unset(raw, HostPathField::UserDir, skips);
+        }
+        return;
+    }
+    if let ArgExpand::Ready(user_dir) = expand_user_skills_dir(cwd, Some(raw_path)) {
+        if path_has_line_separator(&user_dir) {
+            skip_line_separator_root(&user_dir, HostPathField::UserDir, skips);
+        } else if !user_dir.is_dir() {
+            skip_unresolvable_host_path(&user_dir, HostPathField::UserDir, skips);
+        }
+    }
+}
+
 pub(super) fn push_watch_dir(out: &mut Vec<PathBuf>, p: PathBuf) {
     if p.is_dir() {
         push_watch_unique(out, p);

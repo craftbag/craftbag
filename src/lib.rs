@@ -29,12 +29,13 @@
 //! `validate --json` and MCP `skills_validate` share that report.
 //!
 //! [`format_skip_tsv`] is the skip TSV source (`skip\tkind\tpath\tdetail`)
-//! for CLI list stderr, CLI why stdout, and MCP catalog/xml text.
+//! for CLI list stderr, CLI why stdout, and MCP catalog/xml/watch text.
 //! [`format_list_tsv`] is default list TSV. [`format_why_text`] is CLI
 //! why text and MCP `skills_why` format=text (loaded rows, skip TSV,
-//! activation). [`format_watch_dirs`] is CLI `list --watch-dirs` and
-//! MCP `skills_list format=watch`. Do not inline those rows on a new
-//! text surface.
+//! activation). [`format_watch_dirs`] is the root list for CLI
+//! `list --watch-dirs` and MCP `skills_list format=watch`.
+//! [`watch_host_skips`] is the refused `--path` / `--user-dir` rows on
+//! that same surface. Do not inline those rows on a new text surface.
 
 mod activate;
 mod discover;
@@ -56,7 +57,7 @@ pub use activate::{
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
     format_watch_dirs, validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-    with_home_override,
+    watch_host_skips, with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
 pub use miss::{

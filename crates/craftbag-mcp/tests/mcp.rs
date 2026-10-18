@@ -997,7 +997,11 @@ fn stdio_skills_list_watch_whitespace_extra_path_omits_root() {
             "watch must not list a collapsed extra-path token {raw:?}: {text:?}"
         );
         assert!(
-            text.trim().is_empty(),
+            text.contains("skip\tunreadable") && text.contains("collapses"),
+            "collapsed extra-path {raw:?} must say why it is not a watch root: {text:?}"
+        );
+        assert!(
+            text.lines().all(|l| !l.starts_with('/')),
             "collapsed extra-path {raw:?} must not add a watch root: {text:?}"
         );
     }
@@ -1099,10 +1103,64 @@ fn stdio_skills_list_watch_whitespace_user_dir_omits_root() {
             "watch must not list a collapsed user_dir token {raw:?}: {text:?}"
         );
         assert!(
-            text.trim().is_empty(),
+            text.contains("skip\tunreadable") && text.contains("collapses"),
+            "collapsed user_dir {raw:?} must say why it is not a watch root: {text:?}"
+        );
+        assert!(
+            text.lines().all(|l| !l.starts_with('/')),
             "collapsed user_dir {raw:?} must not add a watch root: {text:?}"
         );
     }
+}
+
+#[test]
+fn stdio_skills_list_watch_missing_path_emits_unreadable_skip() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("no-such-extra");
+    let pkg = root.path().join("demo");
+    std::fs::create_dir_all(&pkg).expect("mkdir");
+    std::fs::write(
+        pkg.join("SKILL.md"),
+        "---\nname: demo\ndescription: d\n---\nbody\n",
+    )
+    .expect("write");
+    let resp = rpc_in(
+        cwd.path(),
+        home.path(),
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 44,
+            "method": "tools/call",
+            "params": {
+                "name": "skills_list",
+                "arguments": {
+                    "format": "watch",
+                    "paths": [pkg, missing],
+                    "implicit_roots": false
+                }
+            }
+        }),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.lines().any(|l| Path::new(l) == pkg.as_path()),
+        "watch must still list the real package: {text:?}"
+    );
+    assert!(
+        text.lines().all(|l| Path::new(l) != missing.as_path()),
+        "watch must not list the missing path: {text:?}"
+    );
+    assert!(
+        text.contains("skip\tunreadable") && text.contains("path does not exist:"),
+        "watch must name the missing path: {text:?}"
+    );
+    assert!(
+        !text.contains("SECRET_BODY") && !text.contains("## Skills"),
+        "watch must not load SKILL.md: {text}"
+    );
 }
 
 #[test]

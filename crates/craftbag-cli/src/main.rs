@@ -25,7 +25,7 @@ use craftbag::{
     find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
     format_load_view, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
     progressive_budgets, unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs,
-    why,
+    watch_host_skips, why,
 };
 
 #[derive(Parser)]
@@ -77,12 +77,12 @@ enum Cmd {
         /// Markdown catalog (name + description) for model prompts. Omits disable_model_invocation (official client-guide). JSON, XML, and TSV still list those rows.
         #[arg(long, conflicts_with_all = ["json", "xml"])]
         catalog: bool,
-        /// Print notify-watch roots (same walk as discover). Does not load SKILL.md.
+        /// Print notify-watch roots (same walk as discover). Does not load SKILL.md. A refused `--path` or `--user-dir` is a skip on stderr, not a watch root.
         #[arg(long = "watch-dirs", conflicts_with_all = ["json", "xml", "catalog"])]
         watch_dirs: bool,
         /// Same tokens as MCP skills_list format: json (`{ skills, skips }`), xml (`<available_skills>`), catalog, watch.
         /// catalog omits disable_model_invocation (official client-guide); json, xml, and TSV still list those rows.
-        /// xml and catalog also emit `skip\tkind\tpath\tdetail` (CLI stderr; MCP text after the prompt fragment).
+        /// xml, catalog, and watch also emit `skip\tkind\tpath\tdetail` (CLI stderr; MCP text after the prompt fragment).
         /// `watch-dirs` and `watch_dirs` are the `--watch-dirs` flag name.
         #[arg(long = "format", value_name = "FORMAT", conflicts_with_all = ["json", "xml", "catalog", "watch_dirs"])]
         format: Option<String>,
@@ -169,6 +169,11 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             let (cwd, opts) = discovery_opts(&discovery)?;
             if matches!(mode, ListOutput::Watch) {
                 write_stdout(&format_watch_dirs(&watch_dirs(&cwd, &opts)))?;
+                let _ = write!(
+                    io::stderr(),
+                    "{}",
+                    format_skip_tsv(&watch_host_skips(&cwd, &opts))
+                );
                 return Ok(ExitCode::SUCCESS);
             }
             let report = discover(&cwd, &opts);
