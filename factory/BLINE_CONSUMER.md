@@ -50,7 +50,7 @@ sets `isError` and peels the same `SkillMiss` next to it.
 |--------------|-----------|
 | CLI `why --json` | stdout `{ loaded, skips, activation }` on success; `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
-| CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
+| CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success is `{ name, path, source, text }` and `text` is the envelope |
 | MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
 | MCP `skills_validate` | same peel as CLI `validate --json` next to `isError`; success `content[0].text` is `ValidationReport` (no `error_kind`) |
 
