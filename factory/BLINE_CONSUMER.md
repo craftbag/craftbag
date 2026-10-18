@@ -50,7 +50,7 @@ sets `isError` and peels the same `SkillMiss` next to it.
 |--------------|-----------|
 | CLI `why --json` | stdout `{ loaded, skips, activation }` on success; `{ error_kind, error }` on unknown (no `path`); skip rows stay in `skips`; stderr one-line `error` |
 | CLI `validate --json` | same peel on failure (`path` is the SKILL.md); success is `ValidationReport` (no `error_kind`) |
-| CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success stays the text envelope |
+| CLI `load --json` | stdout `{ error_kind, error }` on a miss (no `path` on unknown); skip peels `path`; `winner_path` on `name_collision`; stderr one-line `error`; success is `{ name, path, source, text }` and `text` is the envelope |
 | MCP `skills_load` / `skills_why` | `SkillMiss.error`, `SkillMiss.error_kind`, and `SkillMiss.path` (when known) next to `isError`; `winner_path` on `name_collision`; `content[0].text` is `error` |
 | MCP `skills_validate` | same peel as CLI `validate --json` next to `isError`; success `content[0].text` is `ValidationReport` (no `error_kind`) |
 
@@ -105,7 +105,12 @@ catalog. `extra` is `--path` / `paths`, not a vendor name.
 
 CLI `list --format` uses the same tokens as MCP `skills_list`
 (`json`, `xml`, `catalog`, `watch`). `watch-dirs` and `watch_dirs`
-are the `--watch-dirs` flag name (same walk). The older `--json` /
+are the `--watch-dirs` flag name (same walk). The MCP `format` enum
+lists those four tokens and both aliases, so a host that checks
+`inputSchema` can send the spellings the description names. The MCP
+`vendor` enum lists `bline`, `claude`, `cursor`, `grok` and the
+leading-dot forms (`.claude`). Other ASCII case is still folded when
+the host does not pre-validate. The older `--json` /
 `--xml` / `--catalog` / `--watch-dirs` flags stay. CLI `list --json` / `list --xml`,
 MCP `skills_list` (json or xml), and
 `why` JSON `loaded` rows include
@@ -137,7 +142,13 @@ default list. Prompt stdout stays skip-free. MCP `skills_list`
 `format=catalog` / `format=xml` append those same skip rows after the
 prompt fragment (stdio has no stderr). `list --json` keeps skips
 in the object. CLI `load` /
-MCP `skills_load` is the text envelope, not that JSON object. CLI
+MCP `skills_load` is the text envelope, not that JSON object. MCP
+`prompts/list` lists the same discovered skills when `user_invocable`
+is true (omitted defaults true) and omits `user_invocable: false`.
+Each prompt has an optional `args` argument. `prompts/get` returns
+one user message whose text is that load envelope. `arguments.args`
+is the User arguments string. A non-invocable name is an error.
+CLI
 `load --help` and MCP `skills_load` name `argument-hint`, `when-to-use`,
 `triggers`, `allowed-tools`, `license`, `compatibility`, and `metadata`.
 CLI `load` and MCP `skills_load` print `Argument hint: …`,
@@ -207,7 +218,14 @@ is empty. Present `null` is a type error. `watch_dirs` omits the same prefixes
 
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
 same list (one path per line, leftover implicit roots sanitized like
-leftover TSV) without loading SKILL.md. An extra-path
+leftover TSV) without loading SKILL.md. A missing or refused `--path`
+or `--user-dir` (not a directory, collapsed token, line separator, or
+`~` with `HOME` unset) is not a watch root. The CLI prints that
+`skip\tunreadable` row on stderr. MCP appends the same
+`skip\tkind\tpath\tdetail` row after the roots. A bad `SKILL.md` inside
+a directory that is a watch root is not in those skips, because watch
+does not load the file. Implicit missing `.agents/skills` stays silent.
+An extra-path
 that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
 Project, home, vendor, and `user_dir` roots are listed only when they
 are directories. A FIFO, socket, device, or regular file at

@@ -306,8 +306,9 @@ fn push_user_dir_host_skips(cwd: &Path, opts: &DiscoveryOptions, skips: &mut Vec
 /// Vendor names whose `.{name}/skills` directory exists on the
 /// implicit walk, and which this call did not enable.
 ///
-/// `craftbag list` with no `--vendor` otherwise says no walk roots
-/// while a Cursor or Claude tree is sitting in the project.
+/// `craftbag list` with no `--vendor` otherwise only says
+/// `.agents/skills` is missing while a Cursor or Claude tree is
+/// sitting in the project.
 pub fn present_disabled_vendors(cwd: &Path, opts: &DiscoveryOptions) -> Vec<&'static str> {
     if !opts.implicit_roots {
         return Vec::new();

@@ -114,6 +114,20 @@ impl SkillSource {
     /// Frozen v1 vendor tokens (`bline`, `claude`, `cursor`, `grok`).
     pub const VENDOR_TOKENS: &'static [&'static str] = &["bline", "claude", "cursor", "grok"];
 
+    /// MCP `vendor` enum: lowercase tokens plus the leading-dot form.
+    ///
+    /// Other ASCII case is still folded by [`Self::parse_vendor_token`].
+    /// A strict host that checks this enum should send one of these
+    /// strings. `.claude` is the on-disk tree name.
+    pub fn vendor_schema_tokens() -> Vec<String> {
+        let mut out = Vec::with_capacity(Self::VENDOR_TOKENS.len() * 2);
+        for name in Self::VENDOR_TOKENS {
+            out.push((*name).to_owned());
+            out.push(format!(".{name}"));
+        }
+        out
+    }
+
     /// Vendor trees whose empty `triggers` are not always-active.
     ///
     /// Claude / Cursor / Grok product rule. [`Self::Vendor`] `bline` is

@@ -65,7 +65,7 @@ MSRV is 1.85.
 
 ## Getting started
 
-Default `list` walks cwd-to-git `.agents/skills` and `$HOME/.agents/skills`. Claude, Cursor, Grok, and Bline trees stay out of that walk until you pass `--vendor`. When `.cursor/skills` (or the matching directory for another vendor) is present and that vendor is off, the empty list names the flag: `hint: .cursor/skills is present; pass --vendor cursor`. This clone has no project `.agents`. When the `.agents` directories are absent, `craftbag list` exits 0 and says no skills were found. Point `--path` at the demo tree (same catalog as the demo GIF):
+Default `list` walks cwd-to-git `.agents/skills` and `$HOME/.agents/skills`. Claude, Cursor, Grok, and Bline trees stay out of that walk until you pass `--vendor`. When `.cursor/skills` (or the matching directory for another vendor) is present and that vendor is off, the empty list names the flag: `hint: .cursor/skills is present; pass --vendor cursor`. This clone has no project `.agents`. When the `.agents` directories are absent, `craftbag list` exits 0 and says no skills were found. `craftbag new NAME` writes `.agents/skills/NAME/SKILL.md` with a matching name and a placeholder description. Point `--path` at the demo tree (same catalog as the demo GIF):
 
 ```bash
 git clone https://github.com/craftbag/craftbag
@@ -103,7 +103,7 @@ craftbag list --vendor claude --catalog
 
 ## MCP
 
-`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. After `brew install` or `scoop install`, `craftbag-mcp --help` names them.
+`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. `prompts/list` and `prompts/get` expose skills whose `user_invocable` is true (the default) as MCP prompts. `prompts/get` returns the same text envelope as `load`. After `brew install` or `scoop install`, `craftbag-mcp --help` names the tools.
 
 Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio command:
 

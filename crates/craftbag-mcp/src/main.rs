@@ -1,4 +1,5 @@
-//! MCP stdio server: `skills_list`, `skills_load`, `skills_why`, `skills_validate`.
+//! MCP stdio server: `skills_list`, `skills_load`, `skills_why`, `skills_validate`,
+//! plus `prompts/list` and `prompts/get` for user-invocable skills.
 //!
 //! Official `rmcp` 1.0+ uses let-chains and does not compile on MSRV 1.85.
 //! This binary speaks MCP JSON-RPC over stdio and wraps the same library
@@ -402,9 +403,9 @@ fn discover_properties() -> Value {
         "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
-            "items": {"type": "string", "enum": vendor_tokens},
+            "items": {"type": "string", "enum": SkillSource::vendor_schema_tokens()},
             "description": format!(
-                "Opt-in vendor trees: {vendor_listed}. A leading dot is the on-disk tree (same as CLI --vendor). Example: [\"claude\"]."
+                "Opt-in vendor trees: {vendor_listed}. The schema also lists each name with a leading dot (`.claude`). Other ASCII case is folded by the server. Example: [\"claude\"]."
             )
         },
         "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: \"~/myskills\"."},
@@ -419,7 +420,7 @@ fn tools() -> Value {
     let mut list_props = discover_properties();
     list_props["format"] = json!({
         "type": "string",
-        "enum": ListFormat::CANONICAL_TOKENS,
+        "enum": ListFormat::schema_tokens(),
         "description": format!(
             "json (default `{{ skills, skips }}`), xml (skills-ref <available_skills> inventory; includes disable_model_invocation), catalog (markdown name + description; omits disable_model_invocation), or watch (notify-watch roots; does not load SKILL.md). xml, catalog, and watch also emit `skip\\tkind\\tpath\\tdetail` after the prompt fragment (CLI prints those rows on stderr). {} are the same walk as watch.",
             ListFormat::ALIAS_TOKENS.join(" and ")
@@ -674,6 +675,135 @@ fn err(id: Value, code: i64, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
+const PROMPT_LIST_KEYS: &[&str] = &[
+    "paths",
+    "vendor",
+    "user_dir",
+    "ascii_names",
+    "implicit_roots",
+    "disabled",
+    "ignore",
+    "cursor",
+];
+
+const PROMPT_GET_KEYS: &[&str] = &[
+    "paths",
+    "vendor",
+    "user_dir",
+    "ascii_names",
+    "implicit_roots",
+    "disabled",
+    "ignore",
+    "name",
+    "arguments",
+];
+
+fn check_prompt_params(params: &Value, allowed: &[&str]) -> Result<(), String> {
+    if params.is_null() {
+        return Ok(());
+    }
+    reject_unknown_arguments(params, allowed)?;
+    match params.get("cursor") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(text)) if text.is_empty() => {}
+        Some(_) => return Err("prompts cursor is not supported".to_owned()),
+    }
+    Ok(())
+}
+
+fn discovery_from_params(params: &Value) -> Result<DiscoveryArgs, String> {
+    if params.is_null() {
+        return Ok(DiscoveryArgs::default());
+    }
+    DiscoveryArgs::deserialize(params).map_err(|e| e.to_string())
+}
+
+fn prompt_args_text(params: &Value) -> Result<String, String> {
+    match params.get("arguments") {
+        None => Ok(String::new()),
+        Some(Value::Object(map)) => {
+            for key in map.keys() {
+                if key != "args" {
+                    return Err(format!(
+                        "unknown argument: {}",
+                        craftbag::sanitize_error_token(key)
+                    ));
+                }
+            }
+            match map.get("args") {
+                None => Ok(String::new()),
+                Some(Value::String(text)) => Ok(text.clone()),
+                Some(_) => Err("arguments.args must be a string".to_owned()),
+            }
+        }
+        Some(_) => Err("arguments must be an object".to_owned()),
+    }
+}
+
+fn prompts_list(params: &Value) -> Result<Value, String> {
+    check_prompt_params(params, PROMPT_LIST_KEYS)?;
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let opts = opts_from(discovery_from_params(params)?)?;
+    let report = discover(&cwd, &opts);
+    let mut prompts = Vec::new();
+    for skill in &report.skills {
+        if !skill.user_invocable {
+            continue;
+        }
+        let hint = match skill.argument_hint.as_deref() {
+            Some(text) => text.to_owned(),
+            None => "Optional text copied into the envelope as User arguments.".to_owned(),
+        };
+        prompts.push(json!({
+            "name": skill.name,
+            "description": skill.description,
+            "arguments": [{
+                "name": "args",
+                "description": hint,
+                "required": false
+            }]
+        }));
+    }
+    Ok(json!({"prompts": prompts}))
+}
+
+fn prompts_get(params: &Value) -> Result<Value, String> {
+    check_prompt_params(params, PROMPT_GET_KEYS)?;
+    let name = match params.get("name").and_then(Value::as_str) {
+        Some(name) => name,
+        None => return Err("name is required".to_owned()),
+    };
+    let args_text = prompt_args_text(params)?;
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let opts = opts_from(discovery_from_params(params)?)?;
+    let report = discover(&cwd, &opts);
+    match find_skill_by_name(&report.skills, name) {
+        Some(skill) if skill.user_invocable => {
+            let text =
+                format_load_view(skill, &args_text, FormatOptions::default(), LoadView::Body)?;
+            Ok(json!({
+                "description": skill.description,
+                "messages": [{
+                    "role": "user",
+                    "content": {"type": "text", "text": text}
+                }]
+            }))
+        }
+        Some(skill) => Err(format!(
+            "skill is not user-invocable: {}",
+            craftbag::sanitize_error_token(&skill.name)
+        )),
+        None => {
+            let miss = unknown_or_skipped_skill_named(
+                name,
+                &report.skips,
+                report.skills.iter().map(|s| s.name.as_str()),
+            );
+            Err(miss.error)
+        }
+    }
+}
+
 fn handle(req: RpcRequest) -> Option<Value> {
     let method = req.method.unwrap_or_default();
     let id = req.id?;
@@ -685,7 +815,7 @@ fn handle(req: RpcRequest) -> Option<Value> {
             id,
             json!({
                 "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, "prompts": {}},
                 "serverInfo": {"name": "craftbag", "version": env!("CARGO_PKG_VERSION")}
             }),
         )),
@@ -743,6 +873,14 @@ fn handle(req: RpcRequest) -> Option<Value> {
             }
             Some(ok(id, result))
         }
+        "prompts/list" => match prompts_list(&req.params) {
+            Ok(result) => Some(ok(id, result)),
+            Err(message) => Some(err(id, -32602, &message)),
+        },
+        "prompts/get" => match prompts_get(&req.params) {
+            Ok(result) => Some(ok(id, result)),
+            Err(message) => Some(err(id, -32602, &message)),
+        },
         other => Some(err(
             id,
             -32601,
@@ -765,7 +903,11 @@ Tools:
   skills_why       explain loaded, skipped, and activation
   skills_validate  check one SKILL.md or package directory
 
-Launch defaults (used when a tool call omits that field):
+Prompts (user_invocable skills only; default is true):
+  prompts/list     name, description, and optional args
+  prompts/get      load envelope as one user message
+
+Launch defaults (used when a tool or prompt call omits that field):
   --path PATH              Extra package or collection root (repeatable)
   --vendor VENDOR          Opt-in vendor trees: bline, claude, cursor, grok
   --user-dir DIR           User skills root
@@ -1131,6 +1273,7 @@ mod tests {
         };
         let resp = handle(req).expect("resp");
         assert_eq!(resp["result"]["capabilities"]["tools"], json!({}));
+        assert_eq!(resp["result"]["capabilities"]["prompts"], json!({}));
         let names = handle(RpcRequest {
             jsonrpc: Some("2.0".into()),
             id: Some(json!(2)),
@@ -1156,6 +1299,123 @@ mod tests {
                 .iter()
                 .any(|v| v == "name")
         );
+    }
+
+    #[test]
+    fn prompts_list_omits_user_invocable_false_and_get_returns_envelope() {
+        let extra = tempfile::tempdir().expect("extra");
+        let hidden = extra.path().join("hidden-slash");
+        std::fs::create_dir_all(&hidden).expect("mkdir");
+        std::fs::write(
+            hidden.join("SKILL.md"),
+            "---\nname: hidden-slash\ndescription: model only\nuser_invocable: false\n---\nHIDDEN\n",
+        )
+        .expect("write");
+        let slash = extra.path().join("slash-hint");
+        std::fs::create_dir_all(&slash).expect("mkdir");
+        std::fs::write(
+            slash.join("SKILL.md"),
+            "---\nname: slash-hint\ndescription: user only\nargument_hint: [name]\n---\nBODY\n",
+        )
+        .expect("write");
+        let path = extra.path().to_string_lossy().into_owned();
+        let listed = empty_home(|| {
+            handle(RpcRequest {
+                jsonrpc: Some("2.0".into()),
+                id: Some(json!(70)),
+                method: Some("prompts/list".into()),
+                params: json!({"paths": [path.clone()], "implicit_roots": false}),
+            })
+            .expect("list")
+        });
+        assert!(listed.get("error").is_none(), "{listed}");
+        let prompts = listed["result"]["prompts"].as_array().expect("prompts");
+        assert!(
+            prompts.iter().all(|p| p["name"] != "hidden-slash"),
+            "user_invocable false must stay off the prompt list: {listed}"
+        );
+        let hint = prompts
+            .iter()
+            .find(|p| p["name"] == "slash-hint")
+            .expect("slash-hint");
+        assert_eq!(hint["description"], "user only");
+        assert_eq!(hint["arguments"][0]["name"], "args");
+        assert_eq!(hint["arguments"][0]["description"], "[name]");
+        assert_eq!(hint["arguments"][0]["required"], false);
+        let got = empty_home(|| {
+            handle(RpcRequest {
+                jsonrpc: Some("2.0".into()),
+                id: Some(json!(71)),
+                method: Some("prompts/get".into()),
+                params: json!({
+                    "name": "slash-hint",
+                    "arguments": {"args": "demo"},
+                    "paths": [path.clone()],
+                    "implicit_roots": false
+                }),
+            })
+            .expect("get")
+        });
+        assert!(got.get("error").is_none(), "{got}");
+        let text = got["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .expect("text");
+        assert!(
+            text.contains("[Activated skill: slash-hint]") && text.contains("BODY"),
+            "prompts/get must return the load envelope: {text}"
+        );
+        assert!(
+            text.contains("User arguments: demo") || text.contains("demo"),
+            "prompts/get must copy arguments.args into the envelope: {text}"
+        );
+        let hidden_get = empty_home(|| {
+            handle(RpcRequest {
+                jsonrpc: Some("2.0".into()),
+                id: Some(json!(72)),
+                method: Some("prompts/get".into()),
+                params: json!({"name": "hidden-slash", "paths": [path.clone()], "implicit_roots": false}),
+            })
+            .expect("hidden")
+        });
+        let message = hidden_get["error"]["message"].as_str().unwrap_or("");
+        assert!(
+            message.contains("not user-invocable"),
+            "prompts/get must refuse a hidden skill: {hidden_get}"
+        );
+        let typo = empty_home(|| {
+            handle(RpcRequest {
+                jsonrpc: Some("2.0".into()),
+                id: Some(json!(73)),
+                method: Some("prompts/list".into()),
+                params: json!({"pathz": [path.clone()]}),
+            })
+            .expect("typo")
+        });
+        let typo_message = typo["error"]["message"].as_str().unwrap_or("");
+        assert!(
+            typo_message.contains("unknown argument: pathz"),
+            "a mistyped discovery field must not fall through: {typo}"
+        );
+        let null_args = empty_home(|| {
+            handle(RpcRequest {
+                jsonrpc: Some("2.0".into()),
+                id: Some(json!(74)),
+                method: Some("prompts/get".into()),
+                params: json!({
+                    "name": "slash-hint",
+                    "arguments": {"args": null},
+                    "paths": [path],
+                    "implicit_roots": false
+                }),
+            })
+            .expect("null args")
+        });
+        let null_message = null_args["error"]["message"].as_str().unwrap_or("");
+        assert!(
+            null_message.contains("arguments.args must be a string"),
+            "present null args must not load an empty envelope: {null_args}"
+        );
+        assert!(null_args.get("result").is_none(), "{null_args}");
     }
 
     #[test]
@@ -5058,13 +5318,13 @@ mod tests {
             .collect();
         assert_eq!(
             tokens,
-            craftbag::ListFormat::CANONICAL_TOKENS,
-            "skills_list format enum must match ListFormat::CANONICAL_TOKENS: {format}"
+            craftbag::ListFormat::schema_tokens(),
+            "skills_list format enum must list canonical tokens and watch aliases: {format}"
         );
         for alias in craftbag::ListFormat::ALIAS_TOKENS {
             assert!(
-                !tokens.contains(alias),
-                "schema enum is canonical tokens only; {alias} stays a parse alias: {format}"
+                tokens.contains(alias),
+                "schema enum must accept the alias the description names: {alias} {format}"
             );
         }
     }
@@ -5090,10 +5350,11 @@ mod tests {
                 .iter()
                 .filter_map(|v| v.as_str())
                 .collect();
+            let expected = craftbag::SkillSource::vendor_schema_tokens();
             assert_eq!(
                 tokens,
-                craftbag::SkillSource::VENDOR_TOKENS,
-                "{} vendor enum must match SkillSource::VENDOR_TOKENS: {vendor}",
+                expected.iter().map(String::as_str).collect::<Vec<_>>(),
+                "{} vendor enum must list lowercase tokens and the leading-dot form: {vendor}",
                 tool["name"]
             );
             let desc = vendor["description"].as_str().unwrap_or("");
