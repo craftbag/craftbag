@@ -462,8 +462,20 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
             craftbag::sanitize_error_token(&shown.display().to_string())
         ));
     }
-    std::fs::create_dir_all(&package)
-        .map_err(|err| craftbag::sanitize_error_token(&err.to_string()))?;
+    std::fs::create_dir_all(&package).map_err(|err| {
+        // io::Error does not name the path. Windows reports
+        // AlreadyExists (os error 183) when a parent component is a
+        // file. Unix reports NotADirectory. Either way, name that file.
+        if let Some(blocked) = file_blocking_create(&package) {
+            let shown = craftbag::sanitize_error_token(&blocked.display().to_string());
+            return format!("not a directory: {shown}");
+        }
+        let shown = craftbag::sanitize_error_token(&package.display().to_string());
+        format!(
+            "{shown}: {}",
+            craftbag::sanitize_error_token(&err.to_string())
+        )
+    })?;
     // Quote the name. Unquoted `on` / `null` are YAML booleans and null,
     // which this parser rejects even when the directory name is legal.
     let body = format!(
@@ -492,6 +504,17 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
         &skill_md.display().to_string(),
     ))?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn file_blocking_create(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut prefix = std::path::PathBuf::new();
+    for component in path.components() {
+        prefix.push(component);
+        if prefix.is_file() {
+            return Some(prefix);
+        }
+    }
+    None
 }
 
 fn refuse_new_dir(path: &std::path::Path) -> Result<(), String> {

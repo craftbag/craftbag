@@ -7781,6 +7781,46 @@ fn new_writes_a_package_validate_accepts_and_refuses_a_second_write() {
 }
 
 #[test]
+fn new_names_the_file_blocking_the_package_directory() {
+    let proj = tempfile::tempdir().expect("proj");
+    let agents = proj.path().join(".agents");
+    fs::write(&agents, "not a dir").expect("file");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .args(["new", "demo"])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not a directory") && stderr.contains(&agents.display().to_string()),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("os error"), "{stderr}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(agents.is_file(), ".agents must stay a file");
+
+    let root = tempfile::tempdir().expect("root");
+    let file = root.path().join("notdir");
+    fs::write(&file, "x").expect("file");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .args(["new", "demo", "--dir"])
+        .arg(&file)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not a directory") && stderr.contains(&file.display().to_string()),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("os error"), "{stderr}");
+    assert!(file.is_file(), "--dir file must stay a file");
+}
+
+#[test]
 fn new_quotes_yaml_bool_and_null_names() {
     for name in ["on", "null"] {
         let proj = tempfile::tempdir().expect("proj");
