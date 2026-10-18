@@ -3480,6 +3480,20 @@ fn unreadable_child_package_dir_is_skip_not_silent() {
         "locked package directory must be a skip: {:?}",
         report.skips
     );
+    let named = crate::why(&report, Some("hidden"), None, None);
+    assert!(
+        named.unknown_skill_message().is_none(),
+        "locked package must not look unknown: {:?}",
+        named.unknown_skill_message()
+    );
+    assert!(
+        named
+            .skips
+            .iter()
+            .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("Permission denied") }),
+        "why must keep the locked package skip: {:?}",
+        named.skips
+    );
 
     let extra = tempfile::tempdir().expect("extra");
     let only = extra.path().join("skills").join("hidden");
@@ -4584,6 +4598,42 @@ fn validate_path_through_file_parent_names_missing_not_os_error() {
         "must echo the sanitized path: {}",
         miss.error
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn validate_unreadable_package_dir_is_not_missing_skill_md() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().expect("tmp");
+    let pkg = root.path().join("demo");
+    write_skill(&pkg, "demo", "body");
+    let original = fs::metadata(&pkg).expect("meta").permissions();
+    struct Restore<'a>(&'a std::path::Path, fs::Permissions);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, self.1.clone());
+        }
+    }
+    let _restore = Restore(&pkg, original.clone());
+    let mut locked = original;
+    locked.set_mode(0o000);
+    fs::set_permissions(&pkg, locked).expect("chmod");
+    if fs::symlink_metadata(pkg.join("SKILL.md")).is_ok() {
+        return;
+    }
+    let report = validate_path(&pkg);
+    assert!(!report.ok, "{report:?}");
+    let detail = report.errors.join(" ");
+    assert!(
+        !detail.contains("no SKILL.md"),
+        "unreadable package must not look like a missing file: {detail}"
+    );
+    assert!(
+        detail.contains("Permission denied"),
+        "unreadable package must name the IO error: {detail}"
+    );
+    let skip = report.skip.expect("skip");
+    assert_eq!(skip.kind, SkipKind::Unreadable);
 }
 
 #[test]

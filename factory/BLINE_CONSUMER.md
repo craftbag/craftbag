@@ -34,7 +34,9 @@ Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
 CLI `validate` accepts a SKILL.md file or a package directory (joins
 `SKILL.md` / `skill.md`, same as extra-path). A collection root with
 no package file is unreadable (`directory is not a skill package`),
-not a child walk. `validate --json` uses the same peel on a failed
+not a child walk. A package directory that exists but whose
+`SKILL.md` cannot be stat'd reports that IO error. It is not
+`no SKILL.md`. `validate --json` uses the same peel on a failed
 path. A refused validate path (whitespace collapse or line separator)
 peels as `unreadable` with a detail that names `validate` /
 `skills_validate`. `error_kind` is the skip code (`parse_error`,
@@ -165,7 +167,9 @@ list XML `<location>`, and CLI `list --watch-dirs` / MCP
 `skills_list format=watch` (`format_watch_dirs`) go through
 `sanitize_error_token` like leftover TSV (`evil?root`, em dash to ASCII).
 `watch_dirs` PathBufs stay raw for notify. File names still fold Unicode
-whitespace so a newline cannot inject a header field. The skill body after `---` keeps
+whitespace so a newline cannot inject a header field. A `scripts/`,
+`references/`, or `assets/` directory that exists but cannot be listed
+says `(unreadable: …)` and is not called `(empty)`. The skill body after `---` keeps
 its newlines. Catalog markdown is one list item per skill:
 newlines in a literal `|` or folded `>` description or
 `when-to-use` become spaces (JSON and XML keep the raw frontmatter; location is sanitized). When `when-to-use` is set, the catalog line appends
