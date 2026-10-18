@@ -56,8 +56,8 @@ pub use activate::{
 };
 pub use discover::{
     CURSOR_VENDOR_DENYLIST, DiscoveryOptions, ValidationReport, discover, find_skill_by_name,
-    format_watch_dirs, validate_path, validate_path_with_options, walk_cwd_to_git_root, watch_dirs,
-    watch_host_skips, with_home_override,
+    format_watch_dirs, present_disabled_vendors, validate_path, validate_path_with_options,
+    walk_cwd_to_git_root, watch_dirs, watch_host_skips, with_home_override,
 };
 pub use error::{Error, ParseError, sanitize_error_token};
 pub use miss::{

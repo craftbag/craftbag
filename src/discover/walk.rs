@@ -303,6 +303,39 @@ fn push_user_dir_host_skips(cwd: &Path, opts: &DiscoveryOptions, skips: &mut Vec
     }
 }
 
+/// Vendor names whose `.{name}/skills` directory exists on the
+/// implicit walk, and which this call did not enable.
+///
+/// `craftbag list` with no `--vendor` otherwise says no walk roots
+/// while a Cursor or Claude tree is sitting in the project.
+pub fn present_disabled_vendors(cwd: &Path, opts: &DiscoveryOptions) -> Vec<&'static str> {
+    if !opts.implicit_roots {
+        return Vec::new();
+    }
+    let cwd = cwd
+        .canonicalize()
+        .unwrap_or_else(|_| lexical_normalize(cwd));
+    let mut roots = walk_cwd_to_git_root(&cwd);
+    if let Some(home) = nonempty_home() {
+        if !implicit_home_already_walked(&roots, &home) {
+            roots.push(home);
+        }
+    }
+    let mut out = Vec::new();
+    for name in SkillSource::VENDOR_TOKENS {
+        if opts.vendor_roots.iter().any(|enabled| enabled == name) {
+            continue;
+        }
+        let present = roots
+            .iter()
+            .any(|dir| dir.join(format!(".{name}")).join("skills").is_dir());
+        if present {
+            out.push(*name);
+        }
+    }
+    out
+}
+
 pub(super) fn push_watch_dir(out: &mut Vec<PathBuf>, p: PathBuf) {
     if p.is_dir() {
         push_watch_unique(out, p);
