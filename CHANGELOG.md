@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/craftbag/craftbag/compare/v0.2.3...v0.3.0) (2026-10-18)
+
+
+### Features
+
+* add a skill scaffold and MCP prompts ([#425](https://github.com/craftbag/craftbag/issues/425)) ([595d6a6](https://github.com/craftbag/craftbag/commit/595d6a6830e8230affe0d484714c719b2620d05c))
+
+
+### Bug Fixes
+
+* do not call a file or symlink package dir missing ([#428](https://github.com/craftbag/craftbag/issues/428)) ([477637b](https://github.com/craftbag/craftbag/commit/477637b67a77164a155f48918a3a697808472c5e))
+* hint --vendor when a vendor skills directory exists ([#423](https://github.com/craftbag/craftbag/issues/423)) ([dcc91d7](https://github.com/craftbag/craftbag/commit/dcc91d79cef410210f5b1eb65587c5ca2744673f))
+* name the file that blocks craftbag new ([#427](https://github.com/craftbag/craftbag/issues/427)) ([62af045](https://github.com/craftbag/craftbag/commit/62af0459ec8b6c2342db7c109ad68f75b9c1dc8e))
+* refuse craftbag new through an outside package symlink ([#429](https://github.com/craftbag/craftbag/issues/429)) ([926053e](https://github.com/craftbag/craftbag/commit/926053e6ada59c75368971388786bab3f3e7ec08))
+* report a missing path from list --watch-dirs ([#422](https://github.com/craftbag/craftbag/issues/422)) ([ad1191b](https://github.com/craftbag/craftbag/commit/ad1191b086095193bd95c2ece2ed5726d61bd2d1))
+* say to quote a YAML boolean used as a skill name ([#420](https://github.com/craftbag/craftbag/issues/420)) ([494166d](https://github.com/craftbag/craftbag/commit/494166d75d6aab9e90250a87aa3ace849acfa5e9))
+* say when a package directory cannot be read ([#426](https://github.com/craftbag/craftbag/issues/426)) ([11ed2ed](https://github.com/craftbag/craftbag/commit/11ed2ed41279e8ba3abb0811fad6e2ff38cdbe16))
+
 ## [0.2.3](https://github.com/craftbag/craftbag/compare/v0.2.2...v0.2.3) (2026-10-05)
 
 
