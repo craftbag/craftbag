@@ -207,7 +207,14 @@ is empty. Present `null` is a type error. `watch_dirs` omits the same prefixes
 
 CLI `list --watch-dirs` and MCP `skills_list format=watch` print that
 same list (one path per line, leftover implicit roots sanitized like
-leftover TSV) without loading SKILL.md. An extra-path
+leftover TSV) without loading SKILL.md. A missing or refused `--path`
+or `--user-dir` (not a directory, collapsed token, line separator, or
+`~` with `HOME` unset) is not a watch root. The CLI prints that
+`skip\tunreadable` row on stderr. MCP appends the same
+`skip\tkind\tpath\tdetail` row after the roots. A bad `SKILL.md` inside
+a directory that is a watch root is not in those skips, because watch
+does not load the file. Implicit missing `.agents/skills` stays silent.
+An extra-path
 that is a SKILL.md file is listed; a FIFO or other non-file is omitted.
 Project, home, vendor, and `user_dir` roots are listed only when they
 are directories. A FIFO, socket, device, or regular file at
