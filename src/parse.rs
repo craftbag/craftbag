@@ -491,6 +491,13 @@ fn unquoted_yaml_bool_word(raw: &str) -> bool {
     )
 }
 
+/// `name: off` is not an empty field. Say which word to quote.
+fn unquoted_bool_quote_message(field: &str, raw: &str) -> String {
+    let shown_field = crate::sanitize_error_token(field);
+    let shown = crate::sanitize_error_token(raw.trim());
+    format!("{shown_field}: quote '{shown}' (YAML treats it as a boolean)")
+}
+
 /// A scalar wrapped in `"` or `'`. The whole value is one token.
 fn quoted_yaml_scalar(raw: &str) -> bool {
     let s = raw.trim();
@@ -824,10 +831,13 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
 
             match key {
                 "name" => {
-                    if value.is_empty()
-                        || unquoted_yaml_null(raw_value)
-                        || unquoted_yaml_bool_word(raw_value)
-                    {
+                    if unquoted_yaml_bool_word(raw_value) {
+                        if !peek_starts_yaml_list(&mut lines) {
+                            return Err(ParseError::InvalidYaml(unquoted_bool_quote_message(
+                                "name", raw_value,
+                            )));
+                        }
+                    } else if value.is_empty() || unquoted_yaml_null(raw_value) {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml("name value is empty".to_owned()));
                         }
@@ -843,7 +853,14 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                             "description must be a string, got: {shown}"
                         )));
                     }
-                    if unquoted_yaml_null(raw_value) || unquoted_yaml_bool_word(raw_value) {
+                    if unquoted_yaml_bool_word(raw_value) {
+                        if !peek_starts_yaml_list(&mut lines) {
+                            return Err(ParseError::InvalidYaml(unquoted_bool_quote_message(
+                                "description",
+                                raw_value,
+                            )));
+                        }
+                    } else if unquoted_yaml_null(raw_value) {
                         if !peek_starts_yaml_list(&mut lines) {
                             return Err(ParseError::InvalidYaml(
                                 "description value is empty".to_owned(),
@@ -2769,21 +2786,30 @@ body
             let description = format!("---\nname: n\ndescription: {token}\n---\nbody\n");
             let err = parse_skill(&description).expect_err(&description);
             let msg = err.to_string();
-            assert!(msg.contains("description value is empty"), "{token}: {msg}");
+            assert!(
+                msg.contains(&format!("description: quote '{token}'")),
+                "{token}: {msg}"
+            );
+            assert!(
+                msg.contains("YAML treats it as a boolean"),
+                "{token}: {msg}"
+            );
             assert!(!msg.contains("must be a string"), "{token}: {msg}");
+            assert!(!msg.contains("value is empty"), "{token}: {msg}");
             let name = format!("---\nname: {token}\ndescription: d\n---\nbody\n");
             let err = parse_skill(&name).expect_err(&name);
             let msg = err.to_string();
             assert!(
-                msg.contains("name value is empty"),
+                msg.contains(&format!("name: quote '{token}'")),
                 "{token} must not become a skill name: {msg}"
             );
             assert!(!msg.contains("lowercase alphanumeric"), "{token}: {msg}");
+            assert!(!msg.contains("value is empty"), "{token}: {msg}");
         }
         let commented = parse_skill("---\nname: n\ndescription: yes # placeholder\n---\nbody\n")
             .expect_err("comment");
         assert!(
-            commented.to_string().contains("description value is empty"),
+            commented.to_string().contains("description: quote 'yes'"),
             "{commented}"
         );
 
