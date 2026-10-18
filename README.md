@@ -65,7 +65,7 @@ MSRV is 1.85.
 
 ## Getting started
 
-Default `list` walks cwd-to-git `.agents` / vendor trees and `$HOME/.agents` / vendor trees. This clone has no project `.agents`. When those directories are absent, `craftbag list` exits 0 and says no skills were found. Point `--path` at the demo tree (same catalog as the demo GIF):
+Default `list` walks cwd-to-git `.agents/skills` and `$HOME/.agents/skills`. Claude, Cursor, Grok, and Bline trees stay out of that walk until you pass `--vendor`. When `.cursor/skills` (or the matching directory for another vendor) is present and that vendor is off, the empty list names the flag: `hint: .cursor/skills is present; pass --vendor cursor`. This clone has no project `.agents`. When the `.agents` directories are absent, `craftbag list` exits 0 and says no skills were found. Point `--path` at the demo tree (same catalog as the demo GIF):
 
 ```bash
 git clone https://github.com/craftbag/craftbag
@@ -77,6 +77,8 @@ craftbag load review-pr --no-implicit-roots --path demo/workspace/.agents/skills
 craftbag why review-pr --no-implicit-roots --path demo/workspace/.agents/skills --context review
 craftbag validate demo/workspace/.agents/skills/review-pr
 ```
+
+`--section review-a-pull-request` passes the outline key. `--outline` prints that key before the heading `Review a pull request`. `validate` takes the package directory that contains `SKILL.md`, here `demo/workspace/.agents/skills/review-pr`. The collection folder `demo/workspace/.agents/skills` has no `SKILL.md` of its own, so `validate` on it exits 1 with `directory is not a skill package (no SKILL.md)`. `list --path` on that folder still lists the packages inside it.
 
 If `craftbag` is not on `PATH` yet, `cargo build -p craftbag-cli --locked` and use `./target/debug/craftbag` in those commands.
 
