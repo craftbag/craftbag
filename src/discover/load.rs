@@ -490,11 +490,16 @@ pub(super) fn resolve_validate_target(path: &Path) -> Result<PathBuf, String> {
         }
         return Ok(path.to_path_buf());
     }
-    let joined = ["SKILL.md", "skill.md"]
-        .into_iter()
-        .map(|name| path.join(name))
-        .find(|p| skill_md_inode_exists(p))
-        .ok_or_else(|| "directory is not a skill package (no SKILL.md)".to_owned())?;
+    // `skill_md_inode_exists` is false for both NotFound and
+    // permission denied. Discover already separates those. Validate
+    // must not call a locked package "no SKILL.md".
+    let joined = match lookup_package_skill_md(path) {
+        PackageSkillMd::Found(joined) => joined,
+        PackageSkillMd::Missing => {
+            return Err("directory is not a skill package (no SKILL.md)".to_owned());
+        }
+        PackageSkillMd::Unreadable(detail) => return Err(detail),
+    };
     // Joined SKILL.md is this package unless the inode is a symlink
     // out of the directory (same as extra-path classify).
     if let Some(detail) = unresolved_symlink_detail(&joined) {
