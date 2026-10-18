@@ -1,4 +1,4 @@
-//! craftbag CLI: list, load, why, validate.
+//! craftbag CLI: list, load, why, validate, new.
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -23,9 +23,10 @@ use clap::{Parser, Subcommand};
 use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
-    format_load_view, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
-    present_disabled_vendors, progressive_budgets, unknown_or_skipped_skill_named,
-    validate_path_with_options, watch_dirs, watch_host_skips, why,
+    format_load_view, format_skip_tsv, format_watch_dirs, format_why_text, normalize_skill_name,
+    parse_list_format, present_disabled_vendors, progressive_budgets,
+    unknown_or_skipped_skill_named, validate_path_with_options, validate_skill_name, watch_dirs,
+    watch_host_skips, why,
 };
 
 #[derive(Parser)]
@@ -140,6 +141,14 @@ enum Cmd {
         /// Success is ValidationReport (no error_kind). Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
         #[arg(long)]
         json: bool,
+    },
+    /// Write `.agents/skills/NAME/SKILL.md` with a matching name and a placeholder description.
+    New {
+        /// Frontmatter name. Also the package directory name.
+        name: String,
+        /// Collection root. Default is `.agents/skills` under the current directory.
+        #[arg(long, value_name = "DIR")]
+        dir: Option<PathBuf>,
     },
 }
 
@@ -302,6 +311,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Cmd::New { name, dir } => write_new_skill(&name, dir.as_deref()),
         Cmd::Validate { path, strict, json } => {
             let report = validate_path_with_options(&path, strict);
             if report.ok {
@@ -406,7 +416,7 @@ fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
     if implicit_miss {
         let _ = writeln!(
             io::stderr(),
-            "hint: create .agents/skills/NAME/SKILL.md, or pass --path DIR for a collection root"
+            "hint: run craftbag new NAME, or pass --path DIR for a collection root"
         );
     } else {
         let _ = writeln!(
@@ -420,6 +430,85 @@ fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
             "hint: .{name}/skills is present; pass --vendor {name}"
         );
     }
+}
+
+fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<ExitCode, String> {
+    let name = normalize_skill_name(raw_name);
+    match validate_skill_name(&name) {
+        Ok(()) => {}
+        Err(craftbag::ParseError::InvalidYaml(msg)) => return Err(msg),
+        Err(err) => return Err(err.to_string()),
+    }
+    if let Some(path) = dir {
+        refuse_new_dir(path)?;
+    }
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let root = match dir {
+        Some(path) if path.is_absolute() => path.to_path_buf(),
+        Some(path) => cwd.join(path),
+        None => cwd.join(".agents").join("skills"),
+    };
+    let package = root.join(&name);
+    let skill_md = package.join("SKILL.md");
+    let skill_md_lower = package.join("skill.md");
+    if skill_md.exists() || skill_md_lower.exists() {
+        let shown = if skill_md.exists() {
+            skill_md
+        } else {
+            skill_md_lower
+        };
+        return Err(format!(
+            "skill already exists: {}",
+            craftbag::sanitize_error_token(&shown.display().to_string())
+        ));
+    }
+    std::fs::create_dir_all(&package)
+        .map_err(|err| craftbag::sanitize_error_token(&err.to_string()))?;
+    // Quote the name. Unquoted `on` / `null` are YAML booleans and null,
+    // which this parser rejects even when the directory name is legal.
+    let body = format!(
+        "---\nname: \"{name}\"\ndescription: Describe when to use this skill.\n---\n\n# {name}\n\nInstructions for the agent.\n"
+    );
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&skill_md);
+    let mut file = match file {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(format!(
+                "skill already exists: {}",
+                craftbag::sanitize_error_token(&skill_md.display().to_string())
+            ));
+        }
+        Err(err) => return Err(err.to_string()),
+    };
+    if let Err(err) = std::io::Write::write_all(&mut file, body.as_bytes()) {
+        drop(file);
+        let _ = std::fs::remove_file(&skill_md);
+        return Err(craftbag::sanitize_error_token(&err.to_string()));
+    }
+    writeln_stdout(&craftbag::sanitize_error_token(
+        &skill_md.display().to_string(),
+    ))?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn refuse_new_dir(path: &std::path::Path) -> Result<(), String> {
+    for component in path.components() {
+        match component.as_os_str().to_str() {
+            None => return Err("--dir is not valid UTF-8".to_owned()),
+            Some(text)
+                if text
+                    .chars()
+                    .any(|c| matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}')) =>
+            {
+                return Err("--dir contains a line separator".to_owned());
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
 }
 
 fn discover_cwd(discovery: &DiscoveryArgs) -> Result<craftbag::DiscoveryReport, String> {

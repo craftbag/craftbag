@@ -7704,12 +7704,116 @@ fn list_empty_implicit_roots_names_agents_skills_not_missing_walk() {
             "{args:?} must name the default search: {stderr}"
         );
         assert!(
-            stderr.contains("create .agents/skills/NAME/SKILL.md"),
-            "{args:?} must name the usual first file: {stderr}"
+            stderr.contains("run craftbag new NAME"),
+            "{args:?} must name the starter command: {stderr}"
         );
         assert!(
             !stderr.contains("no walk roots"),
             "{args:?} must not claim nothing was searched: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn new_writes_a_package_validate_accepts_and_refuses_a_second_write() {
+    let proj = tempfile::tempdir().expect("proj");
+    fs::create_dir_all(proj.path().join(".git")).expect("git");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .args(["new", "demo-skill"])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let written = Path::new(stdout.trim());
+    assert!(
+        written.ends_with(Path::new("demo-skill").join("SKILL.md")),
+        "stdout={}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let body = fs::read_to_string(written).expect("read");
+    assert!(
+        body.contains("name: \"demo-skill\"")
+            && body.contains("description: Describe when to use this skill."),
+        "{body}"
+    );
+    let (_home, mut validate) = bin();
+    let checked = validate
+        .args(["validate", written.to_str().expect("utf8")])
+        .output()
+        .expect("validate");
+    assert_eq!(checked.status.code(), Some(0), "{checked:?}");
+    assert!(
+        String::from_utf8_lossy(&checked.stdout).contains("ok\tdemo-skill"),
+        "stdout={}",
+        String::from_utf8_lossy(&checked.stdout)
+    );
+    let (_home, mut again) = bin();
+    let second = again
+        .current_dir(proj.path())
+        .args(["new", "demo-skill"])
+        .output()
+        .expect("second");
+    assert_eq!(second.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&second.stderr).contains("skill already exists"),
+        "stderr={}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let (_home, mut bad) = bin();
+    let rejected = bad
+        .current_dir(proj.path())
+        .args(["new", "Bad Name"])
+        .output()
+        .expect("bad");
+    assert_eq!(rejected.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("lowercase alphanumeric"),
+        "stderr={}",
+        String::from_utf8_lossy(&rejected.stderr)
+    );
+}
+
+#[test]
+fn new_quotes_yaml_bool_and_null_names() {
+    for name in ["on", "null"] {
+        let proj = tempfile::tempdir().expect("proj");
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(proj.path())
+            .args(["new", name])
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{name} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let written = Path::new(stdout.trim());
+        let (_home, mut validate) = bin();
+        let checked = validate
+            .args(["validate", written.to_str().expect("utf8")])
+            .output()
+            .expect("validate");
+        assert_eq!(
+            checked.status.code(),
+            Some(0),
+            "{name} stdout={} stderr={}",
+            String::from_utf8_lossy(&checked.stdout),
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&checked.stdout).contains(&format!("ok\t{name}")),
+            "{name} stdout={}",
+            String::from_utf8_lossy(&checked.stdout)
         );
     }
 }

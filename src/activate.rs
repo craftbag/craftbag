@@ -364,10 +364,10 @@ pub enum ListFormat {
 }
 
 impl ListFormat {
-    /// Canonical tokens (`list --format` / MCP `format` enum).
+    /// Canonical tokens (`list --format` help and unknown-format errors).
     ///
-    /// `--watch-dirs` aliases live in [`Self::ALIAS_TOKENS`], not here.
-    /// MCP `inputSchema` and unknown-format help share this table.
+    /// `--watch-dirs` aliases live in [`Self::ALIAS_TOKENS`]. MCP
+    /// `inputSchema` lists both ([`Self::schema_tokens`]).
     pub const CANONICAL_TOKENS: &'static [&'static str] = &["json", "xml", "catalog", "watch"];
 
     /// CLI `--watch-dirs` flag name. Same walk as [`Self::Watch`].
@@ -386,6 +386,15 @@ impl ListFormat {
             Self::Catalog => "catalog",
             Self::Watch => "watch",
         }
+    }
+
+    /// MCP `format` enum: canonical tokens plus `--watch-dirs` aliases.
+    pub fn schema_tokens() -> Vec<&'static str> {
+        let mut tokens =
+            Vec::with_capacity(Self::CANONICAL_TOKENS.len() + Self::ALIAS_TOKENS.len());
+        tokens.extend_from_slice(Self::CANONICAL_TOKENS);
+        tokens.extend_from_slice(Self::ALIAS_TOKENS);
+        tokens
     }
 
     /// Help / error list (`json, xml, catalog, or watch`).
@@ -1239,7 +1248,11 @@ mod tests {
         for alias in ListFormat::ALIAS_TOKENS {
             assert!(
                 !ListFormat::CANONICAL_TOKENS.contains(alias),
-                "alias {alias} must not appear in the MCP schema table"
+                "alias {alias} stays out of the canonical help list"
+            );
+            assert!(
+                ListFormat::schema_tokens().contains(alias),
+                "MCP format enum must list alias {alias}"
             );
             assert_eq!(parse_list_format(alias), Ok(ListFormat::Watch));
         }
