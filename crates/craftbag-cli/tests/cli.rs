@@ -7596,6 +7596,44 @@ fn load_json_success_is_json_object() {
 }
 
 #[test]
+fn list_empty_tree_hints_when_vendor_skills_dir_exists() {
+    let proj = tempfile::tempdir().expect("proj");
+    fs::create_dir_all(proj.path().join(".git")).expect("git");
+    let mine = proj.path().join(".cursor").join("skills").join("mine");
+    fs::create_dir_all(&mine).expect("mkdir");
+    fs::write(
+        mine.join("SKILL.md"),
+        "---\nname: mine\ndescription: d\n---\nMINE_BODY\n",
+    )
+    .expect("write");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .arg("list")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stdout.is_empty(),
+        "vendor-off list must not print the cursor skill: {stdout}"
+    );
+    assert!(
+        !stdout.contains("MINE_BODY") && !stderr.contains("MINE_BODY"),
+        "hint must not load the skill body: stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        stderr.contains("hint: .cursor/skills is present; pass --vendor cursor"),
+        "empty list must name the vendor flag: {stderr}"
+    );
+    assert!(
+        !stderr.contains("--vendor claude") && !stderr.contains("--vendor grok"),
+        "absent vendor trees must not be hinted: {stderr}"
+    );
+}
+
+#[test]
 fn list_empty_tree_notes_stderr_keeps_stdout_empty() {
     let extra = tempfile::tempdir().expect("extra");
     let (_home, mut cmd) = bin();

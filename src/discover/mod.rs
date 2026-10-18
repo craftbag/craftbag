@@ -73,8 +73,8 @@ impl Default for DiscoveryOptions {
 
 pub use path::{walk_cwd_to_git_root, with_home_override};
 pub use walk::{
-    ValidationReport, discover, find_skill_by_name, format_watch_dirs, validate_path,
-    validate_path_with_options, watch_dirs, watch_host_skips,
+    ValidationReport, discover, find_skill_by_name, format_watch_dirs, present_disabled_vendors,
+    validate_path, validate_path_with_options, watch_dirs, watch_host_skips,
 };
 
 #[cfg(test)]

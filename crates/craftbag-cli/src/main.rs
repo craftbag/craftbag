@@ -24,8 +24,8 @@ use craftbag::{
     DiscoveryOptions, FormatOptions, ListFormat, LoadView, SkillSource, SkillSummary, discover,
     find_skill_by_name, format_available_skills_xml, format_catalog, format_list_tsv,
     format_load_view, format_skip_tsv, format_watch_dirs, format_why_text, parse_list_format,
-    progressive_budgets, unknown_or_skipped_skill_named, validate_path_with_options, watch_dirs,
-    watch_host_skips, why,
+    present_disabled_vendors, progressive_budgets, unknown_or_skipped_skill_named,
+    validate_path_with_options, watch_dirs, watch_host_skips, why,
 };
 
 #[derive(Parser)]
@@ -401,6 +401,12 @@ fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
         io::stderr(),
         "hint: a skill is a directory containing SKILL.md; pass --path DIR for a collection root"
     );
+    for name in present_disabled_vendors(cwd, opts) {
+        let _ = writeln!(
+            io::stderr(),
+            "hint: .{name}/skills is present; pass --vendor {name}"
+        );
+    }
 }
 
 fn discover_cwd(discovery: &DiscoveryArgs) -> Result<craftbag::DiscoveryReport, String> {
