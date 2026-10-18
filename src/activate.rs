@@ -677,15 +677,20 @@ pub fn format_package_envelope(skill: &Skill) -> String {
             ));
             continue;
         }
-        let listing = list_dir_names_capped(&dir, 30);
         let shown_dir = leftover_path_one_line(&dir);
-        if listing.is_empty() {
-            out.push_str(&format!("  {dir_name}/: {shown_dir} (empty)\n"));
-        } else {
-            out.push_str(&format!(
-                "  {dir_name}/: {shown_dir} (files: {})\n",
-                listing.join(", ")
-            ));
+        match list_dir_names_capped(&dir, 30) {
+            Ok(listing) if listing.is_empty() => {
+                out.push_str(&format!("  {dir_name}/: {shown_dir} (empty)\n"));
+            }
+            Ok(listing) => {
+                out.push_str(&format!(
+                    "  {dir_name}/: {shown_dir} (files: {})\n",
+                    listing.join(", ")
+                ));
+            }
+            Err(err) => {
+                out.push_str(&format!("  {dir_name}/: {shown_dir} (unreadable: {err})\n"));
+            }
         }
     }
     out
@@ -701,23 +706,35 @@ fn package_dir_escapes(root_canon: Option<&Path>, dir: &Path) -> bool {
     }
 }
 
-fn list_dir_names_capped(dir: &Path, max: usize) -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok())
-        .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| !n.starts_with('.'))
-        .map(|n| catalog_one_line(&n))
-        .filter(|n| !n.is_empty())
-        .collect();
+fn list_dir_names_capped(dir: &Path, max: usize) -> Result<Vec<String>, String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => return Err(crate::sanitize_error_token(&err.to_string())),
+    };
+    let mut names = Vec::new();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => return Err(crate::sanitize_error_token(&err.to_string())),
+        };
+        let raw = entry.file_name();
+        let name = raw.to_string_lossy();
+        if name.starts_with('.') {
+            continue;
+        }
+        let name = catalog_one_line(&name);
+        if name.is_empty() {
+            continue;
+        }
+        names.push(name);
+    }
     names.sort();
     if names.len() > max {
         let extra = names.len() - max;
         names.truncate(max);
         names.push(format!("…+{extra} more"));
     }
-    names
+    Ok(names)
 }
 
 /// Fold a load-envelope field to one line (same whitespace rule as catalog).
@@ -1749,6 +1766,34 @@ mod tests {
             "leftover location must sanitize NUL like TSV, not drop it: {xml}"
         );
         assert!(xml.ends_with("</available_skills>\n"), "{xml}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn format_package_envelope_unreadable_dir_is_not_empty() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().expect("root");
+        let pkg = root.path().join("demo");
+        let scripts = pkg.join("scripts");
+        std::fs::create_dir_all(&scripts).expect("mkdir");
+        std::fs::write(scripts.join("run.sh"), "echo hi\n").expect("write");
+        let skill_md = pkg.join("SKILL.md");
+        std::fs::write(&skill_md, "---\nname: demo\ndescription: d\n---\nbody\n").expect("skill");
+        let mut perms = std::fs::metadata(&scripts).expect("meta").permissions();
+        perms.set_mode(0o000);
+        std::fs::set_permissions(&scripts, perms).expect("chmod");
+        let mut skill = parse_skill("---\nname: demo\ndescription: d\n---\nbody\n").expect("parse");
+        skill.source_path = Some(skill_md);
+        let env = format_package_envelope(&skill);
+        let mut restore = std::fs::metadata(&scripts).expect("meta").permissions();
+        restore.set_mode(0o755);
+        std::fs::set_permissions(&scripts, restore).expect("chmod back");
+        let scripts_line = env
+            .lines()
+            .find(|line| line.trim_start().starts_with("scripts/:"))
+            .unwrap_or_else(|| panic!("no scripts listing:\n{env}"));
+        assert!(scripts_line.contains("unreadable"), "{scripts_line}");
+        assert!(!scripts_line.contains("(empty)"), "{scripts_line}");
     }
 
     #[test]
