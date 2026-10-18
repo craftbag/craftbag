@@ -667,9 +667,34 @@ pub fn format_package_envelope(skill: &Skill) -> String {
     let root_canon = root.canonicalize().ok();
     for dir_name in ["scripts", "references", "assets"] {
         let dir = root.join(dir_name);
-        if !dir.is_dir() {
-            out.push_str(&format!("  {dir_name}/: (not present)\n"));
-            continue;
+        match classify_package_dir(&dir) {
+            PackageDirKind::Missing => {
+                out.push_str(&format!("  {dir_name}/: (not present)\n"));
+                continue;
+            }
+            PackageDirKind::NotDirectory => {
+                let shown_dir = leftover_path_one_line(&dir);
+                out.push_str(&format!("  {dir_name}/: {shown_dir} (not a directory)\n"));
+                continue;
+            }
+            PackageDirKind::Dangling => {
+                let shown_dir = leftover_path_one_line(&dir);
+                out.push_str(&format!(
+                    "  {dir_name}/: {shown_dir} (dangling symbolic link)\n"
+                ));
+                continue;
+            }
+            PackageDirKind::Loop(target) => {
+                let target = crate::sanitize_error_token(&target);
+                out.push_str(&format!("  {dir_name}/: (symbolic link loop: {target})\n"));
+                continue;
+            }
+            PackageDirKind::Unreadable(err) => {
+                let shown_dir = leftover_path_one_line(&dir);
+                out.push_str(&format!("  {dir_name}/: {shown_dir} (unreadable: {err})\n"));
+                continue;
+            }
+            PackageDirKind::Directory => {}
         }
         if package_dir_escapes(root_canon.as_deref(), &dir) {
             out.push_str(&format!(
@@ -694,6 +719,48 @@ pub fn format_package_envelope(skill: &Skill) -> String {
         }
     }
     out
+}
+
+enum PackageDirKind {
+    Missing,
+    Directory,
+    NotDirectory,
+    Dangling,
+    Loop(String),
+    Unreadable(String),
+}
+
+/// `is_dir` is false for a missing path, a file, a dangling symlink,
+/// and a symlink loop. Those are not the same fact.
+fn classify_package_dir(dir: &Path) -> PackageDirKind {
+    let meta = match std::fs::symlink_metadata(dir) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return PackageDirKind::Missing,
+        Err(err) => {
+            return PackageDirKind::Unreadable(crate::sanitize_error_token(&err.to_string()));
+        }
+    };
+    if meta.file_type().is_symlink() {
+        return match std::fs::metadata(dir) {
+            Ok(followed) if followed.is_dir() => PackageDirKind::Directory,
+            Ok(_) => PackageDirKind::NotDirectory,
+            // `ErrorKind::FilesystemLoop` needs `io_error_more`, unstable
+            // on the 1.85 MSRV. Same debug check as discover.
+            Err(err) if format!("{:?}", err.kind()) == "FilesystemLoop" => {
+                let target = std::fs::read_link(dir)
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|_| "unknown".to_owned());
+                PackageDirKind::Loop(target)
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => PackageDirKind::Dangling,
+            Err(err) => PackageDirKind::Unreadable(crate::sanitize_error_token(&err.to_string())),
+        };
+    }
+    if meta.is_dir() {
+        PackageDirKind::Directory
+    } else {
+        PackageDirKind::NotDirectory
+    }
 }
 
 fn package_dir_escapes(root_canon: Option<&Path>, dir: &Path) -> bool {
@@ -1794,6 +1861,66 @@ mod tests {
             .unwrap_or_else(|| panic!("no scripts listing:\n{env}"));
         assert!(scripts_line.contains("unreadable"), "{scripts_line}");
         assert!(!scripts_line.contains("(empty)"), "{scripts_line}");
+    }
+
+    #[test]
+    fn format_package_envelope_file_is_not_missing() {
+        let root = tempfile::tempdir().expect("root");
+        let pkg = root.path().join("demo");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::fs::write(pkg.join("scripts"), "not a dir\n").expect("file");
+        let skill_md = pkg.join("SKILL.md");
+        std::fs::write(&skill_md, "---\nname: demo\ndescription: d\n---\nbody\n").expect("skill");
+        let mut skill = parse_skill("---\nname: demo\ndescription: d\n---\nbody\n").expect("parse");
+        skill.source_path = Some(skill_md);
+        let env = format_package_envelope(&skill);
+        let scripts_line = env
+            .lines()
+            .find(|line| line.trim_start().starts_with("scripts/:"))
+            .unwrap_or_else(|| panic!("no scripts listing:\n{env}"));
+        assert!(scripts_line.contains("not a directory"), "{scripts_line}");
+        assert!(!scripts_line.contains("(not present)"), "{scripts_line}");
+        assert!(
+            env.contains("references/: (not present)"),
+            "a missing references dir stays not present:\n{env}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn format_package_envelope_symlink_loop_and_dangling_are_not_missing() {
+        let root = tempfile::tempdir().expect("root");
+        let pkg = root.path().join("demo");
+        std::fs::create_dir_all(&pkg).expect("mkdir");
+        std::os::unix::fs::symlink("scripts", pkg.join("scripts")).expect("loop");
+        std::os::unix::fs::symlink(pkg.join("missing-target"), pkg.join("references"))
+            .expect("dangling");
+        let skill_md = pkg.join("SKILL.md");
+        std::fs::write(&skill_md, "---\nname: demo\ndescription: d\n---\nbody\n").expect("skill");
+        let mut skill = parse_skill("---\nname: demo\ndescription: d\n---\nbody\n").expect("parse");
+        skill.source_path = Some(skill_md);
+        let env = format_package_envelope(&skill);
+        let line = |prefix: &str| {
+            env.lines()
+                .find(|line| line.trim_start().starts_with(prefix))
+                .unwrap_or_else(|| panic!("no {prefix} line:\n{env}"))
+                .to_owned()
+        };
+        let scripts_line = line("scripts/:");
+        let references_line = line("references/:");
+        assert!(
+            scripts_line.contains("symbolic link loop"),
+            "{scripts_line}"
+        );
+        assert!(!scripts_line.contains("(not present)"), "{scripts_line}");
+        assert!(
+            references_line.contains("dangling symbolic link"),
+            "{references_line}"
+        );
+        assert!(
+            !references_line.contains("(not present)"),
+            "{references_line}"
+        );
     }
 
     #[test]
