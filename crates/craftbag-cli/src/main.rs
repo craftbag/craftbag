@@ -449,6 +449,9 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
         None => cwd.join(".agents").join("skills"),
     };
     let package = root.join(&name);
+    if let Some(err) = package_symlink_escapes(&root, &package) {
+        return Err(err);
+    }
     let skill_md = package.join("SKILL.md");
     let skill_md_lower = package.join("skill.md");
     if skill_md.exists() || skill_md_lower.exists() {
@@ -504,6 +507,30 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
         &skill_md.display().to_string(),
     ))?;
     Ok(ExitCode::SUCCESS)
+}
+
+/// A package directory symlink whose target is outside the collection
+/// root would make `new` write that target's `SKILL.md`.
+fn package_symlink_escapes(root: &std::path::Path, package: &std::path::Path) -> Option<String> {
+    let meta = std::fs::symlink_metadata(package).ok()?;
+    if !meta.file_type().is_symlink() {
+        return None;
+    }
+    let Some(root_c) = root.canonicalize().ok() else {
+        let shown = craftbag::sanitize_error_token(&package.display().to_string());
+        return Some(format!(
+            "package directory escapes collection root: {shown}"
+        ));
+    };
+    // A dangling link fails closed in create_dir_all. Do not invent a target.
+    let pkg_c = package.canonicalize().ok()?;
+    if pkg_c.starts_with(&root_c) {
+        return None;
+    }
+    let shown = craftbag::sanitize_error_token(&package.display().to_string());
+    Some(format!(
+        "package directory escapes collection root: {shown}"
+    ))
 }
 
 fn file_blocking_create(path: &std::path::Path) -> Option<std::path::PathBuf> {
