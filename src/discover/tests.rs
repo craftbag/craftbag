@@ -1044,8 +1044,8 @@ fn first_name_wins_uses_nfkc_identity_like_why_and_load() {
         crate::parse::skill_names_equal(WIN, LOSE),
         "fixture must be one identity"
     );
-    assert!(crate::parse::validate_skill_name(WIN).is_ok());
-    assert!(crate::parse::validate_skill_name(LOSE).is_ok());
+    crate::parse::validate_skill_name(WIN).expect("titlecase greek fixture");
+    crate::parse::validate_skill_name(LOSE).expect("lowercase greek fixture");
 
     let cwd = tempfile::tempdir().expect("cwd");
     let first = tempfile::tempdir().expect("first");
