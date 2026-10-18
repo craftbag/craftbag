@@ -10,6 +10,12 @@ updates:
       - dependencies
     commit-message:
       prefix: "deps"
+    # proptest 1.12.0 requires rustc 1.88. MSRV stays 1.85.
+    ignore:
+      - dependency-name: "proptest"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
     groups:
       cargo-minor-patch:
         patterns:
