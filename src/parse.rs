@@ -2310,8 +2310,8 @@ Use pdftotext.
 
     #[test]
     fn validate_skill_name_rejects_invalid() {
-        assert!(validate_skill_name("ok-name").is_ok());
-        assert!(validate_skill_name("a").is_ok());
+        validate_skill_name("ok-name").expect("ok-name");
+        validate_skill_name("a").expect("a");
         assert!(validate_skill_name("-leading").is_err());
         assert!(validate_skill_name("trailing-").is_err());
         assert!(validate_skill_name("has--double").is_err());
@@ -2324,10 +2324,10 @@ Use pdftotext.
 
     #[test]
     fn validate_skill_name_accepts_unicode_lowercase() {
-        assert!(validate_skill_name("перевод").is_ok());
-        assert!(validate_skill_name("技能").is_ok());
-        assert!(validate_skill_name("übersicht").is_ok());
-        assert!(validate_skill_name("пере-вод").is_ok());
+        validate_skill_name("перевод").expect("cyrillic name");
+        validate_skill_name("技能").expect("cjk name");
+        validate_skill_name("übersicht").expect("latin name");
+        validate_skill_name("пере-вод").expect("hyphenated cyrillic name");
         assert!(validate_skill_name("Перевод").is_err());
     }
 
@@ -2349,8 +2349,8 @@ Use pdftotext.
             super::skill_names_equal("ᾼ", "ᾳ"),
             "Greek titlecase and lowercase are one identity after case fold"
         );
-        assert!(super::validate_skill_name("ᾼ-pack").is_ok());
-        assert!(super::validate_skill_name("ᾳ-pack").is_ok());
+        super::validate_skill_name("ᾼ-pack").expect("titlecase greek name");
+        super::validate_skill_name("ᾳ-pack").expect("lowercase greek name");
         assert!(!super::skill_names_equal("перевод", "other"));
         assert!(!super::skill_names_equal(".", "wanted"));
         assert!(super::skill_names_equal("demo\u{00A0}", "demo"));

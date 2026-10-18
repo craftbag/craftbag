@@ -85,7 +85,7 @@ fn validate_minimal_valid_ok() {
         .arg(&path)
         .assert()
         .success()
-        .stdout(predicates::str::contains("ok"));
+        .stdout(predicates::str::contains("ok\tminimal-valid"));
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn validate_unknown_key_passes_default_and_fails_strict() {
         .arg(&skill)
         .assert()
         .success()
-        .stdout(predicates::str::contains("ok"));
+        .stdout(predicates::str::contains("ok\tdemo"));
     let (_home, mut cmd) = bin();
     let out = cmd
         .arg("validate")
@@ -344,7 +344,7 @@ fn validate_strict_corpus_ok() {
         .arg(&path)
         .assert()
         .success()
-        .stdout(predicates::str::contains("ok"));
+        .stdout(predicates::str::contains("ok\tminimal-valid"));
 }
 
 #[test]

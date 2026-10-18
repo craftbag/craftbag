@@ -42,7 +42,7 @@ fn non_bool_yaml_scalar() -> impl Strategy<Value = String> {
 proptest! {
     #[test]
     fn valid_names_parse(name in valid_name()) {
-        prop_assert!(validate_skill_name(&name).is_ok());
+        validate_skill_name(&name).unwrap_or_else(|e| panic!("{name}: {e}"));
         let md = format!("---\nname: {name}\ndescription: d\n---\nbody\n");
         let skill = parse_skill(&md).expect("valid name");
         prop_assert_eq!(skill.name, name);
