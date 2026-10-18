@@ -463,10 +463,10 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
         ));
     }
     std::fs::create_dir_all(&package).map_err(|err| {
-        // io::Error does not include the path. Name the file that
-        // blocked the package directory instead of a bare OS errno.
-        if err.kind() == std::io::ErrorKind::NotADirectory {
-            let blocked = file_blocking_create(&package).unwrap_or_else(|| package.clone());
+        // io::Error does not name the path. Windows reports
+        // AlreadyExists (os error 183) when a parent component is a
+        // file. Unix reports NotADirectory. Either way, name that file.
+        if let Some(blocked) = file_blocking_create(&package) {
             let shown = craftbag::sanitize_error_token(&blocked.display().to_string());
             return format!("not a directory: {shown}");
         }
