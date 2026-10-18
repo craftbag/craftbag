@@ -383,13 +383,19 @@ fn discovery_opts(discovery: &DiscoveryArgs) -> Result<(PathBuf, DiscoveryOption
 fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
     let dirs = watch_dirs(cwd, opts);
     let _ = writeln!(io::stderr(), "no skills found. searched:");
-    if dirs.is_empty() {
+    let implicit_miss = dirs.is_empty() && opts.implicit_roots;
+    if implicit_miss {
+        let _ = writeln!(
+            io::stderr(),
+            "  (no .agents/skills directory on the cwd-to-git walk or under $HOME)"
+        );
+    } else if dirs.is_empty() {
         let _ = writeln!(
             io::stderr(),
             "  (no walk roots; pass --path DIR for a collection)"
         );
     } else {
-        for dir in dirs {
+        for dir in &dirs {
             let _ = writeln!(
                 io::stderr(),
                 "  {}",
@@ -397,10 +403,17 @@ fn write_empty_tree_note(cwd: &std::path::Path, opts: &DiscoveryOptions) {
             );
         }
     }
-    let _ = writeln!(
-        io::stderr(),
-        "hint: a skill is a directory containing SKILL.md; pass --path DIR for a collection root"
-    );
+    if implicit_miss {
+        let _ = writeln!(
+            io::stderr(),
+            "hint: create .agents/skills/NAME/SKILL.md, or pass --path DIR for a collection root"
+        );
+    } else {
+        let _ = writeln!(
+            io::stderr(),
+            "hint: a skill is a directory containing SKILL.md; pass --path DIR for a collection root"
+        );
+    }
     for name in present_disabled_vendors(cwd, opts) {
         let _ = writeln!(
             io::stderr(),

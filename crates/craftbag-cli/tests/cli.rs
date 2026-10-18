@@ -7679,3 +7679,60 @@ fn why_empty_tree_notes_stderr() {
         "empty why must say so on stderr: {stderr}"
     );
 }
+
+#[test]
+fn list_empty_implicit_roots_names_agents_skills_not_missing_walk() {
+    let proj = tempfile::tempdir().expect("proj");
+    fs::create_dir_all(proj.path().join(".git")).expect("git");
+    let cases: &[&[&str]] = &[&["list"], &["list", "--catalog"], &["why"]];
+    for args in cases {
+        let (_home, mut cmd) = bin();
+        let out = cmd
+            .current_dir(proj.path())
+            .args(*args)
+            .output()
+            .expect("run");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{args:?} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("no .agents/skills directory on the cwd-to-git walk or under $HOME"),
+            "{args:?} must name the default search: {stderr}"
+        );
+        assert!(
+            stderr.contains("create .agents/skills/NAME/SKILL.md"),
+            "{args:?} must name the usual first file: {stderr}"
+        );
+        assert!(
+            !stderr.contains("no walk roots"),
+            "{args:?} must not claim nothing was searched: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn list_no_implicit_roots_without_path_says_no_walk_roots() {
+    let proj = tempfile::tempdir().expect("proj");
+    fs::create_dir_all(proj.path().join(".git")).expect("git");
+    fs::create_dir_all(proj.path().join(".agents").join("skills").join("demo")).expect("mkdir");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .args(["list", "--no-implicit-roots"])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("no walk roots; pass --path DIR for a collection"),
+        "collection-only with no --path must say no walk roots: {stderr}"
+    );
+    assert!(
+        !stderr.contains("demo"),
+        "implicit .agents/skills must stay out when roots are off: {stderr}"
+    );
+}
