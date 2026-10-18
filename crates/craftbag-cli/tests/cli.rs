@@ -7820,6 +7820,55 @@ fn new_names_the_file_blocking_the_package_directory() {
     assert!(file.is_file(), "--dir file must stay a file");
 }
 
+#[cfg(unix)]
+#[test]
+fn new_refuses_package_symlink_outside_collection_root() {
+    let proj = tempfile::tempdir().expect("proj");
+    let outside = tempfile::tempdir().expect("outside");
+    let skills = proj.path().join(".agents").join("skills");
+    fs::create_dir_all(&skills).expect("mkdir");
+    let link = skills.join("demo");
+    std::os::unix::fs::symlink(outside.path(), &link).expect("symlink");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .args(["new", "demo"])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("escapes collection root") && stderr.contains(&link.display().to_string()),
+        "{stderr}"
+    );
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(
+        !outside.path().join("SKILL.md").exists(),
+        "new must not write through the symlink"
+    );
+
+    let inside = skills.join("real");
+    fs::create_dir_all(&inside).expect("inside");
+    let alias = skills.join("alias");
+    std::os::unix::fs::symlink(&inside, &alias).expect("inside symlink");
+    let (_home, mut cmd) = bin();
+    let out = cmd
+        .current_dir(proj.path())
+        .args(["new", "alias"])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a symlink inside the collection may be written: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        inside.join("SKILL.md").is_file(),
+        "inside alias must receive SKILL.md"
+    );
+}
+
 #[test]
 fn new_quotes_yaml_bool_and_null_names() {
     for name in ["on", "null"] {
