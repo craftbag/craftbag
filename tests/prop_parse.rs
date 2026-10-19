@@ -14,10 +14,13 @@ fn valid_name() -> impl Strategy<Value = String> {
             let n = s.chars().count();
             (1..=64).contains(&n)
         })
-        // Unquoted YAML 1.1 bool words are empty names on purpose.
-        // `validate_skill_name` still accepts the charset (`no`, `on`).
+        // Unquoted YAML 1.1 bool words are rejected on `name`.
+        // `validate_skill_name` still accepts the charset (`y`, `n`, `no`).
         .prop_filter("not a yaml bool word", |s| {
-            !matches!(s.as_str(), "true" | "false" | "yes" | "no" | "on" | "off")
+            !matches!(
+                s.as_str(),
+                "y" | "n" | "true" | "false" | "yes" | "no" | "on" | "off"
+            )
         })
 }
 
@@ -124,11 +127,11 @@ proptest! {
     ) {
         let name = chunks.join("-");
         prop_assume!(validate_skill_name(&name).is_ok());
-        // Unquoted YAML 1.1 bool words are empty names on purpose.
-        // `validate_skill_name` still accepts the charset (`no`, `on`).
+        // Unquoted YAML 1.1 bool words are rejected on `name`.
+        // `validate_skill_name` still accepts the charset (`y`, `n`, `no`).
         prop_assume!(!matches!(
             name.as_str(),
-            "true" | "false" | "yes" | "no" | "on" | "off"
+            "y" | "n" | "true" | "false" | "yes" | "no" | "on" | "off"
         ));
         let md = format!("---\nname: {name}\ndescription: d\n---\nbody\n");
         let skill = parse_skill(&md).expect("valid unicode name");

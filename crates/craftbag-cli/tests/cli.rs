@@ -7871,7 +7871,7 @@ fn new_refuses_package_symlink_outside_collection_root() {
 
 #[test]
 fn new_quotes_yaml_bool_and_null_names() {
-    for name in ["on", "null"] {
+    for name in ["on", "null", "y", "n"] {
         let proj = tempfile::tempdir().expect("proj");
         let (_home, mut cmd) = bin();
         let out = cmd

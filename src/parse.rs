@@ -478,16 +478,17 @@ fn unquoted_yaml_null(raw: &str) -> bool {
     matches!(raw.trim(), "null" | "Null" | "NULL" | "~")
 }
 
-/// Unquoted YAML 1.1 boolean words (`true`, `yes`, `on`, and the
-/// false set). Case folds. Digits `0` and `1` stay text because
-/// metadata `version: 1` is a string. A quoted `"true"` is the word.
+/// Unquoted YAML 1.1 boolean words. The canonical letters are `y`
+/// and `n`; the rest are `yes`, `no`, `true`, `false`, `on`, and
+/// `off`. Case folds. Digits `0` and `1` stay text because metadata
+/// `version: 1` is a string. A quoted `"y"` is the letter.
 fn unquoted_yaml_bool_word(raw: &str) -> bool {
     if quoted_yaml_scalar(raw) {
         return false;
     }
     matches!(
         raw.trim().to_ascii_lowercase().as_str(),
-        "true" | "false" | "yes" | "no" | "on" | "off"
+        "y" | "n" | "yes" | "no" | "true" | "false" | "on" | "off"
     )
 }
 
@@ -2532,7 +2533,7 @@ description:
         assert_names_item(
             "\
 ---
-name: n
+name: kept
 description:
 
   - use foo: bar
@@ -2543,7 +2544,7 @@ body
         assert_names_item(
             "\
 ---
-name: n
+name: kept
 description:
   # when
   - use foo: bar
@@ -2551,7 +2552,7 @@ description:
 body
 ",
         );
-        let empty = parse_skill("---\nname: n\ndescription:\n---\nbody\n").expect_err("empty");
+        let empty = parse_skill("---\nname: kept\ndescription:\n---\nbody\n").expect_err("empty");
         assert!(
             empty.to_string().contains("description value is empty"),
             "{empty}"
@@ -2559,7 +2560,7 @@ body
         let when = parse_skill(
             "\
 ---
-name: n
+name: kept
 description: d
 when-to-use:
 
@@ -2601,7 +2602,7 @@ body
         assert_names_item(
             "\
 ---
-name: n
+name: kept
 description: d
 user-invocable:
   - true
@@ -2613,7 +2614,7 @@ body
         assert_names_item(
             "\
 ---
-name: n
+name: kept
 description: d
 disable-model-invocation:
   - true
@@ -2625,7 +2626,7 @@ body
         assert_names_item(
             "\
 ---
-name: n
+name: kept
 description: d
 user_invocable:
 
@@ -2641,8 +2642,9 @@ body
             empty_name.to_string().contains("name value is empty"),
             "{empty_name}"
         );
-        let empty_bool = parse_skill("---\nname: n\ndescription: d\nuser-invocable:\n---\nbody\n")
-            .expect_err("bool");
+        let empty_bool =
+            parse_skill("---\nname: kept\ndescription: d\nuser-invocable:\n---\nbody\n")
+                .expect_err("bool");
         assert!(
             empty_bool
                 .to_string()
@@ -2654,7 +2656,7 @@ body
     #[test]
     fn unquoted_null_and_tilde_are_empty_scalars() {
         for token in ["null", "Null", "NULL", "~"] {
-            let description = format!("---\nname: n\ndescription: {token}\n---\nbody\n");
+            let description = format!("---\nname: kept\ndescription: {token}\n---\nbody\n");
             let err = parse_skill(&description).expect_err(&description);
             assert!(
                 err.to_string().contains("description value is empty"),
@@ -2677,10 +2679,10 @@ body
         assert_eq!(quoted.description, "null");
         assert_eq!(quoted.license.as_deref(), Some("NULL"));
         assert_eq!(quoted.compatibility.as_deref(), Some("~"));
-        let word = parse_skill("---\nname: n\ndescription: nullnull\n---\nbody\n")
+        let word = parse_skill("---\nname: kept\ndescription: nullnull\n---\nbody\n")
             .expect("nullnull is not a null token");
         assert_eq!(word.description, "nullnull");
-        let quoted_tilde = parse_skill("---\nname: n\ndescription: \"~\"\n---\nbody\n")
+        let quoted_tilde = parse_skill("---\nname: kept\ndescription: \"~\"\n---\nbody\n")
             .expect("quoted tilde is the character");
         assert_eq!(quoted_tilde.description, "~");
         let quoted_name = parse_skill("---\nname: \"~\"\ndescription: d\n---\nbody\n")
@@ -2704,7 +2706,7 @@ body
             ("when_to_use", "when_to_use"),
         ] {
             for token in ["null", "Null", "NULL", "~"] {
-                let input = format!("---\nname: n\ndescription: d\n{key}: {token}\n---\nbody\n");
+                let input = format!("---\nname: kept\ndescription: d\n{key}: {token}\n---\nbody\n");
                 let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
                 let got = match field {
                     "license" => skill.license,
@@ -2718,7 +2720,7 @@ body
             }
         }
         let quoted = parse_skill(
-            "---\nname: n\ndescription: d\nlicense: \"null\"\nwhen-to-use: \"~\"\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nlicense: \"null\"\nwhen-to-use: \"~\"\n---\nbody\n",
         )
         .expect("quoted null stays");
         assert_eq!(quoted.license.as_deref(), Some("null"));
@@ -2729,7 +2731,7 @@ body
             ("license", "[MIT]"),
             ("argument-hint", "{a: b}"),
         ] {
-            let input = format!("---\nname: n\ndescription: d\n{input_key}: {raw}\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: d\n{input_key}: {raw}\n---\nbody\n");
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
@@ -2739,37 +2741,37 @@ body
             assert_eq!(msg.lines().count(), 1, "{msg:?}");
         }
         let brackets =
-            parse_skill("---\nname: n\ndescription: d\nwhen-to-use: \"see [one]\"\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nwhen-to-use: \"see [one]\"\n---\nbody\n")
                 .expect("quoted brackets");
         assert_eq!(brackets.when_to_use.as_deref(), Some("see [one]"));
         for key in ["argument-hint", "argument_hint"] {
-            let input = format!("---\nname: n\ndescription: d\n{key}: [name]\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: d\n{key}: [name]\n---\nbody\n");
             let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
             assert_eq!(skill.argument_hint.as_deref(), Some("[name]"), "{key}");
         }
 
         for token in ["null", "NULL", "~"] {
-            let input = format!("---\nname: n\ndescription: d\ntriggers: {token}\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: d\ntriggers: {token}\n---\nbody\n");
             let skill = parse_skill(&input).unwrap_or_else(|e| panic!("{input}: {e}"));
             assert!(skill.triggers.is_empty(), "{token}: {:?}", skill.triggers);
         }
         let quoted_trigger =
-            parse_skill("---\nname: n\ndescription: d\ntriggers: [\"null\", git]\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\ntriggers: [\"null\", git]\n---\nbody\n")
                 .expect("quoted trigger null");
         assert_eq!(
             quoted_trigger.triggers,
             vec!["null".to_owned(), "git".to_owned()]
         );
         let skipped =
-            parse_skill("---\nname: n\ndescription: d\ntriggers: [null, git]\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\ntriggers: [null, git]\n---\nbody\n")
                 .expect("skip null item");
         assert_eq!(skipped.triggers, vec!["git".to_owned()]);
         let kept =
-            parse_skill("---\nname: n\ndescription: d\ntriggers: [git, rebase]\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\ntriggers: [git, rebase]\n---\nbody\n")
                 .expect("flow triggers");
         assert_eq!(kept.triggers, vec!["git".to_owned(), "rebase".to_owned()]);
 
-        let list = parse_skill("---\nname: n\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
+        let list = parse_skill("---\nname: kept\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
             .expect_err("license list");
         let list_msg = list.to_string();
         assert!(
@@ -2779,11 +2781,96 @@ body
     }
 
     #[test]
+    fn unquoted_yaml_11_bool_letters_use_the_quote_error() {
+        for token in ["y", "n", "Y", "N"] {
+            let description = format!("---\nname: kept\ndescription: {token}\n---\nbody\n");
+            let err = parse_skill(&description).expect_err(&description);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("description: quote '{token}'"))
+                    && msg.contains("YAML treats it as a boolean"),
+                "{token}: {msg}"
+            );
+            assert!(!msg.contains("value is empty"), "{token}: {msg}");
+
+            let name = format!("---\nname: {token}\ndescription: d\n---\nbody\n");
+            let err = parse_skill(&name).expect_err(&name);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("name: quote '{token}'"))
+                    && msg.contains("YAML treats it as a boolean"),
+                "{token}: {msg}"
+            );
+            assert!(
+                !msg.contains("lowercase alphanumeric"),
+                "{token} must be the quote error before the name rule: {msg}"
+            );
+        }
+
+        let commented = parse_skill("---\nname: kept\ndescription: y # placeholder\n---\nbody\n")
+            .expect_err("comment");
+        assert!(
+            commented.to_string().contains("description: quote 'y'"),
+            "{commented}"
+        );
+
+        let quoted = parse_skill(
+            "---\nname: \"y\"\ndescription: 'n'\nlicense: \"Y\"\nwhen-to-use: 'N'\n---\nbody\n",
+        )
+        .expect("quoted y and n stay letters");
+        assert_eq!(quoted.name, "y");
+        assert_eq!(quoted.description, "n");
+        assert_eq!(quoted.license.as_deref(), Some("Y"));
+        assert_eq!(quoted.when_to_use.as_deref(), Some("N"));
+
+        for (key, token) in [
+            ("license", "y"),
+            ("compatibility", "n"),
+            ("allowed-tools", "Y"),
+            ("when-to-use", "N"),
+        ] {
+            let input = format!("---\nname: kept\ndescription: d\n{key}: {token}\n---\nbody\n");
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(&format!("{key} must be a string, got: {token}")),
+                "{key} {token}: {msg}"
+            );
+        }
+        let meta = parse_skill(
+            "---\nname: kept\ndescription: d\nmetadata:\n  author: y\n  version: 1\n---\nbody\n",
+        )
+        .expect_err("metadata letter");
+        assert!(
+            meta.to_string()
+                .contains("metadata value must be a string, got: y"),
+            "{meta}"
+        );
+
+        let longer = parse_skill("---\nname: ny\ndescription: ye\nlicense: nope\n---\nbody\n")
+            .expect("longer words stay text");
+        assert_eq!(longer.name, "ny");
+        assert_eq!(longer.description, "ye");
+        assert_eq!(longer.license.as_deref(), Some("nope"));
+
+        let flag = parse_skill("---\nname: kept\ndescription: d\nuser-invocable: y\n---\nbody\n")
+            .expect_err("bool keys do not take the letter");
+        assert!(
+            flag.to_string()
+                .contains("user_invocable must be a boolean, got: y"),
+            "{flag}"
+        );
+        let trigger = parse_skill("---\nname: kept\ndescription: d\ntriggers: y\n---\nbody\n")
+            .expect("a trigger may be the letter");
+        assert_eq!(trigger.triggers, vec!["y".to_owned()]);
+    }
+
+    #[test]
     fn unquoted_yaml_bool_words_are_not_stored_text() {
         for token in [
             "true", "false", "yes", "no", "on", "off", "TRUE", "Yes", "OFF",
         ] {
-            let description = format!("---\nname: n\ndescription: {token}\n---\nbody\n");
+            let description = format!("---\nname: kept\ndescription: {token}\n---\nbody\n");
             let err = parse_skill(&description).expect_err(&description);
             let msg = err.to_string();
             assert!(
@@ -2806,7 +2893,7 @@ body
             assert!(!msg.contains("lowercase alphanumeric"), "{token}: {msg}");
             assert!(!msg.contains("value is empty"), "{token}: {msg}");
         }
-        let commented = parse_skill("---\nname: n\ndescription: yes # placeholder\n---\nbody\n")
+        let commented = parse_skill("---\nname: kept\ndescription: yes # placeholder\n---\nbody\n")
             .expect_err("comment");
         assert!(
             commented.to_string().contains("description: quote 'yes'"),
@@ -2823,7 +2910,7 @@ body
             ("when-to-use", "TRUE"),
             ("when_to_use", "Yes"),
         ] {
-            let input = format!("---\nname: n\ndescription: d\n{key}: {token}\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: d\n{key}: {token}\n---\nbody\n");
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
@@ -2844,26 +2931,26 @@ body
         assert_eq!(quoted.argument_hint.as_deref(), Some("off"));
 
         let phrase =
-            parse_skill("---\nname: n\ndescription: true story\nlicense: yesman\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: true story\nlicense: yesman\n---\nbody\n")
                 .expect("longer words are text");
         assert_eq!(phrase.description, "true story");
         assert_eq!(phrase.license.as_deref(), Some("yesman"));
-        let digits =
-            parse_skill("---\nname: n\ndescription: 1\nlicense: 0\n---\nbody\n").expect("digits");
+        let digits = parse_skill("---\nname: kept\ndescription: 1\nlicense: 0\n---\nbody\n")
+            .expect("digits");
         assert_eq!(digits.description, "1");
         assert_eq!(digits.license.as_deref(), Some("0"));
 
-        let block = parse_skill("---\nname: n\ndescription: |\n  true\n---\nbody\n")
+        let block = parse_skill("---\nname: kept\ndescription: |\n  true\n---\nbody\n")
             .expect("block scalar is text");
         assert_eq!(block.description, "true");
 
         let flagged =
-            parse_skill("---\nname: n\ndescription: d\nuser-invocable: false\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nuser-invocable: false\n---\nbody\n")
                 .expect("bool key");
         assert!(!flagged.user_invocable);
 
         let meta = parse_skill(
-            "---\nname: n\ndescription: d\nmetadata: {author: true, version: 1}\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nmetadata: {author: true, version: 1}\n---\nbody\n",
         )
         .expect_err("flow metadata bool");
         assert!(
@@ -2872,12 +2959,12 @@ body
             "{meta}"
         );
         let meta_block = parse_skill(
-            "---\nname: n\ndescription: d\nmetadata:\n  author: YES\n  version: 1\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nmetadata:\n  author: YES\n  version: 1\n---\nbody\n",
         )
         .expect_err("block metadata bool");
         assert!(meta_block.to_string().contains("got: YES"), "{meta_block}");
         let meta_quoted = parse_skill(
-            "---\nname: n\ndescription: d\nmetadata: {author: \"true\", version: 1}\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nmetadata: {author: \"true\", version: 1}\n---\nbody\n",
         )
         .expect("quoted metadata bool word");
         assert_eq!(
@@ -2889,7 +2976,7 @@ body
             Some("1")
         );
         let meta_num =
-            parse_skill("---\nname: n\ndescription: d\nmetadata:\n  version: 1\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nmetadata:\n  version: 1\n---\nbody\n")
                 .expect("digit metadata stays");
         assert_eq!(
             meta_num.metadata.get("version").map(String::as_str),
@@ -2909,7 +2996,7 @@ body
             ("argument-hint", "name: file"),
             ("argument_hint", "name: file"),
         ] {
-            let input = format!("---\nname: n\ndescription: d\n{key}:\n  {nested}\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: d\n{key}:\n  {nested}\n---\nbody\n");
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
@@ -2920,7 +3007,7 @@ body
         }
         let commented = "\
 ---
-name: n
+name: kept
 description: d
 license:
   # later
@@ -2936,7 +3023,7 @@ body
         );
         let blank = "\
 ---
-name: n
+name: kept
 description: d
 license:
 
@@ -2946,12 +3033,12 @@ body
 ";
         let err = parse_skill(blank).expect_err("blank before nested");
         assert!(err.to_string().contains("spdx: MIT"), "{err}");
-        let nbsp = "---\nname: n\ndescription: d\nlicense:\n\u{00a0}spdx: MIT\n---\nbody\n";
+        let nbsp = "---\nname: kept\ndescription: d\nlicense:\n\u{00a0}spdx: MIT\n---\nbody\n";
         let err = parse_skill(nbsp).expect_err("nbsp indent");
         assert!(err.to_string().contains("spdx: MIT"), "{err}");
         let deeper = "\
 ---
-name: n
+name: kept
 description: d
 compatibility:
   os:
@@ -2966,7 +3053,7 @@ body
             "{err}"
         );
         let hostile = format!(
-            "---\nname: n\ndescription: d\nlicense:\n  spdx: MIT{}\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nlicense:\n  spdx: MIT{}\n---\nbody\n",
             "\u{2028}"
         );
         let err = parse_skill(&hostile).expect_err("line sep");
@@ -2974,7 +3061,7 @@ body
         assert!(!msg.contains('\u{2028}'), "{msg:?}");
         assert_eq!(msg.lines().count(), 1, "{msg:?}");
 
-        let list = parse_skill("---\nname: n\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
+        let list = parse_skill("---\nname: kept\ndescription: d\nlicense:\n  - MIT\n---\nbody\n")
             .expect_err("list stays the list error");
         let list_msg = list.to_string();
         assert!(
@@ -2983,11 +3070,11 @@ body
         );
 
         let literal =
-            parse_skill("---\nname: n\ndescription: d\nlicense: |\n  spdx: MIT\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nlicense: |\n  spdx: MIT\n---\nbody\n")
                 .expect("literal block is a string");
         assert_eq!(literal.license.as_deref(), Some("spdx: MIT"));
         let quoted = parse_skill(
-            "---\nname: n\ndescription: d\nlicense: \"spdx: MIT\"\ncompatibility: 'os: linux'\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nlicense: \"spdx: MIT\"\ncompatibility: 'os: linux'\n---\nbody\n",
         )
         .expect("quoted colon stays");
         assert_eq!(quoted.license.as_deref(), Some("spdx: MIT"));
@@ -2997,7 +3084,7 @@ body
 ---
 author:
   name: ada
-name: n
+name: kept
 description: d
 ---
 body
@@ -3008,7 +3095,7 @@ body
             "{err}"
         );
         let author_flow =
-            parse_skill("---\nname: n\ndescription: d\nauthor: {name: ada}\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nauthor: {name: ada}\n---\nbody\n")
                 .expect_err("top-level author flow");
         assert!(
             author_flow
@@ -3017,25 +3104,25 @@ body
             "{author_flow}"
         );
         let author_text =
-            parse_skill("---\nname: n\ndescription: d\nauthor: Ada Lovelace\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nauthor: Ada Lovelace\n---\nbody\n")
                 .expect("scalar author is still an unknown key");
         assert!(author_text.metadata.is_empty());
         let author_list =
-            parse_skill("---\nname: n\ndescription: d\nauthor:\n  - ada\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nauthor:\n  - ada\n---\nbody\n")
                 .expect("author list stays ignored");
         assert!(author_list.metadata.is_empty());
         let author_quoted =
-            parse_skill("---\nname: n\ndescription: d\nauthor: \"{name: ada}\"\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nauthor: \"{name: ada}\"\n---\nbody\n")
                 .expect("quoted author flow stays ignored");
         assert!(author_quoted.metadata.is_empty());
         let hooks =
-            parse_skill("---\nname: n\ndescription: d\nhooks:\n  name: pre-commit\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nhooks:\n  name: pre-commit\n---\nbody\n")
                 .expect("hooks nested map still loads");
-        assert_eq!(hooks.name, "n");
+        assert_eq!(hooks.name, "kept");
         let version =
-            parse_skill("---\nname: n\ndescription: d\nversion:\n  major: 1\n---\nbody\n")
+            parse_skill("---\nname: kept\ndescription: d\nversion:\n  major: 1\n---\nbody\n")
                 .expect("unknown nested map still loads");
-        assert_eq!(version.name, "n");
+        assert_eq!(version.name, "kept");
         assert!(version.metadata.is_empty());
     }
 
@@ -3061,7 +3148,7 @@ body
 
         let commented = "\
 ---
-name: n
+name: kept
 description: hello
   # later
   world: not-a-key
@@ -3077,7 +3164,7 @@ body
 
         let quoted = "\
 ---
-name: n
+name: kept
 description: \"hello\"
   world: not-a-key
 ---
@@ -3116,7 +3203,7 @@ body
             ("argument_hint", "name: file"),
         ] {
             let input =
-                format!("---\nname: n\ndescription: d\n{key}: MIT\n  {nested}\n---\nbody\n");
+                format!("---\nname: kept\ndescription: d\n{key}: MIT\n  {nested}\n---\nbody\n");
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
@@ -3128,7 +3215,7 @@ body
 
         let triggers = "\
 ---
-name: n
+name: kept
 description: d
 triggers: review
   code: review
@@ -3143,7 +3230,7 @@ body
         );
         let quoted_triggers = "\
 ---
-name: n
+name: kept
 description: d
 triggers: \"review\"
   code: review
@@ -3158,7 +3245,7 @@ body
         );
 
         let wrapped = parse_skill(
-            "---\nname: n\ndescription: d\ntriggers: pull request,\n  code review\n---\nbody\n",
+            "---\nname: kept\ndescription: d\ntriggers: pull request,\n  code review\n---\nbody\n",
         )
         .expect("wrapped triggers still split");
         assert_eq!(
@@ -3167,7 +3254,7 @@ body
         );
 
         let url = parse_skill(
-            "---\nname: n\ndescription: See the docs at\n  https://example.com/a:b more\n---\nbody\n",
+            "---\nname: kept\ndescription: See the docs at\n  https://example.com/a:b more\n---\nbody\n",
         )
         .expect("url colon stays text");
         assert_eq!(
@@ -3176,7 +3263,7 @@ body
         );
 
         let flow = parse_skill(
-            "---\nname: n\ndescription: hello\n  {a: b}\nlicense: MIT\n  {spdx: MIT}\n---\nbody\n",
+            "---\nname: kept\ndescription: hello\n  {a: b}\nlicense: MIT\n  {spdx: MIT}\n---\nbody\n",
         )
         .expect("a flow map under a scalar is not folded and still loads");
         assert_eq!(flow.description, "hello");
@@ -3184,7 +3271,7 @@ body
 
         let flagged = "\
 ---
-name: n
+name: kept
 description: d
 user-invocable: false
   note: internal only
@@ -3199,7 +3286,7 @@ body
         );
         let flagged_next = "\
 ---
-name: n
+name: kept
 description: d
 user-invocable: false
   disable-model-invocation: true
@@ -3215,7 +3302,7 @@ body
 
         let meta = "\
 ---
-name: n
+name: kept
 description: d
 metadata: {author: ada}
   version: 1
@@ -3233,18 +3320,19 @@ body
     #[test]
     fn quoted_trigger_scalar_keeps_a_comma() {
         let quoted = parse_skill(
-            "---\nname: n\ndescription: d\ntriggers: \"changelog, release\"\n---\nbody\n",
+            "---\nname: kept\ndescription: d\ntriggers: \"changelog, release\"\n---\nbody\n",
         )
         .expect("quoted trigger");
         assert_eq!(quoted.triggers, vec!["changelog, release".to_owned()]);
         let single = parse_skill(
-            "---\nname: n\ndescription: d\ntriggers: 'changelog, release'\n---\nbody\n",
+            "---\nname: kept\ndescription: d\ntriggers: 'changelog, release'\n---\nbody\n",
         )
         .expect("single quoted trigger");
         assert_eq!(single.triggers, vec!["changelog, release".to_owned()]);
-        let split =
-            parse_skill("---\nname: n\ndescription: d\ntriggers: changelog, release\n---\nbody\n")
-                .expect("unquoted triggers");
+        let split = parse_skill(
+            "---\nname: kept\ndescription: d\ntriggers: changelog, release\n---\nbody\n",
+        )
+        .expect("unquoted triggers");
         assert_eq!(
             split.triggers,
             vec!["changelog".to_owned(), "release".to_owned()]
@@ -3254,7 +3342,7 @@ body
     #[test]
     fn metadata_null_value_is_omitted() {
         let flow = parse_skill(
-            "---\nname: n\ndescription: d\nmetadata: {author: null, version: 1}\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nmetadata: {author: null, version: 1}\n---\nbody\n",
         )
         .expect("flow metadata");
         assert!(
@@ -3263,15 +3351,16 @@ body
             flow.metadata.get("author")
         );
         assert_eq!(flow.metadata.get("version").map(String::as_str), Some("1"));
-        let quoted =
-            parse_skill("---\nname: n\ndescription: d\nmetadata: {author: \"null\"}\n---\nbody\n")
-                .expect("quoted metadata null");
+        let quoted = parse_skill(
+            "---\nname: kept\ndescription: d\nmetadata: {author: \"null\"}\n---\nbody\n",
+        )
+        .expect("quoted metadata null");
         assert_eq!(
             quoted.metadata.get("author").map(String::as_str),
             Some("null")
         );
         let block = parse_skill(
-            "---\nname: n\ndescription: d\nmetadata:\n  author: ~\n  version: 1\n---\nbody\n",
+            "---\nname: kept\ndescription: d\nmetadata:\n  author: ~\n  version: 1\n---\nbody\n",
         )
         .expect("block metadata");
         assert!(
@@ -3280,7 +3369,7 @@ body
             block.metadata
         );
         assert_eq!(block.metadata.get("version").map(String::as_str), Some("1"));
-        let err = parse_skill("---\nname: n\ndescription: d\nmetadata: null\n---\nbody\n")
+        let err = parse_skill("---\nname: kept\ndescription: d\nmetadata: null\n---\nbody\n")
             .expect_err("scalar metadata");
         assert!(err.to_string().contains("must be a map"), "{err}");
     }
@@ -3368,7 +3457,7 @@ body
     #[test]
     fn description_flow_collection_is_invalid_yaml() {
         let assert_flow = |raw: &str| {
-            let input = format!("---\nname: n\ndescription: {raw}\n---\nbody\n");
+            let input = format!("---\nname: kept\ndescription: {raw}\n---\nbody\n");
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
@@ -3383,22 +3472,23 @@ body
         assert_flow("[]");
         assert_flow("{}");
         let hostile = format!(
-            "---\nname: n\ndescription: [{}\u{2028}]\n---\nbody\n",
+            "---\nname: kept\ndescription: [{}\u{2028}]\n---\nbody\n",
             "one"
         );
         let err = parse_skill(&hostile).expect_err(&hostile);
         let msg = err.to_string();
         assert!(!msg.contains('\u{2028}'), "{msg:?}");
         assert!(msg.contains("[one?]"), "{msg}");
-        let quoted =
-            parse_skill("---\nname: n\ndescription: \"see [one]\"\nlicense: '{a: b}'\n---\nbody\n")
-                .expect("quoted brackets stay text");
+        let quoted = parse_skill(
+            "---\nname: kept\ndescription: \"see [one]\"\nlicense: '{a: b}'\n---\nbody\n",
+        )
+        .expect("quoted brackets stay text");
         assert_eq!(quoted.description, "see [one]");
         assert_eq!(quoted.license.as_deref(), Some("{a: b}"));
-        let quoted_flow = parse_skill("---\nname: n\ndescription: \"[one, two]\"\n---\nbody\n")
+        let quoted_flow = parse_skill("---\nname: kept\ndescription: \"[one, two]\"\n---\nbody\n")
             .expect("a quoted flow is still a string");
         assert_eq!(quoted_flow.description, "[one, two]");
-        let noted = parse_skill("---\nname: n\ndescription: [one, two] # note\n---\nbody\n")
+        let noted = parse_skill("---\nname: kept\ndescription: [one, two] # note\n---\nbody\n")
             .expect_err("comment");
         assert!(
             noted
