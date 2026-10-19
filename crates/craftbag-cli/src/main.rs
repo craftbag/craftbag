@@ -479,8 +479,8 @@ fn write_new_skill(raw_name: &str, dir: Option<&std::path::Path>) -> Result<Exit
             craftbag::sanitize_error_token(&err.to_string())
         )
     })?;
-    // Quote the name. Unquoted `on` / `null` are YAML booleans and null,
-    // which this parser rejects even when the directory name is legal.
+    // Quote the name. Unquoted YAML 1.1 booleans (`y`, `n`, `on`, `off`)
+    // and null are rejected even when the directory name is legal.
     let body = format!(
         "---\nname: \"{name}\"\ndescription: Describe when to use this skill.\n---\n\n# {name}\n\nInstructions for the agent.\n"
     );
