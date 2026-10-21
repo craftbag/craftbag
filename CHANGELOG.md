@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/craftbag/craftbag/compare/v0.3.0...v0.3.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* keep host paths and MCP replies on the contract the host named ([#434](https://github.com/craftbag/craftbag/issues/434)) ([137adab](https://github.com/craftbag/craftbag/commit/137adab4da4781ca797f3230aa0b5ea36356d995))
+* quote YAML 1.1 boolean letters y and n ([#431](https://github.com/craftbag/craftbag/issues/431)) ([dba5ef3](https://github.com/craftbag/craftbag/commit/dba5ef3498ad891b18a45effaa8bf13746a84c42))
+
 ## [0.3.0](https://github.com/craftbag/craftbag/compare/v0.2.3...v0.3.0) (2026-10-18)
 
 
