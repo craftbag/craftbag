@@ -1155,9 +1155,11 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::parse_cli_os_args;
     use super::{
         DiscoverArgs, DiscoveryArgs, LaunchDefaults, ParsedCli, RpcRequest, handle, list_json,
-        merge_launch, parse_cli_args, parse_cli_os_args, write_all_ignore_broken_pipe,
+        merge_launch, parse_cli_args, write_all_ignore_broken_pipe,
     };
     use serde_json::json;
     use std::fs;
