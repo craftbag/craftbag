@@ -4,6 +4,9 @@
 //! Official `rmcp` 1.0+ uses let-chains and does not compile on MSRV 1.85.
 //! This binary speaks MCP JSON-RPC over stdio and wraps the same library
 //! the CLI uses.
+//!
+//! A message with no `id` is a notification and gets no response.
+//! `"id": null` is a request and is answered with `"id": null`.
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -21,10 +24,21 @@ use serde_json::{Value, json};
 #[derive(Debug, Deserialize)]
 struct RpcRequest {
     jsonrpc: Option<String>,
+    /// Missing stays [`None`] (notification). JSON `null` is
+    /// [`Some`]`(Null)` so the request is answered.
+    #[serde(default, deserialize_with = "deserialize_present_id")]
     id: Option<Value>,
     method: Option<String>,
     #[serde(default)]
     params: Value,
+}
+
+/// `Option<Value>` maps JSON `null` to missing. Keep a present null.
+fn deserialize_present_id<'de, D>(deserializer: D) -> Result<Option<Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Value::deserialize(deserializer)?))
 }
 
 /// Present JSON `null` is a type error. Missing fields still default.
@@ -53,7 +67,7 @@ struct DiscoveryArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
-    /// Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd.
+    /// Path prefixes never loaded (silent; no skip row). `~/` and `~//` stay under home. Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
 }
@@ -400,7 +414,7 @@ fn discover_properties() -> Value {
     let vendor_tokens = SkillSource::VENDOR_TOKENS;
     let vendor_listed = vendor_tokens.join(", ");
     json!({
-        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: [\"./my-skill\"]."},
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
             "items": {"type": "string", "enum": SkillSource::vendor_schema_tokens()},
@@ -408,11 +422,11 @@ fn discover_properties() -> Value {
                 "Opt-in vendor trees: {vendor_listed}. The schema also lists each name with a leading dot (`.claude`). Other ASCII case is folded by the server. Example: [\"claude\"]."
             )
         },
-        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: \"~/myskills\"."},
+        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
-        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). Relative prefixes join cwd. Example: [\"./secret\"]."}
+        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). `~/` and `~//` stay under home. Relative prefixes join cwd. Example: [\"./secret\"]."}
     })
 }
 
@@ -502,7 +516,7 @@ fn tools() -> Value {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`). A missing path is reported as unreadable. Example: \"./my-skill\"."
+                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. Example: \"./my-skill\"."
                     },
                     "strict": {
                         "type": "boolean",
@@ -908,13 +922,13 @@ Prompts (user_invocable skills only; default is true):
   prompts/get      load envelope as one user message
 
 Launch defaults (used when a tool or prompt call omits that field):
-  --path PATH              Extra package or collection root (repeatable)
+  --path PATH              Extra package or collection root (repeatable). ~/ and ~// stay under home
   --vendor VENDOR          Opt-in vendor trees: bline, claude, cursor, grok
-  --user-dir DIR           User skills root
+  --user-dir DIR           User skills root. ~/ and ~// stay under home
   --ascii-names            Reject names outside a-z0-9-
   --no-implicit-roots      Skip cwd-to-git and $HOME .agents / vendor walks
   --disabled NAME          Skill name never loaded (repeatable)
-  --ignore PATH            Path prefix never loaded (repeatable)
+  --ignore PATH            Path prefix never loaded (repeatable). ~/ and ~// stay under home
 
 Options:
   -h, --help     Print this message
@@ -1011,6 +1025,20 @@ fn take_value(
     }
 }
 
+fn parse_cli_os_args<I>(args: I) -> Result<ParsedCli, String>
+where
+    I: IntoIterator<Item = std::ffi::OsString>,
+{
+    let mut utf8 = Vec::new();
+    for arg in args {
+        match arg.into_string() {
+            Ok(text) => utf8.push(text),
+            Err(_) => return Err("argument is not valid Unicode".to_owned()),
+        }
+    }
+    parse_cli_args(utf8)
+}
+
 fn parse_cli_args<I>(args: I) -> Result<ParsedCli, String>
 where
     I: IntoIterator<Item = String>,
@@ -1042,14 +1070,34 @@ where
     Ok(ParsedCli::Stdio(launch))
 }
 
+/// `print!` panics on a closed pipe. `BrokenPipe` is a clean stop,
+/// same as the CLI.
+fn write_stdout(text: &str) -> Result<(), String> {
+    write_all_ignore_broken_pipe(&mut io::stdout(), text)
+}
+
+fn write_all_ignore_broken_pipe(out: &mut impl Write, text: &str) -> Result<(), String> {
+    match out.write_all(text.as_bytes()).and_then(|_| out.flush()) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 fn main() {
-    match parse_cli_args(std::env::args().skip(1)) {
+    match parse_cli_os_args(std::env::args_os().skip(1)) {
         Ok(ParsedCli::Help) => {
-            print!("{HELP}");
+            if let Err(e) = write_stdout(HELP) {
+                let _ = writeln!(io::stderr(), "{e}");
+                std::process::exit(1);
+            }
             return;
         }
         Ok(ParsedCli::Version) => {
-            println!("{}", env!("CARGO_PKG_VERSION"));
+            if let Err(e) = write_stdout(&format!("{}\n", env!("CARGO_PKG_VERSION"))) {
+                let _ = writeln!(io::stderr(), "{e}");
+                std::process::exit(1);
+            }
             return;
         }
         Ok(ParsedCli::Stdio(launch)) => {
@@ -1107,12 +1155,15 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::parse_cli_os_args;
     use super::{
         DiscoverArgs, DiscoveryArgs, LaunchDefaults, ParsedCli, RpcRequest, handle, list_json,
-        merge_launch, parse_cli_args,
+        merge_launch, parse_cli_args, write_all_ignore_broken_pipe,
     };
     use serde_json::json;
     use std::fs;
+    use std::io;
     use std::path::PathBuf;
 
     fn corpus_pkg() -> String {
@@ -1706,6 +1757,13 @@ mod tests {
                     props["user_dir"]["description"].as_str().unwrap_or(""),
                     &format!("{name} user_dir"),
                 );
+                for field in ["paths", "user_dir"] {
+                    let desc = props[field]["description"].as_str().unwrap_or("");
+                    assert!(
+                        desc.contains("dangling symlink") && desc.contains("~//"),
+                        "{name} {field} must name dangling symlink and ~//: {desc}"
+                    );
+                }
             }
             if name == "skills_validate" {
                 assert_schema_names_path_token_refuse(
@@ -1891,6 +1949,49 @@ mod tests {
             params: json!({}),
         });
         assert!(resp.is_none());
+    }
+
+    #[test]
+    fn missing_id_json_is_a_notification() {
+        let req: RpcRequest =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
+                .expect("parse");
+        assert!(handle(req).is_none());
+    }
+
+    #[test]
+    fn null_id_json_is_answered() {
+        let req: RpcRequest =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#).expect("parse");
+        let resp = handle(req).expect("null id is a request");
+        assert!(resp["id"].is_null(), "{resp}");
+        assert!(resp.get("result").is_some(), "{resp}");
+        assert!(resp.get("error").is_none(), "{resp}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_arg_is_a_usage_error() {
+        use std::os::unix::ffi::OsStringExt;
+        let err = parse_cli_os_args([std::ffi::OsString::from_vec(vec![0xff])]).unwrap_err();
+        assert!(
+            err.contains("not valid Unicode"),
+            "non-Unicode argv must be a usage error, not a panic: {err}"
+        );
+    }
+
+    #[test]
+    fn write_all_broken_pipe_is_ok() {
+        struct Closed;
+        impl io::Write for Closed {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        assert!(write_all_ignore_broken_pipe(&mut Closed, "help\n").is_ok());
     }
 
     #[test]

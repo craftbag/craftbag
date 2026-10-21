@@ -18,12 +18,17 @@ pub const CURSOR_VENDOR_DENYLIST: &[&str] = &["shell", "canvas", "statusline"];
 /// Options for multi-root skill discovery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryOptions {
-    /// Extra paths (`~` / `~/` expanded when home is set). Relative paths
+    /// Extra paths (`~` / `~/` / `~//` expanded when home is set).
+    /// `~//name` stays under home, the same as `~/name`. A remainder that
+    /// is still a Windows drive path is refused. Relative paths
     /// join the discover `cwd`. Empty or whitespace-only items are ignored
     /// (not cwd). A `~` or `~/` token with unset or blank home is an
-    /// unreadable skip, not a cwd join.
+    /// unreadable skip, not a cwd join. A missing path says it does not
+    /// exist. A symlink whose target is gone says dangling symlink.
     pub paths: Vec<String>,
-    /// Path prefixes to ignore (`~` / `~/` expanded when home is set).
+    /// Path prefixes to ignore (`~` / `~/` / `~//` expanded when home is set).
+    /// `~//name` stays under home, the same as `~/name`. A drive-prefixed
+    /// remainder is refused.
     /// Relative prefixes join `cwd`. Empty or whitespace-only items are
     /// ignored (not cwd). A `~` or `~/` token with unset or blank home
     /// is an unreadable skip and is not installed as a prefix.
@@ -38,8 +43,11 @@ pub struct DiscoveryOptions {
     pub disabled: Vec<String>,
     /// Host names: `bline`, `claude`, `cursor`, `grok`.
     pub vendor_roots: Vec<String>,
-    /// Host-supplied user skills dir (`~` / `~/` expanded when home is
+    /// Host-supplied user skills dir (`~` / `~/` / `~//` expanded when home is
     /// set, relative paths join the discover `cwd`, same as `paths`).
+    /// `~//name` stays under home. A drive-prefixed remainder is refused.
+    /// A missing directory says it does not exist. A symlink whose target
+    /// is gone says dangling symlink.
     /// Empty or whitespace-only is ignored. A `~` or `~/` token with
     /// unset or blank home is an unreadable skip, not a cwd join. A
     /// token that collapses after whitespace trim (` /..`, `/ ..`) is

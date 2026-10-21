@@ -14,8 +14,8 @@ use crate::source::SkillSource;
 use super::DiscoveryOptions;
 use super::host_token::{
     HostPathField, host_token_collapses_after_whitespace, path_has_line_separator,
-    skip_line_separator_root, skip_tilde_home_unset, skip_unresolvable_host_path,
-    skip_whitespace_collapse_token, str_has_line_separator,
+    skip_line_separator_root, skip_tilde_home_unset, skip_tilde_leaves_home,
+    skip_unresolvable_host_path, skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
     child_dir_counts_as_skill_package, dir_load, finish_load_parsed_skill, finish_load_skill_file,
@@ -49,6 +49,10 @@ pub(super) fn load_extra_path(
         ArgExpand::Empty => return,
         ArgExpand::HomeUnset => {
             skip_tilde_home_unset(raw, HostPathField::ExtraPath, skips);
+            return;
+        }
+        ArgExpand::LeavesHome => {
+            skip_tilde_leaves_home(raw, HostPathField::ExtraPath, skips);
             return;
         }
         ArgExpand::Ready(path) => path,
@@ -117,12 +121,21 @@ pub(super) fn load_extra_path(
     // or unreadable skills/ is not a usable collection; fall back to
     // extra/. leftover extra/skills/SKILL.md that stays Package (name:
     // loose) is not collection entries. extra/skills/SKILL.md named
-    // skills is a sibling package: classify once and reuse the parse.
-    // A leftover SKILL.md directory stays in the extra/ walk.
-    let skills_md = ["SKILL.md", "skill.md"]
-        .into_iter()
-        .map(|name| skills_subdir.join(name))
-        .find(|p| skill_md_inode_exists(p));
+    // skills is a sibling package when the directory stays under extra/:
+    // classify once and reuse the parse. A symlink to another directory
+    // is not that package, even when the target's SKILL.md is named
+    // `skills`. Do not read it. extra_skills_subdir_is_collection
+    // records the escapes skip. A leftover SKILL.md directory stays
+    // in the extra/ walk.
+    let skills_escaped = skills_subdir.exists() && !stays_under(&skills_subdir, &expanded);
+    let skills_md = if skills_escaped {
+        None
+    } else {
+        ["SKILL.md", "skill.md"]
+            .into_iter()
+            .map(|name| skills_subdir.join(name))
+            .find(|p| skill_md_inode_exists(p))
+    };
     let mut extra_skills_named = false;
     let mut leftover_skills_md = None;
     if let Some(skill_file) = skills_md.as_ref() {
@@ -164,7 +177,7 @@ pub(super) fn load_extra_path(
         }
     });
     let skip_skills_in_extra_walk =
-        handle_skills || extra_skills_named || leftover_skills_md.is_some();
+        skills_escaped || handle_skills || extra_skills_named || leftover_skills_md.is_some();
     if handle_skills {
         if let (Some(skill_file), Some(classified)) = (skills_md.as_ref(), leftover_skills_md) {
             skip_classified_extra_skills_leftover(

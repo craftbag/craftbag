@@ -24,8 +24,9 @@ use super::extra_path::{
 use super::host_token::{
     HostPathField, component_is_whitespace_padded_dot, host_token_collapses_after_whitespace,
     nfkc_dot_path_components, one_line_error, path_has_line_separator,
-    skip_ignore_tilde_home_unset, skip_line_separator_root, skip_tilde_home_unset,
-    skip_unresolvable_host_path, skip_whitespace_collapse_token, str_has_line_separator,
+    skip_ignore_tilde_home_unset, skip_ignore_tilde_leaves_home, skip_line_separator_root,
+    skip_tilde_home_unset, skip_tilde_leaves_home, skip_unresolvable_host_path,
+    skip_whitespace_collapse_token, str_has_line_separator,
 };
 use super::load::{
     dir_load, is_skill_md_filename, load_skills_from_dir, read_skill_md, resolve_validate_target,
@@ -34,7 +35,7 @@ use super::load::{
 use super::path::{
     ArgExpand, IgnorePrefix, expand_extra_path_arg, expand_ignore_list, expand_user_skills_dir,
     implicit_home_already_walked, lexical_normalize, nonempty_home, path_is_ignored, stays_under,
-    tilde_without_home, walk_cwd_to_git_root,
+    tilde_leaves_home, tilde_without_home, walk_cwd_to_git_root,
 };
 
 /// Discover skills for `cwd` using the host-neutral root matrix.
@@ -229,6 +230,8 @@ pub fn watch_host_skips(cwd: &Path, opts: &DiscoveryOptions) -> Vec<SkillSkip> {
     for raw in &opts.ignore {
         if tilde_without_home(raw) {
             skip_ignore_tilde_home_unset(raw, &mut skips);
+        } else if tilde_leaves_home(raw) {
+            skip_ignore_tilde_leaves_home(raw, &mut skips);
         }
     }
     push_user_dir_host_skips(&cwd, opts, &mut skips);
@@ -255,6 +258,10 @@ fn push_extra_path_host_skip(raw: &str, cwd: &Path, skips: &mut Vec<SkillSkip>) 
         ArgExpand::Empty => return,
         ArgExpand::HomeUnset => {
             skip_tilde_home_unset(raw, HostPathField::ExtraPath, skips);
+            return;
+        }
+        ArgExpand::LeavesHome => {
+            skip_tilde_leaves_home(raw, HostPathField::ExtraPath, skips);
             return;
         }
         ArgExpand::Ready(path) => path,
@@ -291,6 +298,12 @@ fn push_user_dir_host_skips(cwd: &Path, opts: &DiscoveryOptions, skips: &mut Vec
     if let ArgExpand::HomeUnset = expand_user_skills_dir(cwd, Some(raw_path)) {
         if let Some(raw) = raw_path.to_str() {
             skip_tilde_home_unset(raw, HostPathField::UserDir, skips);
+        }
+        return;
+    }
+    if let ArgExpand::LeavesHome = expand_user_skills_dir(cwd, Some(raw_path)) {
+        if let Some(raw) = raw_path.to_str() {
+            skip_tilde_leaves_home(raw, HostPathField::UserDir, skips);
         }
         return;
     }
@@ -634,6 +647,8 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
     for raw in &opts.ignore {
         if tilde_without_home(raw) {
             skip_ignore_tilde_home_unset(raw, &mut skips);
+        } else if tilde_leaves_home(raw) {
+            skip_ignore_tilde_leaves_home(raw, &mut skips);
         }
     }
     let git_walk = if opts.implicit_roots {
@@ -671,6 +686,10 @@ pub(super) fn discover_report(cwd: &Path, opts: &DiscoveryOptions) -> DiscoveryR
         } else if let ArgExpand::HomeUnset = expand_user_skills_dir(&cwd, Some(raw_path)) {
             if let Some(raw) = raw_path.to_str() {
                 skip_tilde_home_unset(raw, HostPathField::UserDir, &mut skips);
+            }
+        } else if let ArgExpand::LeavesHome = expand_user_skills_dir(&cwd, Some(raw_path)) {
+            if let Some(raw) = raw_path.to_str() {
+                skip_tilde_leaves_home(raw, HostPathField::UserDir, &mut skips);
             }
         } else if let ArgExpand::Ready(user_dir) = expand_user_skills_dir(&cwd, Some(raw_path)) {
             if path_has_line_separator(&user_dir) {

@@ -270,6 +270,18 @@ fn help_names_path_token_refuse() {
             &help_own_flag_block(&help, "--user-dir"),
             &format!("{cmd_name} --user-dir"),
         );
+        for flag in ["--path", "--user-dir"] {
+            let block = help_own_flag_block(&help, flag);
+            assert!(
+                block.contains("dangling symlink") && block.contains("~//"),
+                "{cmd_name} {flag} must name dangling symlink and ~//: {block}"
+            );
+        }
+        let ignore = help_own_flag_block(&help, "--ignore");
+        assert!(
+            ignore.contains("~//"),
+            "{cmd_name} --ignore must say ~// stays under home: {ignore}"
+        );
     }
     let (_home, mut cmd) = bin();
     let help = String::from_utf8_lossy(

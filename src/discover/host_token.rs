@@ -4,6 +4,8 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::skip::SkillSkip;
 
+use super::path::lexical_normalize;
+
 pub(super) fn one_line_error(raw: impl std::fmt::Display) -> String {
     crate::sanitize_error_token(&raw.to_string())
 }
@@ -35,21 +37,49 @@ pub(super) fn nfkc_dot_path_components(path: &Path) -> PathBuf {
     out
 }
 
-/// True when NFKC / trim rewrite turns an absolute token into `/`
-/// (`/ ..`, `/\t..`). Explicit `/` and `/..` stay host-chosen roots.
-/// Relative `foo/ ‥` still rewrites to parent, not this refuse.
+/// True when a whitespace-padded `.` / `..` (including NFKC) makes an
+/// absolute token resolve to the filesystem root (`/`, `/..`, or a
+/// Windows drive root). Explicit `/` and `/..` stay host-chosen roots.
+/// A literal `..` component (`/tmp/..`) is ordinary resolution of a
+/// root the host named, not this refuse. Relative `foo/ ‥` still
+/// rewrites to parent.
 pub(super) fn nfkc_absolute_rewrites_to_fs_root(raw: &str) -> bool {
     if raw == "/" || raw == "/.." {
         return false;
     }
-    let rewritten = nfkc_dot_path_components(Path::new(raw));
-    let mut comps = rewritten.components();
-    match (comps.next(), comps.next(), comps.next()) {
-        (Some(Component::RootDir), None, _) => true,
-        (Some(Component::RootDir), Some(Component::ParentDir), None) => true,
-        (Some(Component::RootDir), Some(Component::Normal(s)), None) if s == ".." => true,
-        _ => false,
+    let path = Path::new(raw);
+    // Windows treats a leading `/` or `\` as root-relative, not absolute.
+    // `/ ..` still has a root and used to rewrite to the drive root.
+    if !path.has_root() {
+        return false;
     }
+    let padded = path.components().any(|c| match c {
+        Component::Normal(s) => s.to_str().is_some_and(component_is_whitespace_padded_dot),
+        _ => false,
+    });
+    if !padded {
+        return false;
+    }
+    let rewritten = nfkc_dot_path_components(path);
+    normalized_is_fs_root(&lexical_normalize(&rewritten))
+}
+
+/// `lexical_normalize` leaves `/` and `C:\` as a root with no normal
+/// component. Popping `/..` stays `/` (`PathBuf::pop` does not remove
+/// a root). An empty path is the same walk.
+fn normalized_is_fs_root(path: &Path) -> bool {
+    if path.as_os_str().is_empty() {
+        return true;
+    }
+    let mut saw_root = false;
+    for c in path.components() {
+        match c {
+            Component::Prefix(_) | Component::RootDir => saw_root = true,
+            Component::Normal(_) => return false,
+            Component::CurDir | Component::ParentDir => {}
+        }
+    }
+    saw_root
 }
 
 /// True when a host token contains a line separator (U+000A, U+000D,
@@ -174,6 +204,21 @@ impl HostPathField {
         }
     }
 
+    /// Walk detail (`dangling symlink: <target>`) plus the flag the host set.
+    fn dangling_host_detail(self, link_detail: &str) -> String {
+        match self {
+            Self::ExtraPath => format!(
+                "{link_detail} (pass --path / paths as a SKILL.md file or a package directory that contains SKILL.md)"
+            ),
+            Self::UserDir => format!(
+                "{link_detail} (pass --user-dir / user_dir as a directory of skill packages)"
+            ),
+            Self::Validate => format!(
+                "{link_detail} (pass a SKILL.md file or a package directory that contains SKILL.md)"
+            ),
+        }
+    }
+
     fn token_field(self) -> crate::skip::HostTokenField {
         match self {
             Self::ExtraPath => crate::skip::HostTokenField::ExtraPath,
@@ -187,6 +232,14 @@ impl HostPathField {
             Self::ExtraPath => "--path / paths: HOME is unset",
             Self::UserDir => "--user-dir / user_dir: HOME is unset",
             Self::Validate => "validate / skills_validate: HOME is unset",
+        }
+    }
+
+    pub(super) fn leaves_home_detail(self) -> &'static str {
+        match self {
+            Self::ExtraPath => "--path / paths: tilde path would leave home",
+            Self::UserDir => "--user-dir / user_dir: tilde path would leave home",
+            Self::Validate => "validate / skills_validate: tilde path would leave home",
         }
     }
 }
@@ -223,6 +276,23 @@ pub(super) fn skip_ignore_tilde_home_unset(raw: &str, skips: &mut Vec<SkillSkip>
     ));
 }
 
+pub(super) fn skip_tilde_leaves_home(raw: &str, field: HostPathField, skips: &mut Vec<SkillSkip>) {
+    let shown = crate::sanitize_error_token(raw.trim());
+    skips.push(SkillSkip::host_token_refuse(
+        PathBuf::from(&shown),
+        field.leaves_home_detail().to_owned(),
+        field.token_field(),
+    ));
+}
+
+pub(super) fn skip_ignore_tilde_leaves_home(raw: &str, skips: &mut Vec<SkillSkip>) {
+    let shown = crate::sanitize_error_token(raw.trim());
+    skips.push(SkillSkip::host_token_refuse_ignore(
+        PathBuf::from(&shown),
+        "--ignore: tilde path would leave home".to_owned(),
+    ));
+}
+
 pub(super) fn skip_whitespace_collapse_token(
     raw: &str,
     field: HostPathField,
@@ -244,6 +314,18 @@ pub(super) fn skip_unresolvable_host_path(
     skips: &mut Vec<SkillSkip>,
 ) {
     let shown = crate::sanitize_error_token(&path.display().to_string());
+    // A symlink whose target is gone is the same detail a walked
+    // package uses. `metadata` follows the link and would call that
+    // a missing path.
+    if let Some(link_detail) = super::load::dangling_symlink_detail(path) {
+        let detail = one_line_error(field.dangling_host_detail(&link_detail));
+        skips.push(SkillSkip::host_token_refuse(
+            PathBuf::from(shown),
+            detail,
+            field.token_field(),
+        ));
+        return;
+    }
     // Stat first (never open). FIFO / socket / device would hang on
     // open; `metadata` is enough to tell missing vs not-a-directory.
     let detail = match std::fs::metadata(path) {
