@@ -1635,6 +1635,124 @@ fn host_token_collapses_padded_slash_dotdot_like_validate() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn padded_absolute_dot_that_resolves_to_root_collapses() {
+    // `/ ..` is one component. `/tmp/ ..` and `/ .` rewrite to `/`
+    // only after the padded dot is normalized. Literal `/tmp/..`
+    // stays a host-chosen root. A padded dot that stops above `/`
+    // (`/tmp/foo/ ..` -> `/tmp`) is not this refuse.
+    for raw in ["/tmp/ ..", "/tmp/\t..", "/tmp/\u{00a0}..", "/ .", "/tmp/ ‥"] {
+        assert!(
+            host_token_collapses_after_whitespace(raw),
+            "{raw:?} must collapse to the filesystem root"
+        );
+    }
+    for raw in ["/", "/..", "/tmp/..", "/tmp/foo/../bar", "/tmp/foo/ .."] {
+        assert!(
+            !host_token_collapses_after_whitespace(raw),
+            "{raw:?} must stay a host path"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn padded_drive_root_dot_collapses() {
+    assert!(host_token_collapses_after_whitespace(r"C:\tmp\ .."));
+    assert!(!host_token_collapses_after_whitespace(r"C:\tmp\.."));
+    assert!(!host_token_collapses_after_whitespace(r"C:\"));
+}
+
+#[cfg(unix)]
+#[test]
+fn extra_path_padded_root_does_not_walk_filesystem_root() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    for raw in ["/tmp/ ..", "/ ."] {
+        let opts = DiscoveryOptions {
+            paths: vec![raw.to_owned()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let report = with_home_override(Some(home.path().to_path_buf()), || {
+            discover(cwd.path(), &opts)
+        });
+        assert!(
+            report.skills.is_empty(),
+            "extra-path {raw:?} must not load root packages: {:?}",
+            report.skills
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.kind == SkipKind::Unreadable && s.detail.contains("collapses") }),
+            "extra-path {raw:?} must skip as collapse: {:?}",
+            report.skips
+        );
+        let dirs = with_home_override(Some(home.path().to_path_buf()), || {
+            watch_dirs(cwd.path(), &opts)
+        });
+        assert!(
+            dirs.is_empty(),
+            "extra-path {raw:?} must not be a watch root: {dirs:?}"
+        );
+    }
+}
+
+#[test]
+fn padded_dotdot_above_filesystem_root_still_loads() {
+    // `/tmp/foo/ ..` rewrites to the temp root. It must not be refused
+    // just because a component is a padded `..`.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    fs::create_dir_all(root.path().join("foo")).expect("mkdir foo");
+    write_skill(&root.path().join("pkg"), "pkg", "STAYS");
+    let sep = std::path::MAIN_SEPARATOR;
+    let raw = format!("{}{sep}foo{sep} ..", root.path().display());
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![raw.clone()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert_eq!(
+        report
+            .skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["pkg"],
+        "padded .. that stays under a directory must still load ({raw}): {report:?}"
+    );
+    assert_eq!(report.skills[0].content.trim(), "STAYS");
+}
+
+#[cfg(unix)]
+#[test]
+fn ignore_padded_root_does_not_hide_every_path() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join(".agents").join("skills").join("keep"),
+        "keep",
+        "KEEP_BODY",
+    );
+    let report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            ignore: vec!["/tmp/ ..".to_owned()],
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "keep").is_some(),
+        "a padded root ignore must not hide the walk: {report:?}"
+    );
+}
+
 #[test]
 fn extra_path_skills_named_package_does_not_hide_sibling() {
     // extra/skills/SKILL.md named skills is a sibling package.
@@ -2756,6 +2874,161 @@ fn user_skills_dir_expands_tilde_like_extra_path() {
     );
     assert_eq!(report.skills[0].source, SkillSource::User);
     assert_eq!(report.skills[0].content.trim(), "from-home");
+}
+
+#[test]
+fn double_slash_tilde_stays_under_home() {
+    // `~//name` is `$HOME/name`. A leading slash after `~/` must not
+    // become an absolute path and drop home.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let other = tempfile::tempdir().expect("other");
+    write_skill(
+        &home.path().join("cb-tilde-secret").join("hideme"),
+        "hideme",
+        "HOME_SECRET",
+    );
+    write_skill(
+        &home.path().join("myskills").join("mine"),
+        "mine",
+        "from-home",
+    );
+    write_skill(&other.path().join("keep"), "keep", "KEEP_BODY");
+    let home_path = home.path().to_path_buf();
+    let loaded = with_home_override(Some(home_path.clone()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec!["~//cb-tilde-secret".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert_eq!(
+        loaded
+            .skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["hideme"],
+        "~// must load the home package, not an absolute /cb-tilde-secret: {loaded:?}"
+    );
+    assert_eq!(loaded.skills[0].content.trim(), "HOME_SECRET");
+    let loaded_path = loaded.skills[0].source_path.as_ref().expect("source path");
+    assert!(
+        loaded_path.starts_with(&home_path),
+        "loaded path must stay under home: {loaded_path:?}"
+    );
+    let user = with_home_override(Some(home_path.clone()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                user_skills_dir: Some(PathBuf::from("~//myskills")),
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert_eq!(
+        user.skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["mine"],
+        "user_dir ~//myskills must stay under home: {user:?}"
+    );
+    let ignored = with_home_override(Some(home_path), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![
+                    "~/cb-tilde-secret".to_owned(),
+                    other.path().display().to_string(),
+                ],
+                ignore: vec!["~//cb-tilde-secret".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    let ignored_names: Vec<&str> = ignored.skills.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        ignored_names,
+        ["keep"],
+        "~// ignore must hide the home package and keep the other root: {ignored:?}"
+    );
+    assert!(
+        ignored
+            .skills
+            .iter()
+            .all(|s| !s.content.contains("HOME_SECRET")),
+        "ignored home body must stay unloaded: {:?}",
+        ignored.skills
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn double_slash_tilde_drive_prefix_does_not_leave_home() {
+    // After stripping `~/` slashes, `C:/Windows` is a drive path.
+    // Path::join would replace home. Refuse it instead.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    write_skill(&home.path().join("minepkg"), "minepkg", "HOME_BODY");
+    let home_path = home.path().to_path_buf();
+    for raw in ["~//C:/Windows", r"~/\\C:\Windows"] {
+        let report = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["minepkg"],
+            "{raw} must not walk the drive: {report:?}"
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| s.detail.contains("would leave home") && s.detail.contains("--path")),
+            "{raw} skip: {:?}",
+            report.skips
+        );
+        let ignored = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec!["~/minepkg".to_owned()],
+                    ignore: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            find_skill_by_name(&ignored.skills, "minepkg").is_some(),
+            "{raw} ignore must not hide the home package: {ignored:?}"
+        );
+        assert!(
+            ignored
+                .skips
+                .iter()
+                .any(|s| s.detail.contains("would leave home") && s.detail.contains("--ignore")),
+            "{raw} ignore skip: {:?}",
+            ignored.skips
+        );
+    }
 }
 
 #[test]
@@ -6497,6 +6770,73 @@ fn extra_path_skills_subdir_symlink_escape_is_unreadable() {
 
 #[cfg(unix)]
 #[test]
+fn extra_path_skills_symlink_named_skills_is_unreadable() {
+    // extra/skills -> outside, and outside/SKILL.md is named `skills`.
+    // That file is the symlink target, not a package under extra/.
+    // Child packages behind the link stay unloaded too.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let outside = tempfile::tempdir().expect("out");
+    fs::write(
+        outside.path().join("SKILL.md"),
+        "---\nname: skills\ndescription: leaked outside\n---\nSECRET_BODY\n",
+    )
+    .expect("write outside skill");
+    write_skill(&outside.path().join("stolen"), "stolen", "NESTED_SECRET");
+    let extra = tempfile::tempdir().expect("extra");
+    std::os::unix::fs::symlink(outside.path(), extra.path().join("skills")).expect("symlink");
+    write_skill(&extra.path().join("public"), "public", "from-sibling");
+    let _ = super::load::take_read_skill_md_paths();
+    let opts = DiscoveryOptions {
+        paths: vec![extra.path().display().to_string()],
+        implicit_roots: false,
+        ..DiscoveryOptions::default()
+    };
+    let report = empty_home_discover(cwd.path(), &opts);
+    let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["public"],
+        "named skills target must not load: skills={:?} skips={:?}",
+        report.skills,
+        report.skips
+    );
+    assert!(
+        report.skills.iter().all(|s| {
+            !s.content.contains("SECRET_BODY")
+                && !s.content.contains("NESTED_SECRET")
+                && s.description != "leaked outside"
+        }),
+        "escaped body must stay unread: {:?}",
+        report.skills
+    );
+    assert!(
+        report.skips.iter().any(|s| {
+            s.kind == SkipKind::Unreadable && s.detail.contains("skills directory symlink escapes")
+        }),
+        "escape skip must still be recorded: {:?}",
+        report.skips
+    );
+    let reads = super::load::take_read_skill_md_paths();
+    let banned = [
+        outside.path().join("SKILL.md"),
+        outside.path().join("stolen").join("SKILL.md"),
+        extra.path().join("skills").join("SKILL.md"),
+    ];
+    assert!(
+        reads.iter().all(|p| !banned.iter().any(|b| p == b)),
+        "must not open the escaped SKILL.md: {reads:?}"
+    );
+    let loaded = find_skill_by_name(&report.skills, "public").expect("public");
+    assert_eq!(loaded.content.trim(), "from-sibling");
+    let dirs = watch_dirs(cwd.path(), &opts);
+    assert!(
+        dirs.iter().all(|d| !d.starts_with(outside.path())),
+        "watch must not follow the escaped skills dir: {dirs:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn extra_path_skills_subdir_symlink_escape_does_not_hide_sibling() {
     let cwd = tempfile::tempdir().expect("cwd");
     let outside = tempfile::tempdir().expect("out");
@@ -7616,6 +7956,86 @@ fn user_dir_missing_is_unreadable_not_silent() {
     );
     let shown = crate::sanitize_error_token(&missing.display().to_string());
     assert_missing_host_path_skip(&report.skips[0], &shown, "--user-dir", "user_dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn dangling_host_path_says_dangling_symlink() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    let root = tempfile::tempdir().expect("root");
+    let missing = root.path().join("gone-target");
+    let link = root.path().join("gone");
+    std::os::unix::fs::symlink(&missing, &link).expect("symlink");
+    write_skill(&root.path().join("real"), "real", "STILL_HERE");
+    let path_report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![link.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(path_report.skills.is_empty(), "{:?}", path_report.skills);
+    assert_eq!(path_report.skips.len(), 1, "{:?}", path_report.skips);
+    assert!(
+        path_report.skips[0].detail.contains("dangling symlink")
+            && path_report.skips[0].detail.contains("gone-target")
+            && !path_report.skips[0].detail.contains("path does not exist"),
+        "dangling --path must match the walk detail: {}",
+        path_report.skips[0].detail
+    );
+    let user_report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            user_skills_dir: Some(link.clone()),
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(user_report.skills.is_empty(), "{:?}", user_report.skills);
+    assert!(
+        user_report.skips.iter().any(|s| {
+            s.detail.contains("dangling symlink")
+                && s.detail.contains("gone-target")
+                && s.detail.contains("--user-dir")
+                && !s.detail.contains("path does not exist")
+        }),
+        "dangling --user-dir: {:?}",
+        user_report.skips
+    );
+    let real = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![
+                link.display().to_string(),
+                root.path().join("real").display().to_string(),
+            ],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        find_skill_by_name(&real.skills, "real").is_some(),
+        "a real package next to the dangling path must still load: {real:?}"
+    );
+    let file_link = root.path().join("file-link");
+    std::os::unix::fs::symlink(root.path().join("real").join("SKILL.md"), &file_link)
+        .expect("file symlink");
+    let file_report = empty_home_discover(
+        cwd.path(),
+        &DiscoveryOptions {
+            paths: vec![file_link.display().to_string()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        },
+    );
+    assert!(
+        file_report.skips.iter().any(|s| {
+            s.detail.contains("not a directory") && !s.detail.contains("dangling symlink")
+        }),
+        "a symlink to a file stays not-a-directory: {:?}",
+        file_report.skips
+    );
 }
 
 #[test]

@@ -34,6 +34,107 @@ fn mcp_unknown_option_exits_2() {
 }
 
 #[test]
+fn stdio_null_id_is_answered_and_missing_id_is_not() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let home = tempfile::tempdir().expect("home");
+    let stdin = concat!(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"ping\"}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n",
+    );
+    let out = bin()
+        .current_dir(tmp.path())
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .write_stdin(stdin)
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "missing id stays silent: {stdout}");
+    let null_id: serde_json::Value = serde_json::from_str(lines[0]).expect("null id json");
+    assert!(null_id["id"].is_null(), "{null_id}");
+    assert!(null_id.get("result").is_some(), "{null_id}");
+    let one: serde_json::Value = serde_json::from_str(lines[1]).expect("id 1 json");
+    assert_eq!(one["id"], 1, "{one}");
+}
+
+#[cfg(unix)]
+#[test]
+fn mcp_non_utf8_arg_exits_2() {
+    use std::os::unix::ffi::OsStringExt;
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_craftbag-mcp"))
+        .arg(std::ffi::OsString::from_vec(vec![0xff]))
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2), "{:?}", out.status);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("not valid Unicode") && !err.contains("panicked"),
+        "stderr={err}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn mcp_help_and_version_closed_stdout_exit_0() {
+    for arg in ["--help", "--version"] {
+        let status = spawn_with_broken_stdout(arg);
+        assert!(
+            status.success(),
+            "{arg} on a closed stdout must exit 0, not panic: {status:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+fn spawn_with_broken_stdout(arg: &str) -> std::process::ExitStatus {
+    use std::os::unix::io::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::os::unix::process::CommandExt;
+    let (read_end, write_end) = UnixStream::pair().expect("socket pair");
+    drop(read_end);
+    let src = write_end.as_raw_fd();
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_craftbag-mcp"));
+    cmd.arg(arg).stderr(std::process::Stdio::piped());
+    // SAFETY: dup2 and close are async-signal-safe and run between fork and exec.
+    unsafe {
+        cmd.pre_exec(move || {
+            unsafe extern "C" {
+                fn dup2(oldfd: i32, newfd: i32) -> i32;
+                fn close(fd: i32) -> i32;
+            }
+            // dup2 and close are async-signal-safe. src is the write end.
+            if dup2(src, 1) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if src != 1 && close(src) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = cmd.spawn().expect("spawn");
+    drop(write_end);
+    let status = child.wait().expect("wait");
+    let mut err = String::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        use std::io::Read;
+        let _ = stderr.read_to_string(&mut err);
+    }
+    assert!(
+        !err.contains("panicked") && !err.contains("Broken pipe"),
+        "{arg} stderr={err}"
+    );
+    status
+}
+
+#[test]
 fn mcp_paths_alias_suggests_path() {
     let out = bin().args(["--paths", "x"]).output().expect("run");
     assert_eq!(out.status.code(), Some(2));

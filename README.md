@@ -80,6 +80,8 @@ craftbag validate demo/workspace/.agents/skills/review-pr
 
 `--section review-a-pull-request` passes the outline key. `--outline` prints that key before the heading `Review a pull request`. `validate` takes the package directory that contains `SKILL.md`, here `demo/workspace/.agents/skills/review-pr`. The collection folder `demo/workspace/.agents/skills` has no `SKILL.md` of its own, so `validate` on it exits 1 with `directory is not a skill package (no SKILL.md)`. `list --path` on that folder still lists the packages inside it.
 
+`--path`, `--user-dir`, and `--ignore` expand `~/` themselves, because MCP and a quoted command have no shell. `~//name` stays under your home directory, the same as `~/name`. A `~//` remainder that is still a Windows drive path is refused, so it does not replace your home directory. A path that is not there is an unreadable skip and says the path does not exist. A symlink whose target is gone says dangling symlink. Explicit `/` and `/..` are roots you named. A padded `..` that collapses to `/`, such as `/tmp/ ..`, is refused.
+
 If `craftbag` is not on `PATH` yet, `cargo build -p craftbag-cli --locked` and use `./target/debug/craftbag` in those commands.
 
 In a project that already has skills under `.agents/skills`:
@@ -103,7 +105,7 @@ craftbag list --vendor claude --catalog
 
 ## MCP
 
-`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. `prompts/list` and `prompts/get` expose skills whose `user_invocable` is true (the default) as MCP prompts. `prompts/get` returns the same text envelope as `load`. After `brew install` or `scoop install`, `craftbag-mcp --help` names the tools.
+`craftbag-mcp` speaks JSON-RPC on stdio. Tools: `skills_list`, `skills_load`, `skills_why`, `skills_validate`. `prompts/list` and `prompts/get` expose skills whose `user_invocable` is true (the default) as MCP prompts. `prompts/get` returns the same text envelope as `load`. After `brew install` or `scoop install`, `craftbag-mcp --help` names the tools. A request with `"id": null` is answered with that id. A message that omits `id` is a notification and gets no response.
 
 Claude Desktop (`claude_desktop_config.json`) and other hosts that take a stdio command:
 
