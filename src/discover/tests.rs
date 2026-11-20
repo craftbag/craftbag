@@ -2977,7 +2977,12 @@ fn double_slash_tilde_drive_prefix_does_not_leave_home() {
     let home = tempfile::tempdir().expect("home");
     write_skill(&home.path().join("minepkg"), "minepkg", "HOME_BODY");
     let home_path = home.path().to_path_buf();
-    for raw in ["~//C:/Windows", r"~/\\C:\Windows"] {
+    for raw in [
+        "~//C:/Windows",
+        r"~/\\C:\Windows",
+        r"~\C:/Windows",
+        r"~\\C:/Windows",
+    ] {
         let report = with_home_override(Some(home_path.clone()), || {
             discover(
                 cwd.path(),
@@ -3025,6 +3030,294 @@ fn double_slash_tilde_drive_prefix_does_not_leave_home() {
                 .skips
                 .iter()
                 .any(|s| s.detail.contains("would leave home") && s.detail.contains("--ignore")),
+            "{raw} ignore skip: {:?}",
+            ignored.skips
+        );
+    }
+}
+
+#[test]
+fn backslash_tilde_stays_under_home() {
+    // Windows `~\name` is the same home join as `~/name`. A repeated
+    // backslash (`~\\name`) is not a new absolute path. `~user` stays
+    // the literal characters.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    let other = tempfile::tempdir().expect("other");
+    write_skill(
+        &home.path().join("cb-tilde-secret").join("hideme"),
+        "hideme",
+        "HOME_SECRET",
+    );
+    write_skill(
+        &home.path().join("myskills").join("mine"),
+        "mine",
+        "from-home",
+    );
+    write_skill(
+        &cwd.path().join("myskills").join("fromcwd"),
+        "fromcwd",
+        "from-cwd",
+    );
+    write_skill(
+        &cwd.path().join("~cbskills").join("litname"),
+        "litname",
+        "LIT",
+    );
+    write_skill(
+        &home.path().join("cbskills").join("homename"),
+        "homename",
+        "HOME_NAME",
+    );
+    write_skill(&other.path().join("keep"), "keep", "KEEP_BODY");
+    let home_path = home.path().to_path_buf();
+
+    for raw in [r"~\cb-tilde-secret", r"~\\cb-tilde-secret"] {
+        let loaded = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert_eq!(
+            loaded
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["hideme"],
+            "{raw} must load the home package, not a cwd join: {loaded:?}"
+        );
+        let loaded_path = loaded.skills[0].source_path.as_ref().expect("source path");
+        assert!(
+            loaded_path.starts_with(&home_path),
+            "{raw} loaded path must stay under home: {loaded_path:?}"
+        );
+        assert!(
+            !loaded.skills.iter().any(|s| s.content.contains("from-cwd")),
+            "{raw} must not load the cwd lookalike: {loaded:?}"
+        );
+    }
+
+    for raw in [r"~\myskills", r"~\\myskills"] {
+        let opts = DiscoveryOptions {
+            user_skills_dir: Some(PathBuf::from(raw)),
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let user = with_home_override(Some(home_path.clone()), || discover(cwd.path(), &opts));
+        assert_eq!(
+            user.skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["mine"],
+            "user_dir {raw} must stay under home: {user:?}"
+        );
+        let watched = with_home_override(Some(home_path.clone()), || watch_dirs(cwd.path(), &opts));
+        assert!(
+            watched
+                .iter()
+                .any(|dir| dir.starts_with(&home_path) && dir.ends_with("myskills")),
+            "watch {raw} must list the home user dir: {watched:?}"
+        );
+        assert!(
+            watched
+                .iter()
+                .all(|dir| !dir.starts_with(cwd.path().join("myskills"))),
+            "watch {raw} must not list the cwd lookalike: {watched:?}"
+        );
+    }
+
+    for raw in [r"~\cb-tilde-secret", r"~\\cb-tilde-secret", r"~\", r"~\\"] {
+        let ignored = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![
+                        "~/cb-tilde-secret".to_owned(),
+                        other.path().display().to_string(),
+                    ],
+                    ignore: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        let names: Vec<&str> = ignored.skills.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["keep"],
+            "{raw} ignore must hide the home package: {ignored:?}"
+        );
+        assert!(
+            ignored
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("HOME_SECRET")),
+            "{raw} ignored home body must stay unloaded: {:?}",
+            ignored.skills
+        );
+    }
+
+    let literal = with_home_override(Some(home_path), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec!["~cbskills".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert_eq!(
+        literal
+            .skills
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["litname"],
+        "~cbskills must stay a literal cwd join: {literal:?}"
+    );
+}
+
+#[test]
+fn backslash_tilde_without_home_does_not_join_cwd() {
+    let cwd = tempfile::tempdir().expect("cwd");
+    write_skill(
+        &cwd.path().join("myskills").join("fromcwd"),
+        "fromcwd",
+        "from-cwd",
+    );
+    write_skill(
+        &cwd.path().join(r"~\myskills").join("fromlit"),
+        "fromlit",
+        "from-lit",
+    );
+    for raw in [r"~\myskills", r"~\\myskills", r"~\", r"~\\"] {
+        let user_opts = DiscoveryOptions {
+            user_skills_dir: Some(PathBuf::from(raw)),
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        let path_opts = DiscoveryOptions {
+            paths: vec![raw.to_owned()],
+            implicit_roots: false,
+            ..DiscoveryOptions::default()
+        };
+        for (label, run) in [
+            ("unset", RunHome::Unset),
+            ("empty", RunHome::Empty),
+            ("blank", RunHome::Blank),
+        ] {
+            for (flag, opts) in [("user-dir", &user_opts), ("--path", &path_opts)] {
+                let report = run.discover(cwd.path(), opts);
+                let names: Vec<&str> = report.skills.iter().map(|s| s.name.as_str()).collect();
+                assert!(
+                    names.is_empty(),
+                    "{label} {flag} {raw} must not load a cwd lookalike: {names:?} {report:?}"
+                );
+                assert!(
+                    report.skips.iter().any(|skip| {
+                        skip.detail.contains("HOME is unset")
+                            && skip.detail.contains(flag)
+                            && skip.path == PathBuf::from(raw)
+                    }),
+                    "{label} {flag} {raw} skip: {:?}",
+                    report.skips
+                );
+            }
+            let watched = run.watch(cwd.path(), &user_opts);
+            assert!(
+                watched.iter().all(|dir| !dir.ends_with("myskills")),
+                "{label} watch must omit {raw}: {watched:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn backslash_tilde_drive_remainder_does_not_leave_home() {
+    // `C:\Windows` replaces home on Windows join. Unix `Path` keeps the
+    // backslash in one component, so the refuse is on the text. A
+    // forward-slash drive (`C:/Windows`) is covered by the Windows test.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    write_skill(&home.path().join("minepkg"), "minepkg", "HOME_BODY");
+    let home_path = home.path().to_path_buf();
+    for raw in [r"~\C:\Windows", r"~\\C:\Windows", r"~/\\C:\Windows"] {
+        let report = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["minepkg"],
+            "{raw} must not walk the drive: {report:?}"
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.detail.contains("would leave home") && s.detail.contains("--path") }),
+            "{raw} skip: {:?}",
+            report.skips
+        );
+        let user = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec!["~/minepkg".to_owned()],
+                    user_skills_dir: Some(PathBuf::from(raw)),
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            find_skill_by_name(&user.skills, "minepkg").is_some(),
+            "{raw} user_dir must not hide the home package: {user:?}"
+        );
+        assert!(
+            user.skips.iter().any(|s| {
+                s.detail.contains("would leave home") && s.detail.contains("--user-dir")
+            }),
+            "{raw} user_dir skip: {:?}",
+            user.skips
+        );
+        let ignored = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec!["~/minepkg".to_owned()],
+                    ignore: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            find_skill_by_name(&ignored.skills, "minepkg").is_some(),
+            "{raw} ignore must not hide the home package: {ignored:?}"
+        );
+        assert!(
+            ignored.skips.iter().any(|s| {
+                s.detail.contains("would leave home") && s.detail.contains("--ignore")
+            }),
             "{raw} ignore skip: {:?}",
             ignored.skips
         );

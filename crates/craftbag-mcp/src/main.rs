@@ -67,7 +67,7 @@ struct DiscoveryArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
-    /// Path prefixes never loaded (silent; no skip row). `~/` and `~//` stay under home. Relative prefixes join cwd.
+    /// Path prefixes never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
 }
@@ -414,7 +414,7 @@ fn discover_properties() -> Value {
     let vendor_tokens = SkillSource::VENDOR_TOKENS;
     let vendor_listed = vendor_tokens.join(", ");
     json!({
-        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: [\"./my-skill\"]."},
+        "paths": {"type": "array", "items": {"type": "string"}, "description": "Extra SKILL.md package or collection roots. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/`, `~\\`, and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: [\"./my-skill\"]."},
         "vendor": {
             "type": "array",
             "items": {"type": "string", "enum": SkillSource::vendor_schema_tokens()},
@@ -422,11 +422,11 @@ fn discover_properties() -> Value {
                 "Opt-in vendor trees: {vendor_listed}. The schema also lists each name with a leading dot (`.claude`). Other ASCII case is folded by the server. Example: [\"claude\"]."
             )
         },
-        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: \"~/myskills\"."},
+        "user_dir": {"type": "string", "description": "User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/`, `~\\`, and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: \"~/myskills\"."},
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
-        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). `~/` and `~//` stay under home. Relative prefixes join cwd. Example: [\"./secret\"]."}
+        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). `~/`, `~\\`, and `~//` stay under home. Relative prefixes join cwd. Example: [\"./secret\"]."}
     })
 }
 
@@ -922,13 +922,13 @@ Prompts (user_invocable skills only; default is true):
   prompts/get      load envelope as one user message
 
 Launch defaults (used when a tool or prompt call omits that field):
-  --path PATH              Extra package or collection root (repeatable). ~/ and ~// stay under home
+  --path PATH              Extra package or collection root (repeatable). ~/, ~\\, and ~// stay under home
   --vendor VENDOR          Opt-in vendor trees: bline, claude, cursor, grok
-  --user-dir DIR           User skills root. ~/ and ~// stay under home
+  --user-dir DIR           User skills root. ~/, ~\\, and ~// stay under home
   --ascii-names            Reject names outside a-z0-9-
   --no-implicit-roots      Skip cwd-to-git and $HOME .agents / vendor walks
   --disabled NAME          Skill name never loaded (repeatable)
-  --ignore PATH            Path prefix never loaded (repeatable). ~/ and ~// stay under home
+  --ignore PATH            Path prefix never loaded (repeatable). ~/, ~\\, and ~// stay under home
 
 Options:
   -h, --help     Print this message
@@ -1760,8 +1760,10 @@ mod tests {
                 for field in ["paths", "user_dir"] {
                     let desc = props[field]["description"].as_str().unwrap_or("");
                     assert!(
-                        desc.contains("dangling symlink") && desc.contains("~//"),
-                        "{name} {field} must name dangling symlink and ~//: {desc}"
+                        desc.contains("dangling symlink")
+                            && desc.contains("~//")
+                            && desc.contains("~\\"),
+                        "{name} {field} must name dangling symlink, ~//, and ~\\: {desc}"
                     );
                 }
             }

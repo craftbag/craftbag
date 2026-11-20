@@ -98,19 +98,20 @@ pub(super) fn nonempty_home() -> Option<PathBuf> {
 pub(super) enum ArgExpand {
     /// Absolute, or relative and safe to join onto the discover cwd.
     Ready(PathBuf),
-    /// Token is `~` or `~/...` and home is unset or blank.
+    /// Token is `~`, `~/...`, or `~\...` and home is unset or blank.
     /// Callers must not join it onto cwd.
     HomeUnset,
     /// No token, or empty / whitespace-only. Not cwd.
     Empty,
-    /// `~/` remainder still has a root or a drive prefix after extra
-    /// slashes are stripped. `Path::join` would replace home.
+    /// `~/` or `~\` remainder still has a root or a drive prefix after
+    /// extra slashes or backslashes are stripped. `Path::join` would
+    /// replace home.
     LeavesHome,
 }
 
 pub(super) fn expand_user_skills_dir(cwd: &Path, user_dir: Option<&Path>) -> ArgExpand {
-    // Same `~` / `~/` expand as extra-path and ignore. MCP and quoted
-    // CLI `--user-dir` have no shell, unlike a typed `~/skills`.
+    // Same `~` / `~/` / `~\` expand as extra-path and ignore. MCP and
+    // quoted CLI `--user-dir` have no shell, unlike a typed `~/skills`.
     // Relative user_dir joins discover cwd, same as extra-path.
     // Empty or whitespace-only is not a directory (not cwd).
     // `~` / `~/` with unset or blank home is [`ArgExpand::HomeUnset`],
@@ -173,12 +174,12 @@ enum TildeExpand {
     LeavesHome,
 }
 
-/// `~` is home. `~/rest` and `~//rest` are home joined with `rest`.
-/// Slashes or backslashes right after `~/` are not a new absolute
-/// path: `Path::join` would drop home and keep `/rest`. A remainder
-/// that still has a root or a drive prefix is [`TildeExpand::LeavesHome`].
-/// `~user` stays the literal characters. Unset or blank home is
-/// [`TildeExpand::HomeUnset`].
+/// `~` is home. `~/rest`, `~\rest`, `~//rest`, and `~\\rest` are home
+/// joined with `rest`. Slashes or backslashes right after the tilde
+/// are not a new absolute path: `Path::join` would drop home and keep
+/// `/rest`. A remainder that still has a root or a drive prefix is
+/// [`TildeExpand::LeavesHome`]. `~user` stays the literal characters.
+/// Unset or blank home is [`TildeExpand::HomeUnset`].
 fn expand_tilde(raw: &str) -> TildeExpand {
     if raw == "~" {
         return match nonempty_home() {
@@ -186,7 +187,10 @@ fn expand_tilde(raw: &str) -> TildeExpand {
             None => TildeExpand::HomeUnset,
         };
     }
-    if let Some(rest) = raw.strip_prefix("~/") {
+    // Windows paths use `\` after `~`. `~//name` and `~\\name` both
+    // strip to `name` so the extra separator cannot replace home.
+    let rest = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\"));
+    if let Some(rest) = rest {
         return match nonempty_home() {
             Some(home) => {
                 let rest = rest.trim_start_matches(['/', '\\']);
@@ -204,7 +208,7 @@ fn expand_tilde(raw: &str) -> TildeExpand {
     TildeExpand::Ready(PathBuf::from(raw))
 }
 
-/// True when this ignore token is `~` or `~/...` and home is unset or blank.
+/// True when this ignore token is `~`, `~/...`, or `~\...` and home is unset or blank.
 /// Line-separator and trim-collapse tokens stay on their existing drop path.
 pub(super) fn tilde_without_home(raw: &str) -> bool {
     if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
@@ -217,8 +221,9 @@ pub(super) fn tilde_without_home(raw: &str) -> bool {
     matches!(expand_tilde(raw), TildeExpand::HomeUnset)
 }
 
-/// True when `~/...` still has a root or a drive prefix after extra
-/// slashes are removed. `Path::join` would drop home (`~//C:/Windows`).
+/// True when `~/...` or `~\...` still has a root or a drive prefix
+/// after extra slashes are removed. `Path::join` would drop home
+/// (`~//C:/Windows`, `~\C:\Windows`).
 /// Line-separator and trim-collapse tokens stay on their existing path.
 pub(super) fn tilde_leaves_home(raw: &str) -> bool {
     if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
@@ -234,7 +239,19 @@ pub(super) fn tilde_leaves_home(raw: &str) -> bool {
 /// A remainder that still has a root or a prefix replaces home on join.
 fn tilde_rest_leaves_home(rest: &str) -> bool {
     let path = Path::new(rest);
-    path.has_root() || path.components().any(|c| matches!(c, Component::Prefix(_)))
+    if path.has_root() || path.components().any(|c| matches!(c, Component::Prefix(_))) {
+        return true;
+    }
+    // Unix `Path` keeps `\` in one component, so `C:\Windows` would
+    // join under home here and replace home on Windows.
+    windows_backslash_drive(rest)
+}
+
+/// `C:\...` is a Windows drive path even when this host's `Path` does
+/// not treat `\` as a separator.
+fn windows_backslash_drive(rest: &str) -> bool {
+    let bytes = rest.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
 }
 
 pub(super) struct IgnorePrefix {
