@@ -37,9 +37,11 @@ no package file is unreadable (`directory is not a skill package`),
 not a child walk. A package directory that exists but whose
 `SKILL.md` cannot be stat'd reports that IO error. It is not
 `no SKILL.md`. `validate --json` uses the same peel on a failed
-path. A refused validate path (whitespace collapse or line separator)
-peels as `unreadable` with a detail that names `validate` /
-`skills_validate`. `error_kind` is the skip code (`parse_error`,
+path. A refused validate path (whitespace collapse, line separator, unset
+home, or a tilde remainder that would leave home) peels as
+`unreadable` with a detail that names `validate` /
+`skills_validate`. `~/`, `~\`, and `~//` stay under home, the same
+as `--path`. `error_kind` is the skip code (`parse_error`,
 `unreadable`, `name_directory_mismatch`). Success prints the
 `ValidationReport` (no `error_kind`). Call `ValidationReport::miss`.
 Echoed keys and names go through `sanitize_error_token` so stderr

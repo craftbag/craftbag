@@ -516,7 +516,7 @@ fn tools() -> Value {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. Example: \"./my-skill\"."
+                        "description": "SKILL.md file, or a package directory that contains SKILL.md / skill.md. Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/`, `~\\`, and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. Example: \"./my-skill\"."
                     },
                     "strict": {
                         "type": "boolean",

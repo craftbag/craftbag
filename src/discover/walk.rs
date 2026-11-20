@@ -476,9 +476,16 @@ pub fn validate_path_with_options(path: &Path, strict: bool) -> ValidationReport
             }),
         };
     }
+    // Quoted and MCP validate have no shell. `~/mine` and `~\mine`
+    // stay under home, the same as `--path`. Unset home and a drive
+    // remainder use the validate host-token strings.
+    let path = match prepare_validate_tilde(path) {
+        PreparedValidate::Path(path) => path,
+        PreparedValidate::Refuse(report) => return report,
+    };
     // Same NFKC `.` / `..` rewrite as extra-path, so
     // `wanted/evil/‥/SKILL.md` is the `wanted` package.
-    let path = nfkc_dot_path_components(path);
+    let path = nfkc_dot_path_components(&path);
     // `validate .` and `validate SKILL.md` from inside the package have
     // no directory component. Join cwd so the parent name is that package.
     let path = anchor_package_path(&path);
@@ -881,6 +888,64 @@ pub(super) fn load_vendor_tree(
 
 pub(super) fn vendor_enabled(opts: &DiscoveryOptions, name: &str) -> bool {
     opts.vendor_roots.iter().any(|v| v == name)
+}
+
+enum PreparedValidate {
+    Path(PathBuf),
+    Refuse(ValidationReport),
+}
+
+fn prepare_validate_tilde(path: &Path) -> PreparedValidate {
+    let Some(raw) = path.to_str() else {
+        return PreparedValidate::Path(path.to_path_buf());
+    };
+    let trimmed = raw.trim();
+    let tilde = trimmed == "~" || trimmed.starts_with("~/") || trimmed.starts_with("~\\");
+    if !tilde {
+        return PreparedValidate::Path(path.to_path_buf());
+    }
+    if tilde_without_home(trimmed) {
+        return PreparedValidate::Refuse(validate_tilde_refuse(
+            trimmed,
+            HostPathField::Validate.home_unset_detail(),
+        ));
+    }
+    if tilde_leaves_home(trimmed) {
+        return PreparedValidate::Refuse(validate_tilde_refuse(
+            trimmed,
+            HostPathField::Validate.leaves_home_detail(),
+        ));
+    }
+    match expand_extra_path_arg(trimmed, Path::new(".")) {
+        ArgExpand::Ready(expanded) => PreparedValidate::Path(expanded),
+        ArgExpand::HomeUnset => PreparedValidate::Refuse(validate_tilde_refuse(
+            trimmed,
+            HostPathField::Validate.home_unset_detail(),
+        )),
+        ArgExpand::LeavesHome => PreparedValidate::Refuse(validate_tilde_refuse(
+            trimmed,
+            HostPathField::Validate.leaves_home_detail(),
+        )),
+        ArgExpand::Empty => PreparedValidate::Path(path.to_path_buf()),
+    }
+}
+
+fn validate_tilde_refuse(raw: &str, detail: &str) -> ValidationReport {
+    let shown = crate::sanitize_error_token(raw);
+    let path = PathBuf::from(&shown);
+    let detail = detail.to_owned();
+    let skip = SkillSkip::host_token_refuse(
+        path.clone(),
+        detail.clone(),
+        crate::skip::HostTokenField::Validate,
+    );
+    ValidationReport {
+        path,
+        ok: false,
+        name: None,
+        errors: vec![detail],
+        skip: Some(skip),
+    }
 }
 
 /// Refuse validate tokens discover already drops as extra-path.
