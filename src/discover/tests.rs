@@ -3324,6 +3324,40 @@ fn backslash_tilde_drive_remainder_does_not_leave_home() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn forward_slash_drive_remainder_stays_under_home_on_unix() {
+    // `C:/Windows` is not a Unix root, so join stays under home.
+    // Windows refuses the same spelling because Path sees a drive prefix.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    write_skill(&home.path().join("minepkg"), "minepkg", "HOME_BODY");
+    let home_path = home.path().to_path_buf();
+    let raw = "~/C:/Windows";
+    let report = with_home_override(Some(home_path.clone()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert!(
+        report
+            .skips
+            .iter()
+            .all(|s| !s.detail.contains("would leave home")),
+        "{raw} is not a Unix drive escape: {:?}",
+        report.skips
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "minepkg").is_some(),
+        "{raw} must not hide the home package: {report:?}"
+    );
+}
+
 #[test]
 fn validate_backslash_tilde_stays_under_home() {
     // Quoted validate and MCP have no shell. `~/mine` must open the

@@ -20,8 +20,8 @@ pub const CURSOR_VENDOR_DENYLIST: &[&str] = &["shell", "canvas", "statusline"];
 pub struct DiscoveryOptions {
     /// Extra paths (`~` / `~/` / `~\` / `~//` expanded when home is set).
     /// `~//name` and `~\\name` stay under home, the same as `~/name`.
-    /// A remainder that is still a Windows drive path is refused,
-    /// including one spelled with backslashes. Relative paths
+    /// A remainder that would replace home is refused: an absolute
+    /// path, or a backslash drive such as `C:\Windows`. Relative paths
     /// join the discover `cwd`. Empty or whitespace-only items are ignored
     /// (not cwd). A `~`, `~/`, or `~\` token with unset or blank home is an
     /// unreadable skip, not a cwd join. A missing path says it does not
@@ -29,7 +29,8 @@ pub struct DiscoveryOptions {
     pub paths: Vec<String>,
     /// Path prefixes to ignore (`~` / `~/` / `~\` / `~//` expanded when home is set).
     /// `~//name` and `~\\name` stay under home, the same as `~/name`. A
-    /// drive-prefixed remainder is refused, including a backslash drive.
+    /// remainder that would replace home is refused (an absolute path,
+    /// or a backslash drive such as `C:\Windows`).
     /// Relative prefixes join `cwd`. Empty or whitespace-only items are
     /// ignored (not cwd). A `~`, `~/`, or `~\` token with unset or blank home
     /// is an unreadable skip and is not installed as a prefix.
@@ -46,8 +47,9 @@ pub struct DiscoveryOptions {
     pub vendor_roots: Vec<String>,
     /// Host-supplied user skills dir (`~` / `~/` / `~\` / `~//` expanded when home is
     /// set, relative paths join the discover `cwd`, same as `paths`).
-    /// `~//name` and `~\\name` stay under home. A drive-prefixed remainder
-    /// is refused, including a backslash drive.
+    /// `~//name` and `~\\name` stay under home. A remainder that would
+    /// replace home is refused (an absolute path, or a backslash drive
+    /// such as `C:\Windows`).
     /// A missing directory says it does not exist. A symlink whose target
     /// is gone says dangling symlink.
     /// Empty or whitespace-only is ignored. A `~`, `~/`, or `~\` token with
