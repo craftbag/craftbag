@@ -42,13 +42,13 @@ struct Cli {
 
 #[derive(clap::Args, Debug, Clone)]
 struct DiscoveryArgs {
-    /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: --path ./my-skill
+    /// Extra package or collection root (not a project walk). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/`, `~\`, and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: --path ./my-skill
     #[arg(long = "path", value_name = "PATH")]
     paths: Vec<String>,
     /// Opt-in vendor trees: bline, claude, cursor, grok. Example: --vendor claude
     #[arg(long, value_delimiter = ',')]
     vendor: Vec<String>,
-    /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/` and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: --user-dir ~/myskills
+    /// User skills root (child dirs are packages). Refuses a line separator or a token that collapses after whitespace (` /..`, `/tmp/ ..`). `~/`, `~\`, and `~//` stay under home. Explicit `/` and `/..` stay host-chosen roots. A missing path is reported as unreadable. A dangling symlink says dangling symlink. Example: --user-dir ~/myskills
     #[arg(long = "user-dir")]
     user_dir: Option<PathBuf>,
     /// Reject names outside `a-z0-9-`. Default still allows Unicode / NFKC.
@@ -60,7 +60,7 @@ struct DiscoveryArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
     #[arg(long = "disabled", value_name = "NAME")]
     disabled: Vec<String>,
-    /// Path prefix never loaded (silent; no skip row). `~/` and `~//` stay under home. Relative prefixes join cwd. Example: --ignore ./secret
+    /// Path prefix never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. Relative prefixes join cwd. Example: --ignore ./secret
     #[arg(long = "ignore", value_name = "PATH")]
     ignore: Vec<String>,
 }

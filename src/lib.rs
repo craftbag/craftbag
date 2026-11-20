@@ -5,7 +5,7 @@
 //! `$HOME/.agents` / vendor trees.
 //! CLI `--no-implicit-roots` and MCP `implicit_roots: false` turn that
 //! walk off; extra `paths` and `user_skills_dir` still load.
-//! `~/` and `~//` on those fields stay under home. A missing host path
+//! `~/`, `~\`, and `~//` on those fields stay under home. A missing host path
 //! says it does not exist. A symlink whose target is gone says
 //! dangling symlink.
 //!
