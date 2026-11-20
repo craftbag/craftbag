@@ -19,12 +19,15 @@ text on stderr. A matching skip also peels `path` (the `SKILL.md`).
 Unknown omits `path`. A refused `--path` / `paths` or `--user-dir` /
 `user_dir` token (whitespace collapse or line separator) peels as
 `unreadable` with `path` and a detail that names that flag.
-A `name_collision` skip also peels `winner_path`
-(the loaded `SKILL.md`). Other misses omit it. SkillSkip deserialize
-accepts that snake `winner_path` (serialize still emits `winnerPath`). MCP `skills_load` /
-`skills_why` merge that same `SkillMiss` object next to `isError`
-(`error_kind`, `error`, `path` when known, and `winner_path` on
-collision) and leave `content[0].text` unchanged (same text as `error`).
+A `name_collision` whose winner stayed loaded is not that miss.
+`why --json` stays `{ loaded, skips, activation }` and the skip
+field is camelCase `winnerPath`. A SkillMiss peels snake_case
+`winner_path` only when it is a miss. `validate` of one file is
+not a collision peel. SkillSkip deserialize accepts snake
+`winner_path` (serialize still emits `winnerPath`). MCP `skills_load` /
+`skills_why` merge a SkillMiss next to `isError` when the call is
+a miss (`error_kind`, `error`, `path` when known, and `winner_path`
+on that miss) and leave `content[0].text` unchanged (same text as `error`).
 `skills_why` default is WhyReport JSON. `format=text` is
 `format_why_text` (same rows as CLI why).
 Call `unknown_or_skipped_skill` / `WhyReport::unknown_skill_miss` (and
@@ -219,6 +222,8 @@ Omitted MCP `disabled` is empty. Present `null` is a type error.
 
 Set `DiscoveryOptions.ignore` (CLI `--ignore PATH`, MCP
 `ignore: ["PATH"]`) to hide path prefixes without a skip row.
+A tilde with unset home, or a remainder that would leave home,
+is an unreadable skip whose detail starts with `--ignore:`.
 Empty or whitespace-only items are ignored (not cwd). Relative
 prefixes join discover cwd (`~` expanded). Omitted MCP `ignore`
 is empty. Present `null` is a type error. `watch_dirs` omits the same prefixes
