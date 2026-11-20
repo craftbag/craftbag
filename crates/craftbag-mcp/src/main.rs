@@ -67,7 +67,7 @@ struct DiscoveryArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why.
     #[serde(default)]
     disabled: Vec<String>,
-    /// Path prefixes never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. Relative prefixes join cwd.
+    /// Path prefixes never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. A tilde with unset home, or a remainder that would leave home, is an unreadable skip that starts with `--ignore:`. Relative prefixes join cwd.
     #[serde(default)]
     ignore: Vec<String>,
 }
@@ -426,7 +426,7 @@ fn discover_properties() -> Value {
         "ascii_names": {"type": "boolean", "description": "Reject names outside a-z0-9-. Default still allows Unicode / NFKC."},
         "implicit_roots": {"type": "boolean", "description": "Walk cwd-to-git .agents / vendor trees and HOME/.agents / vendor trees. Omitted is true. False is collection-only (extra paths and user_dir still load)."},
         "disabled": {"type": "array", "items": {"type": "string"}, "description": "Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: [\"secret\"]."},
-        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). `~/`, `~\\`, and `~//` stay under home. Relative prefixes join cwd. Example: [\"./secret\"]."}
+        "ignore": {"type": "array", "items": {"type": "string"}, "description": "Path prefixes never loaded (silent; no skip row). `~/`, `~\\`, and `~//` stay under home. A tilde with unset home, or a remainder that would leave home, is an unreadable skip that starts with `--ignore:`. Relative prefixes join cwd. Example: [\"./secret\"]."}
     })
 }
 
@@ -489,7 +489,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_load",
-            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). outline lists heading keys; section fetches one heading. Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as why --json).",
+            "description": "Load one skill body and package envelope (includes argument-hint, when-to-use, triggers, allowed-tools, license, compatibility, and metadata when set). outline lists heading keys; section fetches one heading. Does not dump scripts/ or references/ file bodies. A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known. When the winner stayed loaded, load returns that skill. A SkillMiss name_collision peels winner_path.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": false,
@@ -499,7 +499,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_why",
-            "description": "Explain loaded, skipped, and activation decisions. format is json (default `{ loaded, skips, activation }`) or text (same rows as CLI why). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision.",
+            "description": "Explain loaded, skipped, and activation decisions. format is json (default `{ loaded, skips, activation }`) or text (same rows as CLI why). A name miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known. A collision whose winner stayed loaded stays that report; the skip field is winnerPath. A SkillMiss name_collision peels winner_path.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": false,
@@ -508,7 +508,7 @@ fn tools() -> Value {
         },
         {
             "name": "skills_validate",
-            "description": "Validate one SKILL.md file or package directory (joins SKILL.md / skill.md). strict rejects unknown frontmatter keys (skills-ref default; omitted is false). Success is ValidationReport (no error_kind). A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known, and winner_path on name_collision (same as validate --json).",
+            "description": "Validate one SKILL.md file or package directory (joins SKILL.md / skill.md). strict rejects unknown frontmatter keys (skills-ref default; omitted is false). Success is ValidationReport (no error_kind). A miss sets isError and peels SkillMiss.error_kind plus error, and path when a skip is known. One file is not a name_collision peel, so success omits winner_path.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": false,

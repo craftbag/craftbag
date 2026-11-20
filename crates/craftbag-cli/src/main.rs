@@ -60,7 +60,7 @@ struct DiscoveryArgs {
     /// Skill names never loaded (silent; no skip row). Same NFKC identity as load / why. Example: --disabled secret
     #[arg(long = "disabled", value_name = "NAME")]
     disabled: Vec<String>,
-    /// Path prefix never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. Relative prefixes join cwd. Example: --ignore ./secret
+    /// Path prefix never loaded (silent; no skip row). `~/`, `~\`, and `~//` stay under home. A tilde with unset home, or a remainder that would leave home, is an unreadable skip that starts with `--ignore:`. Relative prefixes join cwd. Example: --ignore ./secret
     #[arg(long = "ignore", value_name = "PATH")]
     ignore: Vec<String>,
 }
@@ -100,7 +100,7 @@ enum Cmd {
     Load {
         /// Frontmatter skill name (not a package path). Discover with list --path DIR.
         name: String,
-        /// Success is `{ name, path, source, text }` (text is the envelope, including --outline / --section). On a miss, print `{ error_kind, error }` (same peel as `why --json` / `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Exit 2 on a miss.
+        /// Success is `{ name, path, source, text }` (text is the envelope, including --outline / --section). On a miss, print `{ error_kind, error }` (same peel as `why --json` / `validate --json`), and `path` when a skip is known. When the winner stayed loaded, load returns that skill. A SkillMiss `name_collision` peels `winner_path`. Exit 2 on a miss.
         #[arg(long)]
         json: bool,
         /// Print SKILL.md heading keys and token costs instead of the body.
@@ -119,7 +119,7 @@ enum Cmd {
     Why {
         /// Optional frontmatter skill name filter (not a package path).
         name: Option<String>,
-        /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. A `name_collision` skip also peels `winner_path`. Exit 2 on a name miss. Exit 1 on a tool error.
+        /// Print `{ loaded, skips, activation }` (same shape as MCP skills_why). On a name miss, print `{ error_kind, error }` (same peel as `validate --json`), and `path` when a skip is known. Exit 2 on a name miss. A collision whose winner stayed loaded stays that report; the skip field is `winnerPath`. A SkillMiss `name_collision` peels `winner_path`. Exit 1 on a tool error.
         #[arg(long)]
         json: bool,
         /// Activation context text. A leading hyphen is text (a diff line). Example: --context rebase
@@ -138,7 +138,7 @@ enum Cmd {
         /// Reject unknown frontmatter keys (skills-ref default).
         #[arg(long)]
         strict: bool,
-        /// Success is ValidationReport (no error_kind). Same `{ error_kind, error }` peel as `why --json` on failure, plus `path`. A `name_collision` skip also peels `winner_path`.
+        /// Success is ValidationReport (no error_kind). On failure, print `{ error_kind, error }` plus `path`. One file is not a `name_collision` peel, so success omits `winner_path`.
         #[arg(long)]
         json: bool,
     },
