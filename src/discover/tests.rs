@@ -3324,6 +3324,123 @@ fn backslash_tilde_drive_remainder_does_not_leave_home() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn forward_slash_drive_remainder_stays_under_home_on_unix() {
+    // `C:/Windows` is not a Unix root, so join stays under home.
+    // Windows refuses the same spelling because Path sees a drive prefix.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    write_skill(&home.path().join("minepkg"), "minepkg", "HOME_BODY");
+    let home_path = home.path().to_path_buf();
+    let raw = "~/C:/Windows";
+    let report = with_home_override(Some(home_path.clone()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert!(
+        report
+            .skips
+            .iter()
+            .all(|s| !s.detail.contains("would leave home")),
+        "{raw} is not a Unix drive escape: {:?}",
+        report.skips
+    );
+    assert!(
+        find_skill_by_name(&report.skills, "minepkg").is_some(),
+        "{raw} must not hide the home package: {report:?}"
+    );
+}
+
+#[test]
+fn validate_backslash_tilde_stays_under_home() {
+    // Quoted validate and MCP have no shell. `~/mine` must open the
+    // home package, not a cwd lookalike named the same way.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let home = tempfile::tempdir().expect("home");
+    write_skill(&home.path().join("mine"), "mine", "HOME_BODY");
+    write_skill(&cwd.path().join("~").join("mine"), "mine", "CWD_BODY");
+    write_skill(
+        &home.path().join("cbskills").join("homename"),
+        "homename",
+        "HOME_NAME",
+    );
+    write_skill(&cwd.path().join("~cbskills"), "litname", "LIT");
+    let home_path = home.path().to_path_buf();
+    for raw in ["~/mine", r"~\mine", r"~\\mine"] {
+        let report = with_home_override(Some(home_path.clone()), || {
+            validate_path(std::path::Path::new(raw))
+        });
+        assert!(
+            report.ok,
+            "{raw} must validate the home package: {report:?}"
+        );
+        assert_eq!(report.name.as_deref(), Some("mine"), "{raw}: {report:?}");
+        assert!(
+            report.path.starts_with(&home_path),
+            "{raw} must stay under home, not the cwd lookalike: {}",
+            report.path.display()
+        );
+    }
+    let literal = with_home_override(Some(home_path.clone()), || {
+        validate_path(std::path::Path::new("~cbskills"))
+    });
+    assert!(
+        !literal.path.starts_with(&home_path),
+        "~cbskills must stay a literal path: {}",
+        literal.path.display()
+    );
+    for raw in [r"~\C:\Windows", r"~\\C:\Windows", r"~/\\C:\Windows"] {
+        let report = with_home_override(Some(home_path.clone()), || {
+            validate_path(std::path::Path::new(raw))
+        });
+        assert!(!report.ok, "{raw} must not validate: {report:?}");
+        let skip = report.skip.as_ref().expect("skip");
+        assert!(
+            skip.detail.contains("would leave home")
+                && skip.detail.contains("validate")
+                && skip.detail.contains("skills_validate"),
+            "{raw} skip: {skip:?}"
+        );
+    }
+    for (label, run) in [
+        ("unset", RunHome::Unset),
+        ("empty", RunHome::Empty),
+        ("blank", RunHome::Blank),
+    ] {
+        for raw in ["~/mine", r"~\mine"] {
+            let report = match run {
+                RunHome::Unset => with_home_unset(|| validate_path(std::path::Path::new(raw))),
+                RunHome::Empty => with_home_override(Some(PathBuf::new()), || {
+                    validate_path(std::path::Path::new(raw))
+                }),
+                RunHome::Blank => with_home_override(Some(PathBuf::from("   ")), || {
+                    validate_path(std::path::Path::new(raw))
+                }),
+            };
+            assert!(!report.ok, "{label} {raw} must not validate: {report:?}");
+            let skip = report.skip.as_ref().expect("skip");
+            assert!(
+                skip.detail.contains("HOME is unset")
+                    && skip.detail.contains("validate")
+                    && skip.path == PathBuf::from(raw),
+                "{label} {raw} skip: {skip:?}"
+            );
+            assert!(
+                !report.path.starts_with(cwd.path()),
+                "{label} {raw} must not join cwd: {}",
+                report.path.display()
+            );
+        }
+    }
+}
+
 #[test]
 fn tilde_host_tokens_do_not_load_cwd_lookalikes_without_home() {
     let cwd = tempfile::tempdir().expect("cwd");

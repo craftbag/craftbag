@@ -296,6 +296,10 @@ fn help_names_path_token_refuse() {
     )
     .into_owned();
     assert_help_names_path_token_refuse(&help, "validate PATH");
+    assert!(
+        help.contains("~//") && help.contains("~\\"),
+        "validate --help must say ~/ and ~\\ stay under home: {help}"
+    );
 }
 
 #[test]
