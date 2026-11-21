@@ -118,6 +118,22 @@ mod tests {
         );
     }
 
+    /// README and `DiscoveryOptions` said a tilde remainder leaves
+    /// home only for an absolute path or a backslash drive. A `..`
+    /// that climbs past home is refused too. That sentence drifted
+    /// after the parent-climb check.
+    #[test]
+    fn tilde_leave_home_docs_name_parent_climb() {
+        let readme = include_str!("../README.md");
+        let opts = include_str!("discover/mod.rs");
+        for (label, text) in [("README", readme), ("DiscoveryOptions", opts)] {
+            assert!(
+                text.contains("climbs past home"),
+                "{label} must say a .. climb past home is refused, not only a drive"
+            );
+        }
+    }
+
     #[test]
     fn unknown_skill_miss_omits_path() {
         let unknown = super::unknown_or_skipped_skill("no-such-skill", &[]);
