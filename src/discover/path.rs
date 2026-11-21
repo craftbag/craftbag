@@ -254,12 +254,18 @@ fn tilde_rest_leaves_home(rest: &str) -> bool {
     tilde_rest_climbs_past_home(rest)
 }
 
-/// `..` counted with both separators, after the same NFKC rewrite
-/// `nfkc_dot_path_components` applies on the joined path. A lookalike
-/// parent must not be accepted and then rewritten out of home.
+/// `..` after the same NFKC rewrite `nfkc_dot_path_components` applies
+/// on the joined path. Refuse when either host would climb past home.
+/// Windows splits on `\` and `/`. Unix `open` splits only on `/` and
+/// keeps `\` inside one name, so counting `\` as a directory grants a
+/// fake `..` (`~/a\b/../../outside`).
 fn tilde_rest_climbs_past_home(rest: &str) -> bool {
+    climb_past_home(rest.split(['/', '\\'])) || climb_past_home(rest.split('/'))
+}
+
+fn climb_past_home<'a>(parts: impl Iterator<Item = &'a str>) -> bool {
     let mut depth: u32 = 0;
-    for component in rest.split(['/', '\\']) {
+    for component in parts {
         if component.is_empty() {
             continue;
         }
