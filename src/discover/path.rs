@@ -103,9 +103,10 @@ pub(super) enum ArgExpand {
     HomeUnset,
     /// No token, or empty / whitespace-only. Not cwd.
     Empty,
-    /// `~/` or `~\` remainder still has a root or a drive prefix after
-    /// extra slashes or backslashes are stripped. `Path::join` would
-    /// replace home.
+    /// `~/` or `~\` remainder would not stay under home. A root, a
+    /// drive prefix, or a `..` that climbs past home (backslash
+    /// parents included; Unix `Path` keeps `\` in one component).
+    /// `Path::join` would open that path.
     LeavesHome,
 }
 
@@ -170,15 +171,17 @@ pub(super) fn expand_extra_path_arg(raw: &str, cwd: &Path) -> ArgExpand {
 enum TildeExpand {
     Ready(PathBuf),
     HomeUnset,
-    /// Remainder has a root or drive prefix. Joining it would replace home.
+    /// Remainder has a root, a drive prefix, or a `..` that climbs
+    /// past home. Joining it would open a path outside home.
     LeavesHome,
 }
 
 /// `~` is home. `~/rest`, `~\rest`, `~//rest`, and `~\\rest` are home
 /// joined with `rest`. Slashes or backslashes right after the tilde
 /// are not a new absolute path: `Path::join` would drop home and keep
-/// `/rest`. A remainder that still has a root or a drive prefix is
-/// [`TildeExpand::LeavesHome`]. `~user` stays the literal characters.
+/// `/rest`. A remainder that still has a root, a drive prefix, or a
+/// `..` that climbs past home is [`TildeExpand::LeavesHome`].
+/// `~user` stays the literal characters.
 /// Unset or blank home is [`TildeExpand::HomeUnset`].
 fn expand_tilde(raw: &str) -> TildeExpand {
     if raw == "~" {
@@ -221,9 +224,9 @@ pub(super) fn tilde_without_home(raw: &str) -> bool {
     matches!(expand_tilde(raw), TildeExpand::HomeUnset)
 }
 
-/// True when `~/...` or `~\...` still has a root or a drive prefix
-/// after extra slashes are removed. `Path::join` would drop home
-/// (`~//C:/Windows`, `~\C:\Windows`).
+/// True when `~/...` or `~\...` would not stay under home after extra
+/// slashes are removed. `Path::join` would drop home (`~//C:/Windows`,
+/// `~\C:\Windows`) or climb out (`~/../../Windows`, `~\..\..\Windows`).
 /// Line-separator and trim-collapse tokens stay on their existing path.
 pub(super) fn tilde_leaves_home(raw: &str) -> bool {
     if str_has_line_separator(raw) || host_token_collapses_after_whitespace(raw) {
@@ -236,7 +239,8 @@ pub(super) fn tilde_leaves_home(raw: &str) -> bool {
     matches!(expand_tilde(raw), TildeExpand::LeavesHome)
 }
 
-/// A remainder that still has a root or a prefix replaces home on join.
+/// A remainder that has a root, a drive prefix, or enough `..` to
+/// climb past home replaces home on join.
 fn tilde_rest_leaves_home(rest: &str) -> bool {
     let path = Path::new(rest);
     if path.has_root() || path.components().any(|c| matches!(c, Component::Prefix(_))) {
@@ -244,7 +248,36 @@ fn tilde_rest_leaves_home(rest: &str) -> bool {
     }
     // Unix `Path` keeps `\` in one component, so `C:\Windows` would
     // join under home here and replace home on Windows.
-    windows_backslash_drive(rest)
+    if windows_backslash_drive(rest) {
+        return true;
+    }
+    tilde_rest_climbs_past_home(rest)
+}
+
+/// `..` counted with both separators, after the same NFKC rewrite
+/// `nfkc_dot_path_components` applies on the joined path. A lookalike
+/// parent must not be accepted and then rewritten out of home.
+fn tilde_rest_climbs_past_home(rest: &str) -> bool {
+    let mut depth: u32 = 0;
+    for component in rest.split(['/', '\\']) {
+        if component.is_empty() {
+            continue;
+        }
+        let normalized = crate::parse::normalize_skill_name(component);
+        let normalized = normalized.trim();
+        if normalized.is_empty() || normalized == "." {
+            continue;
+        }
+        if normalized == ".." {
+            if depth == 0 {
+                return true;
+            }
+            depth -= 1;
+        } else {
+            depth = depth.saturating_add(1);
+        }
+    }
+    false
 }
 
 /// `C:\...` is a Windows drive path even when this host's `Path` does
