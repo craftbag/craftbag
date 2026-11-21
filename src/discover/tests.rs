@@ -3324,6 +3324,186 @@ fn backslash_tilde_drive_remainder_does_not_leave_home() {
     }
 }
 
+#[test]
+fn tilde_parent_remainder_does_not_leave_home() {
+    // `..` is not a root or a drive prefix, so 0.3.2 joined it and
+    // opened the result. Unix `Path` keeps `\` in one component, and
+    // a missing `home/../../Windows` is not a directory, so a watch
+    // list on macOS stayed empty while Windows opened `C:\Windows`.
+    // `outside` is a real package above this home.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let base = tempfile::tempdir().expect("base");
+    let home = base.path().join("users").join("sebta");
+    fs::create_dir_all(&home).expect("home");
+    write_skill(&home.join("minepkg"), "minepkg", "HOME_BODY");
+    write_skill(&base.path().join("outside"), "outside", "OUTSIDE_BODY");
+    let home_path = home.clone();
+    let home_canon = home.canonicalize().expect("home canon");
+    // `outside` is a real package above home. The `Windows` spellings
+    // are the reported tokens: `\` is one component on Unix, so only
+    // the refusal text fails before the fix.
+    let escapes = [
+        "~/../../outside",
+        "~/minepkg/../../../outside",
+        "~/‥/‥/outside",
+        "~/../..",
+        "~/../../Windows",
+        r"~\..\..\Windows",
+        r"~\minepkg\..\..\..\Windows",
+    ];
+    for raw in escapes {
+        let report = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["minepkg"],
+            "{raw} must not load the directory outside home: {report:?}"
+        );
+        assert!(
+            report
+                .skills
+                .iter()
+                .all(|s| !s.content.contains("OUTSIDE_BODY")),
+            "{raw} must not read the outside body: {report:?}"
+        );
+        assert!(
+            report
+                .skips
+                .iter()
+                .any(|s| { s.detail.contains("would leave home") && s.detail.contains("--path") }),
+            "{raw} skip: {:?}",
+            report.skips
+        );
+        let watched = with_home_override(Some(home_path.clone()), || {
+            watch_dirs(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            watched.iter().all(|dir| {
+                dir.canonicalize()
+                    .is_ok_and(|canon| canon.starts_with(&home_canon))
+            }),
+            "{raw} watch must stay under home: {watched:?}"
+        );
+        let validated = with_home_override(Some(home_path.clone()), || {
+            validate_path(std::path::Path::new(raw))
+        });
+        assert!(!validated.ok, "{raw} must not validate: {validated:?}");
+        let skip = validated.skip.as_ref().expect("validate skip");
+        assert!(
+            skip.detail.contains("would leave home") && skip.detail.contains("validate"),
+            "{raw} validate skip: {skip:?}"
+        );
+        assert!(
+            validated
+                .errors
+                .iter()
+                .all(|err| !err.contains("no SKILL.md")),
+            "{raw} must be refused before open: {validated:?}"
+        );
+        let user = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec!["~/minepkg".to_owned()],
+                    user_skills_dir: Some(PathBuf::from(raw)),
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            find_skill_by_name(&user.skills, "minepkg").is_some(),
+            "{raw} user_dir must not hide the home package: {user:?}"
+        );
+        assert!(
+            user.skills
+                .iter()
+                .all(|s| !s.content.contains("OUTSIDE_BODY")),
+            "{raw} user_dir must not read the outside body: {user:?}"
+        );
+        assert!(
+            user.skips.iter().any(|s| {
+                s.detail.contains("would leave home") && s.detail.contains("--user-dir")
+            }),
+            "{raw} user_dir skip: {:?}",
+            user.skips
+        );
+        let ignored = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec!["~/minepkg".to_owned()],
+                    ignore: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert!(
+            find_skill_by_name(&ignored.skills, "minepkg").is_some(),
+            "{raw} ignore must not hide the home package: {ignored:?}"
+        );
+        assert!(
+            ignored.skips.iter().any(|s| {
+                s.detail.contains("would leave home") && s.detail.contains("--ignore")
+            }),
+            "{raw} ignore skip: {:?}",
+            ignored.skips
+        );
+    }
+    for raw in ["~/minepkg/../minepkg", "~/minepkg/‥/minepkg"] {
+        let validated = with_home_override(Some(home_path.clone()), || {
+            validate_path(std::path::Path::new(raw))
+        });
+        assert!(validated.ok, "{raw} stays under home: {validated:?}");
+        assert_eq!(validated.name.as_deref(), Some("minepkg"), "{raw}");
+        assert!(
+            validated.path.starts_with(&home_path),
+            "{raw} path must stay under home: {}",
+            validated.path.display()
+        );
+        let report = with_home_override(Some(home_path.clone()), || {
+            discover(
+                cwd.path(),
+                &DiscoveryOptions {
+                    paths: vec![raw.to_owned()],
+                    implicit_roots: false,
+                    ..DiscoveryOptions::default()
+                },
+            )
+        });
+        assert_eq!(
+            report
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            ["minepkg"],
+            "{raw} must load the home package: {report:?}"
+        );
+        assert_eq!(report.skills[0].content.trim(), "HOME_BODY");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn forward_slash_drive_remainder_stays_under_home_on_unix() {
