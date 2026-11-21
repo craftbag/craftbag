@@ -21,7 +21,9 @@ pub struct DiscoveryOptions {
     /// Extra paths (`~` / `~/` / `~\` / `~//` expanded when home is set).
     /// `~//name` and `~\\name` stay under home, the same as `~/name`.
     /// A remainder that would replace home is refused: an absolute
-    /// path, or a backslash drive such as `C:\Windows`. Relative paths
+    /// path, a backslash drive such as `C:\Windows`, or a `..` that
+    /// climbs past home (`~/../../Windows`). A parent that stays
+    /// inside home still loads. Relative paths
     /// join the discover `cwd`. Empty or whitespace-only items are ignored
     /// (not cwd). A `~`, `~/`, or `~\` token with unset or blank home is an
     /// unreadable skip, not a cwd join. A missing path says it does not
@@ -30,7 +32,8 @@ pub struct DiscoveryOptions {
     /// Path prefixes to ignore (`~` / `~/` / `~\` / `~//` expanded when home is set).
     /// `~//name` and `~\\name` stay under home, the same as `~/name`. A
     /// remainder that would replace home is refused (an absolute path,
-    /// or a backslash drive such as `C:\Windows`).
+    /// a backslash drive such as `C:\Windows`, or a `..` that climbs
+    /// past home). A parent that stays inside home still loads.
     /// Relative prefixes join `cwd`. Empty or whitespace-only items are
     /// ignored (not cwd). A `~`, `~/`, or `~\` token with unset or blank home
     /// is an unreadable skip and is not installed as a prefix.
@@ -48,8 +51,9 @@ pub struct DiscoveryOptions {
     /// Host-supplied user skills dir (`~` / `~/` / `~\` / `~//` expanded when home is
     /// set, relative paths join the discover `cwd`, same as `paths`).
     /// `~//name` and `~\\name` stay under home. A remainder that would
-    /// replace home is refused (an absolute path, or a backslash drive
-    /// such as `C:\Windows`).
+    /// replace home is refused (an absolute path, a backslash drive
+    /// such as `C:\Windows`, or a `..` that climbs past home).
+    /// A parent that stays inside home still loads.
     /// A missing directory says it does not exist. A symlink whose target
     /// is gone says dangling symlink.
     /// Empty or whitespace-only is ignored. A `~`, `~/`, or `~\` token with
