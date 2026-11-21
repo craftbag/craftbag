@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2](https://github.com/craftbag/craftbag/compare/v0.3.1...v0.3.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* expand a Windows backslash tilde path ([#442](https://github.com/craftbag/craftbag/issues/442)) ([4d93578](https://github.com/craftbag/craftbag/commit/4d93578034c6a563f4790e28c309e856f446b638)), closes [#435](https://github.com/craftbag/craftbag/issues/435)
+* expand validate tilde paths and bump rustix ([#444](https://github.com/craftbag/craftbag/issues/444)) ([4cd5433](https://github.com/craftbag/craftbag/commit/4cd543344dfb7c5f6a1473a174207d1102dbf5c3))
+
 ## [0.3.1](https://github.com/craftbag/craftbag/compare/v0.3.0...v0.3.1) (2026-10-21)
 
 
