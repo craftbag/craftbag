@@ -3504,6 +3504,87 @@ fn tilde_parent_remainder_does_not_leave_home() {
     }
 }
 
+#[test]
+fn tilde_backslash_in_name_does_not_grant_parent_depth() {
+    // Unix open keeps `\` inside one directory name. Counting `\` as
+    // a separator gives that name a fake `..`, so `~/a\b/../../outside`
+    // leaves home once `a\b` exists. Windows splits on `\`, so the
+    // same spelling stays under home there. Refuse it on every host.
+    let cwd = tempfile::tempdir().expect("cwd");
+    let base = tempfile::tempdir().expect("base");
+    let home = base.path().join("users").join("sebta");
+    fs::create_dir_all(&home).expect("home");
+    write_skill(&home.join("minepkg"), "minepkg", "HOME_BODY");
+    let outside = base.path().join("users").join("outside");
+    write_skill(&outside, "outside", "OUTSIDE_BODY");
+    let home_path = home.clone();
+    let home_canon = home.canonicalize().expect("home canon");
+    let raw = "~/a\\b/../../outside";
+    if cfg!(unix) {
+        fs::create_dir_all(home.join("a\\b")).expect("backslash name");
+    }
+    let report = with_home_override(Some(home_path.clone()), || {
+        discover(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![raw.to_owned(), "~/minepkg".to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    assert!(
+        report
+            .skills
+            .iter()
+            .all(|s| !s.content.contains("OUTSIDE_BODY")),
+        "{raw} must not read the sibling body: {report:?}"
+    );
+    assert!(
+        report
+            .skips
+            .iter()
+            .any(|s| { s.detail.contains("would leave home") && s.detail.contains("--path") }),
+        "{raw} skip: {:?}",
+        report.skips
+    );
+    let watched = with_home_override(Some(home_path.clone()), || {
+        watch_dirs(
+            cwd.path(),
+            &DiscoveryOptions {
+                paths: vec![raw.to_owned()],
+                implicit_roots: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+    });
+    let outside_canon = outside.canonicalize().expect("outside canon");
+    assert!(
+        watched.iter().all(|dir| {
+            dir.canonicalize()
+                .is_ok_and(|canon| canon.starts_with(&home_canon) && canon != outside_canon)
+        }),
+        "{raw} watch must stay under home: {watched:?}"
+    );
+    let validated = with_home_override(Some(home_path.clone()), || {
+        validate_path(std::path::Path::new(raw))
+    });
+    assert!(!validated.ok, "{raw} must not validate: {validated:?}");
+    let skip = validated.skip.as_ref().expect("validate skip");
+    assert!(
+        skip.detail.contains("would leave home") && skip.detail.contains("validate"),
+        "{raw} validate skip: {skip:?}"
+    );
+    if cfg!(unix) {
+        let stay = "~/a\\b/../minepkg";
+        let stayed = with_home_override(Some(home_path.clone()), || {
+            validate_path(std::path::Path::new(stay))
+        });
+        assert!(stayed.ok, "{stay} stays under home: {stayed:?}");
+        assert_eq!(stayed.name.as_deref(), Some("minepkg"));
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn forward_slash_drive_remainder_stays_under_home_on_unix() {
