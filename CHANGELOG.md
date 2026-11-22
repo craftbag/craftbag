@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3](https://github.com/craftbag/craftbag/compare/v0.3.2...v0.3.3) (2026-11-22)
+
+
+### Bug Fixes
+
+* pin the library install line at 0.3 ([#451](https://github.com/craftbag/craftbag/issues/451)) ([124cc2a](https://github.com/craftbag/craftbag/commit/124cc2adaed7b783a9192a9c5a94562d37055dfc))
+* refuse a tilde parent hidden by a backslash name ([#450](https://github.com/craftbag/craftbag/issues/450)) ([da04071](https://github.com/craftbag/craftbag/commit/da04071d718db859523004e0910463af2d4741e9))
+* refuse a tilde path that climbs out of home ([#447](https://github.com/craftbag/craftbag/issues/447)) ([656b3d9](https://github.com/craftbag/craftbag/commit/656b3d99a6b7f6d79792365e5399cf89df9cd2bb)), closes [#446](https://github.com/craftbag/craftbag/issues/446)
+* say a tilde parent that climbs past home is refused ([#449](https://github.com/craftbag/craftbag/issues/449)) ([011dbae](https://github.com/craftbag/craftbag/commit/011dbae7263e8fa28d0d9150f05d4b789ad1b1ed))
+
 ## [0.3.2](https://github.com/craftbag/craftbag/compare/v0.3.1...v0.3.2) (2026-11-20)
 
 
