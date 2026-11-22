@@ -379,12 +379,12 @@ fn readme_names_the_product_and_is_path_filtered() {
         "README must show a library embedder path"
     );
     assert!(
-        readme.contains("craftbag = \"0.2\""),
-        "library install pin must match the 0.2 discover sample"
+        readme.contains("craftbag = \"0.3\""),
+        "library install pin must be the current 0.3 line"
     );
     assert!(
-        !readme.contains("craftbag = \"0.1\""),
-        "crates.io 0.1 pin stays on 0.1.2 and does not compile the 0.2 sample"
+        !readme.contains("craftbag = \"0.2\"") && !readme.contains("craftbag = \"0.1\""),
+        "0.2 stays on 0.2.3 and 0.1 stays on 0.1.2; neither is the current library"
     );
     let ci = read_rel(".github/workflows/ci.yml");
     assert!(
