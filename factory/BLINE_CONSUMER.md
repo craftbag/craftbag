@@ -71,10 +71,11 @@ Use a Bline worktree that is not findbug and not the durable
 bline-skills = { path = "/path/to/craftbag", package = "craftbag" }
 ```
 
-Published crate: `craftbag = "0.2"` (0.2.0: `discover` returns
-`DiscoveryReport` with no `Result`; leftover `user_dir/skills/SKILL.md`
-is `root_file`). `craftbag = "0.1"` stays on 0.1.2. Path-dep
-remains valid for unreleased pins.
+Published crate line is `craftbag = "0.3"`. `craftbag = "0.2"` stays
+on 0.2.3. `craftbag = "0.1"` stays on 0.1.2. 0.2.0 is when `discover`
+started returning `DiscoveryReport` with no `Result`, and when leftover
+`user_dir/skills/SKILL.md` became `root_file`. Path-dep remains valid
+for unreleased pins.
 
 ## Intended shim
 
