@@ -552,10 +552,8 @@ fn reject_optional_string_bool(key: &str, raw_value: &str) -> Result<(), ParseEr
     if !unquoted_yaml_bool_word(raw_value) {
         return Ok(());
     }
-    let shown_key = crate::sanitize_error_token(key);
-    let shown = crate::sanitize_error_token(raw_value.trim());
-    Err(ParseError::InvalidYaml(format!(
-        "{shown_key} must be a string, got: {shown}"
+    Err(ParseError::InvalidYaml(unquoted_bool_quote_message(
+        key, raw_value,
     )))
 }
 
@@ -563,9 +561,9 @@ fn reject_metadata_bool_word(raw: &str) -> Result<(), ParseError> {
     if !unquoted_yaml_bool_word(raw) {
         return Ok(());
     }
-    let shown = crate::sanitize_error_token(raw.trim());
-    Err(ParseError::InvalidYaml(format!(
-        "metadata value must be a string, got: {shown}"
+    Err(ParseError::InvalidYaml(unquoted_bool_quote_message(
+        "metadata value",
+        raw,
     )))
 }
 
@@ -2833,17 +2831,19 @@ body
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
-                msg.contains(&format!("{key} must be a string, got: {token}")),
+                msg.contains(&format!("{key}: quote '{token}'"))
+                    && msg.contains("YAML treats it as a boolean"),
                 "{key} {token}: {msg}"
             );
+            assert!(!msg.contains("must be a string"), "{key} {token}: {msg}");
         }
         let meta = parse_skill(
             "---\nname: kept\ndescription: d\nmetadata:\n  author: y\n  version: 1\n---\nbody\n",
         )
         .expect_err("metadata letter");
         assert!(
-            meta.to_string()
-                .contains("metadata value must be a string, got: y"),
+            meta.to_string().contains("metadata value: quote 'y'")
+                && meta.to_string().contains("YAML treats it as a boolean"),
             "{meta}"
         );
 
@@ -2914,9 +2914,11 @@ body
             let err = parse_skill(&input).expect_err(&input);
             let msg = err.to_string();
             assert!(
-                msg.contains(&format!("{key} must be a string, got: {token}")),
+                msg.contains(&format!("{key}: quote '{token}'"))
+                    && msg.contains("YAML treats it as a boolean"),
                 "{key} {token}: {msg}"
             );
+            assert!(!msg.contains("must be a string"), "{key} {token}: {msg}");
             assert_eq!(msg.lines().count(), 1, "{msg:?}");
         }
 
@@ -2954,15 +2956,51 @@ body
         )
         .expect_err("flow metadata bool");
         assert!(
-            meta.to_string()
-                .contains("metadata value must be a string, got: true"),
+            meta.to_string().contains("metadata value: quote 'true'")
+                && meta.to_string().contains("YAML treats it as a boolean"),
             "{meta}"
         );
         let meta_block = parse_skill(
             "---\nname: kept\ndescription: d\nmetadata:\n  author: YES\n  version: 1\n---\nbody\n",
         )
         .expect_err("block metadata bool");
-        assert!(meta_block.to_string().contains("got: YES"), "{meta_block}");
+        assert!(
+            meta_block
+                .to_string()
+                .contains("metadata value: quote 'YES'"),
+            "{meta_block}"
+        );
+        for (input, needle) in [
+            (
+                "---\nname: demo\ndescription: A useful skill.\ncompatibility: yes\n---\nBody.\n",
+                "compatibility: quote 'yes'",
+            ),
+            (
+                "---\nname: demo\ndescription: A useful skill.\nlicense: off\n---\nBody.\n",
+                "license: quote 'off'",
+            ),
+            (
+                "---\nname: demo\ndescription: A useful skill.\nallowed-tools: on\n---\nBody.\n",
+                "allowed-tools: quote 'on'",
+            ),
+            (
+                "---\nname: demo\ndescription: A useful skill.\nmetadata:\n  version: on\n---\nBody.\n",
+                "metadata value: quote 'on'",
+            ),
+        ] {
+            let err = parse_skill(input).expect_err(input);
+            let msg = err.to_string();
+            assert!(
+                msg.contains(needle) && msg.contains("YAML treats it as a boolean"),
+                "{needle}: {msg}"
+            );
+            assert!(!msg.contains("must be a string"), "{needle}: {msg}");
+        }
+        let quoted_compat = parse_skill(
+            "---\nname: demo\ndescription: A useful skill.\ncompatibility: \"yes\"\n---\nBody.\n",
+        )
+        .expect("quoted compatibility");
+        assert_eq!(quoted_compat.compatibility.as_deref(), Some("yes"));
         let meta_quoted = parse_skill(
             "---\nname: kept\ndescription: d\nmetadata: {author: \"true\", version: 1}\n---\nbody\n",
         )
