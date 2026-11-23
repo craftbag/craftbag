@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4](https://github.com/craftbag/craftbag/compare/v0.3.3...v0.3.4) (2026-11-23)
+
+
+### Bug Fixes
+
+* tell optional string fields to quote a boolean word ([#453](https://github.com/craftbag/craftbag/issues/453)) ([395cc2a](https://github.com/craftbag/craftbag/commit/395cc2a7c532ea204f1ed81487fb320f7e7b8fd3))
+
 ## [0.3.3](https://github.com/craftbag/craftbag/compare/v0.3.2...v0.3.3) (2026-11-22)
 
 
