@@ -1,4 +1,4 @@
-# craftbag
+# Craftbag
 
 Discover, list, load, and explain Agent Skills (`SKILL.md`) for CLI and MCP hosts.
 
@@ -15,7 +15,7 @@ Discover, list, load, and explain Agent Skills (`SKILL.md`) for CLI and MCP host
 
 ## What it does
 
-craftbag walks project and home skill trees (`.agents`, plus optional vendor trees for Claude, Cursor, Grok, and Bline). It then:
+Craftbag walks project and home skill trees (`.agents`, plus optional vendor trees for Claude, Cursor, Grok, and Bline). It then:
 
 - catalogs skills (`list`)
 - prints one skill body (`load`), or heading keys / one heading (`load --outline`, `load --section KEY`)
@@ -101,7 +101,7 @@ craftbag list --vendor claude --catalog
 
 ## Demo
 
-![craftbag catalog and load](demo/demo.gif)
+![Craftbag catalog and load](demo/demo.gif)
 
 ## MCP
 

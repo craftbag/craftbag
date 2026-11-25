@@ -348,8 +348,12 @@ fn ci_pins_install_action_rust_tools() {
 fn readme_names_the_product_and_is_path_filtered() {
     let readme = read_rel("README.md").replace("\r\n", "\n");
     assert!(
-        readme.starts_with("# craftbag\n"),
-        "README must start with the crate name"
+        readme.starts_with("# Craftbag\n"),
+        "README heading is the display name"
+    );
+    assert!(
+        readme.contains("\nCraftbag walks project and home skill trees"),
+        "English sentences use the display name"
     );
     assert!(
         !readme.contains("Not ready."),
