@@ -210,7 +210,9 @@ fn with_skip_tsv(mut out: String, skips: &[craftbag::SkillSkip]) -> String {
 
 struct ToolError {
     message: String,
-    miss: Option<SkillMiss>,
+    // SkillMiss holds PathBuf. On Windows that value is at least 128
+    // bytes, which is clippy's result_large_err limit. Linux stays under it.
+    miss: Option<Box<SkillMiss>>,
 }
 
 impl From<String> for ToolError {
@@ -226,7 +228,7 @@ impl From<SkillMiss> for ToolError {
     fn from(miss: SkillMiss) -> Self {
         Self {
             message: miss.error.clone(),
-            miss: Some(miss),
+            miss: Some(Box::new(miss)),
         }
     }
 }
@@ -381,7 +383,21 @@ fn validate_text(args: ValidateArgs) -> Result<String, ToolError> {
 }
 
 fn tool_fail(err: ToolError) -> (String, bool, Option<SkillMiss>) {
-    (err.message, true, err.miss)
+    (err.message, true, err.miss.map(|miss| *miss))
+}
+
+#[cfg(test)]
+mod tool_error_size {
+    use super::ToolError;
+
+    #[test]
+    fn tool_error_stays_under_clippy_result_large_err() {
+        let size = std::mem::size_of::<ToolError>();
+        assert!(
+            size < 128,
+            "ToolError is {size} bytes; keep SkillMiss boxed"
+        );
+    }
 }
 
 /// Copy `{ error_kind, error }`, optional `path`, and `winner_path` on
