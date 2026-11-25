@@ -1,4 +1,4 @@
-//! craftbag CLI: list, load, why, validate, new.
+//! Craftbag CLI: list, load, why, validate, new.
 
 use std::io::{self, Write};
 use std::path::PathBuf;
