@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5](https://github.com/craftbag/craftbag/compare/v0.3.4...v0.3.5) (2026-11-25)
+
+
+### Bug Fixes
+
+* load metadata block scalars as text ([#457](https://github.com/craftbag/craftbag/issues/457)) ([6b995a7](https://github.com/craftbag/craftbag/commit/6b995a74de3a8739e3a6dc4bfd00c76056e3287d))
+* reject a block header that shares its line with text ([#459](https://github.com/craftbag/craftbag/issues/459)) ([449363b](https://github.com/craftbag/craftbag/commit/449363bcd97540d86a7aa7987d8ec0320dad02c9))
+
 ## [0.3.4](https://github.com/craftbag/craftbag/compare/v0.3.3...v0.3.4) (2026-11-23)
 
 
