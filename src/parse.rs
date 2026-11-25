@@ -732,6 +732,19 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 if let Some((k, v)) = trimmed.split_once(':') {
                     let k = unquote_yaml_scalar(k.trim());
                     let raw_v = strip_yaml_inline_comment(v);
+                    if let Some(style) = yaml_block_scalar_style(raw_v) {
+                        let block = take_yaml_block_scalar(&mut lines, style, indent);
+                        if block.is_empty() {
+                            let shown = crate::sanitize_error_token(&k);
+                            return Err(ParseError::InvalidYaml(format!(
+                                "{shown} block scalar is empty"
+                            )));
+                        }
+                        if !k.is_empty() {
+                            metadata.insert(k, block);
+                        }
+                        continue;
+                    }
                     if unquoted_yaml_flow_collection(raw_v) {
                         let shown = crate::sanitize_error_token(raw_v.trim());
                         return Err(ParseError::InvalidYaml(format!(
@@ -794,7 +807,13 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
             let value = unquote_yaml_scalar(raw_value);
 
             if let Some(style) = yaml_block_scalar_style(raw_value) {
-                let block = take_yaml_block_scalar(&mut lines, style);
+                // A block is one string. It is not a metadata map, and
+                // the indented body is not read as nested keys.
+                if key == "metadata" {
+                    push_inline_metadata(&mut metadata, raw_value)?;
+                    continue;
+                }
+                let block = take_yaml_block_scalar(&mut lines, style, 0);
                 if let Some(canon) = canonical_bool_yaml_key(key) {
                     assign_parsed_bool(
                         canon,
@@ -1025,7 +1044,13 @@ fn yaml_block_scalar_style(value: &str) -> Option<char> {
     }
 }
 
-fn take_yaml_block_scalar<'a, I>(lines: &mut std::iter::Peekable<I>, style: char) -> String
+/// `parent_indent` is the key column. A later line at that column or
+/// less is the next field, not more block text. Top-level keys pass 0.
+fn take_yaml_block_scalar<'a, I>(
+    lines: &mut std::iter::Peekable<I>,
+    style: char,
+    parent_indent: usize,
+) -> String
 where
     I: Iterator<Item = &'a str>,
 {
@@ -1036,7 +1061,7 @@ where
             lines.next();
             continue;
         }
-        if !line_is_yaml_indented(next) {
+        if yaml_indent_width(next) <= parent_indent {
             break;
         }
         let Some(raw) = lines.next() else {
@@ -1119,7 +1144,7 @@ where
         }
         if let Some(style) = yaml_block_scalar_style(stripped) {
             lines.next();
-            let block = take_yaml_block_scalar(lines, style);
+            let block = take_yaml_block_scalar(lines, style, 0);
             if block.is_empty() {
                 let shown_key = crate::sanitize_error_token(key);
                 return Err(ParseError::InvalidYaml(format!(
@@ -3490,6 +3515,135 @@ body
             quoted.metadata.get("author").map(String::as_str),
             Some("{name: ada}")
         );
+    }
+
+    #[test]
+    fn metadata_block_scalar_loads_as_text() {
+        let literal = "\
+---
+name: demo
+description: A useful skill.
+metadata:
+  author: |
+    Ada Lovelace
+---
+Body.
+";
+        let skill = parse_skill(literal).expect("literal metadata block");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("Ada Lovelace")
+        );
+        assert!(skill.content.contains("Body."));
+
+        let folded = "\
+---
+name: demo
+description: A useful skill.
+metadata:
+  author: >
+    Ada Lovelace
+---
+Body.
+";
+        let skill = parse_skill(folded).expect("folded metadata block");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("Ada Lovelace")
+        );
+
+        let strip = "\
+---
+name: demo
+description: A useful skill.
+metadata:
+  author: |-
+    Ada Lovelace
+---
+Body.
+";
+        let skill = parse_skill(strip).expect("strip-chomp metadata block");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("Ada Lovelace")
+        );
+
+        let two_literal = "\
+---
+name: demo
+description: A useful skill.
+metadata:
+  author: |
+    Ada Lovelace
+    wrote notes
+  version: \"on\"
+---
+Body.
+";
+        let skill = parse_skill(two_literal).expect("two-line literal metadata");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("Ada Lovelace\nwrote notes")
+        );
+        assert_eq!(
+            skill.metadata.get("version").map(String::as_str),
+            Some("on")
+        );
+
+        let two_folded = "\
+---
+name: demo
+description: A useful skill.
+metadata:
+  author: >
+    Ada Lovelace
+    wrote notes
+---
+Body.
+";
+        let skill = parse_skill(two_folded).expect("two-line folded metadata");
+        assert_eq!(
+            skill.metadata.get("author").map(String::as_str),
+            Some("Ada Lovelace wrote notes")
+        );
+    }
+
+    #[test]
+    fn metadata_block_scalar_empty_is_an_error() {
+        for style in ["|", ">", "|-", ">-"] {
+            let input = format!(
+                "---\nname: demo\ndescription: A useful skill.\nmetadata:\n  author: {style}\n---\nBody.\n"
+            );
+            let err = parse_skill(&input).expect_err(&input);
+            let msg = err.to_string();
+            assert!(
+                matches!(err, ParseError::InvalidYaml(_)) && msg.contains("block scalar is empty"),
+                "{style}: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn metadata_block_scalar_value_must_be_a_map() {
+        for style in ['|', '>'] {
+            let input = format!(
+                "---\nname: demo\ndescription: A useful skill.\nmetadata: {style}\n  author: Ada Lovelace\n---\nBody.\n"
+            );
+            match parse_skill(&input) {
+                Ok(skill) => panic!(
+                    "{style} metadata block must not load, metadata={:?}",
+                    skill.metadata
+                ),
+                Err(err) => {
+                    let msg = err.to_string();
+                    assert!(
+                        matches!(err, ParseError::InvalidYaml(_))
+                            && msg.contains("metadata must be a map"),
+                        "{style}: {msg}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
