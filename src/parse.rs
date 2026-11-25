@@ -745,6 +745,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                         }
                         continue;
                     }
+                    reject_block_header_with_trailing_text(&k, raw_v)?;
                     if unquoted_yaml_flow_collection(raw_v) {
                         let shown = crate::sanitize_error_token(raw_v.trim());
                         return Err(ParseError::InvalidYaml(format!(
@@ -846,6 +847,7 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
                 }
                 continue;
             }
+            reject_block_header_with_trailing_text(key, raw_value)?;
 
             match key {
                 "name" => {
@@ -1030,6 +1032,30 @@ pub(crate) fn parse_frontmatter(yaml: &str) -> Result<Skill, ParseError> {
     Ok(skill)
 }
 
+/// `| text` and `> text` are not block scalars. The header has to be
+/// the only token on the line. A quoted `"| text"` stays text.
+fn reject_block_header_with_trailing_text(key: &str, raw_value: &str) -> Result<(), ParseError> {
+    let s = raw_value.trim();
+    if s.starts_with('"') || s.starts_with('\'') {
+        return Ok(());
+    }
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return Ok(());
+    };
+    if first != '|' && first != '>' {
+        return Ok(());
+    }
+    if chars.all(|c| c == '-' || c == '+') {
+        return Ok(());
+    }
+    let shown_key = crate::sanitize_error_token(key);
+    let shown = crate::sanitize_error_token(s);
+    Err(ParseError::InvalidYaml(format!(
+        "{shown_key} block scalar must be the only token on the line, got: {shown}"
+    )))
+}
+
 fn yaml_block_scalar_style(value: &str) -> Option<char> {
     let v = value.trim();
     let mut chars = v.chars();
@@ -1142,6 +1168,7 @@ where
         if unquoted_yaml_flow_collection(stripped) {
             return Ok(EmptyScalarFollow::Flow(stripped.to_owned()));
         }
+        reject_block_header_with_trailing_text(key, stripped)?;
         if let Some(style) = yaml_block_scalar_style(stripped) {
             lines.next();
             let block = take_yaml_block_scalar(lines, style, 0);
@@ -3621,6 +3648,34 @@ Body.
                 "{style}: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn block_header_with_trailing_text_is_not_a_string() {
+        let docs = [
+            "---\nname: demo\ndescription: A useful skill.\nmetadata:\n  author: | Ada Lovelace\n---\nBody.\n",
+            "---\nname: demo\ndescription: | A useful skill\n---\nBody.\n",
+            "---\nname: demo\ndescription:\n  | A useful skill\n---\nBody.\n",
+            "---\nname: demo\ndescription: A useful skill.\nlicense: > MIT\n---\nBody.\n",
+        ];
+        for input in docs {
+            let err = parse_skill(input).expect_err(input);
+            let msg = err.to_string();
+            assert!(
+                matches!(err, ParseError::InvalidYaml(_))
+                    && msg.contains("block scalar must be the only token on the line"),
+                "{input}: {msg}"
+            );
+            assert!(!msg.contains("Body."), "{msg}");
+        }
+        let quoted = parse_skill(
+            "---\nname: demo\ndescription: d\nmetadata:\n  author: \"| Ada\"\n---\nBody.\n",
+        )
+        .expect("quoted pipe is text");
+        assert_eq!(
+            quoted.metadata.get("author").map(String::as_str),
+            Some("| Ada")
+        );
     }
 
     #[test]
