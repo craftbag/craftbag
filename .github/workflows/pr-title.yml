@@ -20,10 +20,10 @@ jobs:
     timeout-minutes: 5
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
-      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
+      - uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2
         with:
           egress-policy: audit
-      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6
+      - uses: amannn/action-semantic-pull-request@66e72920af32222769c386d81f89656ebcb6d6d5 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
